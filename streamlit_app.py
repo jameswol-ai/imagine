@@ -8,18 +8,13 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 
-# --- Page Setup ---
+# --- Page Configuration ---
 st.set_page_config(
     page_title="Creative Studios - Passport Portal",
     page_icon="🏗️",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
-
-# Initialize PostgreSQL connection via Streamlit Secrets / Environment
-conn = st.connection("postgresql", type="sql")
-
-# Allowed export roles for PDF export
-EXPORT_ALLOWED_ROLES = {"Admin", "Project Manager", "Lead Engineer"}
 
 # Initialize Session State
 if "authenticated" not in st.session_state:
@@ -27,30 +22,120 @@ if "authenticated" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state["user"] = None
 
+# Inject Custom CSS for Sleek Modern Styling
+st.markdown("""
+<style>
+    .stApp {
+        background-color: #f8fafc;
+    }
+    .login-header {
+        text-align: center;
+        padding-bottom: 1rem;
+    }
+    .login-brand {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 0.2rem;
+    }
+    .login-subtitle {
+        font-size: 0.95rem;
+        color: #64748b;
+    }
+    .user-badge {
+        background-color: #e0f2fe;
+        color: #0369a1;
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    .error-card {
+        background-color: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# RBAC Configuration
+EXPORT_ALLOWED_ROLES = {"Admin", "Project Manager", "Lead Engineer"}
+
 
 # ==========================================
-# 1. PDF GENERATOR MODULE
+# 0. SAFE DATABASE CONNECTION HANDLER
+# ==========================================
+def get_db_connection():
+    """
+    Safely retrieves the Streamlit SQL connection to prevent hard-crashing 
+    the app when st.secrets is missing or database is offline.
+    """
+    try:
+        # Check if secrets exist before attempting connection
+        has_secrets = False
+        if hasattr(st, "secrets"):
+            if "connections" in st.secrets and "postgresql" in st.secrets["connections"]:
+                has_secrets = True
+            elif "connections.postgresql" in st.secrets:
+                has_secrets = True
+            elif "postgres" in st.secrets:
+                has_secrets = True
+
+        if not has_secrets:
+            return None, "Missing `[connections.postgresql]` configuration in Streamlit secrets."
+
+        conn = st.connection("postgresql", type="sql")
+        return conn, None
+    except Exception as err:
+        return None, str(err)
+
+
+def render_missing_secrets_ui(error_msg: str):
+    """Renders diagnostic guidance when database configuration is missing."""
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.error("🔌 PostgreSQL Connection Required")
+        st.markdown(f"**Diagnostic Error:** `{error_msg}`")
+        
+        with st.expander("🛠️ How to fix this in Streamlit Community Cloud", expanded=True):
+            st.markdown("""
+            1. Go to your **Streamlit Cloud Dashboard**.
+            2. Click **Manage App** (lower right) -> **⋮ Settings** -> **Secrets**.
+            3. Paste your connection TOML configuration:
+            ```toml
+            [connections.postgresql]
+            url = "postgresql://username:password@your-db-host.com:5432/dbname?sslmode=require"
+            ```
+            4. Click **Save** to restart the app.
+            """)
+            
+        with st.expander("💻 How to fix this locally"):
+            st.markdown("""
+            Create or edit `.streamlit/secrets.toml` in your project root directory:
+            ```toml
+            [connections.postgresql]
+            url = "postgresql://postgres:password@localhost:5432/creativestudios"
+            ```
+            """)
+
+
+# ==========================================
+# 1. REPORTLAB PDF GENERATOR
 # ==========================================
 def make_cell(text_val, style):
-    """Wraps cell content in a ReportLab Paragraph for auto-wrapping."""
     val_str = str(text_val) if text_val is not None and not pd.isna(text_val) else "N/A"
     return Paragraph(val_str, style)
 
 def generate_passport_pdf(project_data: dict) -> bytes:
-    """Generates an architectural passport PDF with full cell text wrapping."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        rightMargin=36,
-        leftMargin=36,
-        topMargin=36,
-        bottomMargin=36
+        buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36
     )
-    
     styles = getSampleStyleSheet()
     
-    # Custom Paragraph Styles
     title_style = ParagraphStyle(
         'DocTitle', parent=styles['Title'], fontSize=18, leading=22,
         textColor=colors.HexColor('#1E293B'), alignment=0, spaceAfter=4
@@ -77,14 +162,11 @@ def generate_passport_pdf(project_data: dict) -> bytes:
     )
 
     story = []
-    
-    # Document Header
     story.append(Paragraph("<b>MEP & Structural Passport Report</b>", title_style))
     story.append(Paragraph(f"Project Name: <b>{project_data.get('project_name', 'N/A')}</b>", subtitle_style))
     story.append(Spacer(1, 6))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#2563EB'), spaceAfter=10))
 
-    # Overview Table (Width: 540pt)
     gen_data = [
         [make_cell("Project ID", cell_body_bold), make_cell(project_data.get("project_id"), cell_body),
          make_cell("Date Generated", cell_body_bold), make_cell(project_data.get("date"), cell_body)],
@@ -101,7 +183,6 @@ def generate_passport_pdf(project_data: dict) -> bytes:
     story.append(t_gen)
     story.append(Spacer(1, 10))
 
-    # Structural Section
     story.append(Paragraph("1. Structural Specifications", heading_style))
     struct_data = [
         [make_cell("Parameter", cell_header), make_cell("Specification Details", cell_header)],
@@ -120,7 +201,6 @@ def generate_passport_pdf(project_data: dict) -> bytes:
     story.append(t_struct)
     story.append(Spacer(1, 10))
 
-    # MEP Section
     story.append(Paragraph("2. MEP Systems", heading_style))
     mep_data = [
         [make_cell("System Domain", cell_header), make_cell("System Specifications", cell_header)],
@@ -146,8 +226,7 @@ def generate_passport_pdf(project_data: dict) -> bytes:
 # ==========================================
 # 2. DATABASE & AUTHENTICATION HELPERS
 # ==========================================
-def authenticate_user(username: str, password: str) -> dict | None:
-    """Safely checks credentials against bcrypt hashes in PostgreSQL."""
+def authenticate_user(conn, username: str, password: str) -> dict | None:
     try:
         query = "SELECT id, username, password_hash, role FROM users WHERE username = :username;"
         df = conn.query(query, params={"username": username}, ttl=0)
@@ -158,7 +237,6 @@ def authenticate_user(username: str, password: str) -> dict | None:
         record = df.iloc[0].to_dict()
         stored_hash = record["password_hash"]
         
-        # Ensure correct bytes formatting for bcrypt
         if isinstance(stored_hash, str):
             stored_hash = stored_hash.encode('utf-8')
             
@@ -169,11 +247,10 @@ def authenticate_user(username: str, password: str) -> dict | None:
                 "role": record["role"]
             }
     except Exception as e:
-        st.error(f"Authentication Error: {e}")
+        st.error(f"Database authentication error: {e}")
     return None
 
-def fetch_passport_data(project_id: str) -> dict | None:
-    """Queries project, structural, and MEP details from PostgreSQL."""
+def fetch_passport_data(conn, project_id: str) -> dict | None:
     query = """
         SELECT p.id AS project_id, p.name AS project_name, p.location, p.status,
                TO_CHAR(p.created_at, 'YYYY-MM-DD') AS date,
@@ -188,15 +265,14 @@ def fetch_passport_data(project_id: str) -> dict | None:
         df = conn.query(query, params={"project_id": project_id}, ttl="1m")
         return df.iloc[0].to_dict() if not df.empty else None
     except Exception as e:
-        st.error(f"Error fetching passport record: {e}")
+        st.error(f"Error querying passport data: {e}")
         return None
 
-def update_own_password(username: str, current_pw: str, new_pw: str) -> tuple[bool, str]:
-    """Updates the logged-in user's password with atomic transaction rollback."""
+def update_own_password(conn, username: str, current_pw: str, new_pw: str) -> tuple[bool, str]:
     try:
         df = conn.query("SELECT password_hash FROM users WHERE username = :u;", params={"u": username}, ttl=0)
         if df.empty:
-            return False, "User record not found."
+            return False, "User account not found."
             
         stored_hash = df.iloc[0]["password_hash"]
         if isinstance(stored_hash, str):
@@ -215,10 +291,9 @@ def update_own_password(username: str, current_pw: str, new_pw: str) -> tuple[bo
             session.commit()
         return True, "Password updated successfully!"
     except Exception as e:
-        return False, f"Database update failed: {e}"
+        return False, f"Password update failed: {e}"
 
-def admin_reset_pw(target_username: str, temp_pw: str) -> tuple[bool, str]:
-    """Administrative password override."""
+def admin_reset_pw(conn, target_username: str, temp_pw: str) -> tuple[bool, str]:
     try:
         new_hash = bcrypt.hashpw(temp_pw.encode('utf-8'), bcrypt.gensalt(12)).decode('utf-8')
         with conn.session as session:
@@ -227,12 +302,11 @@ def admin_reset_pw(target_username: str, temp_pw: str) -> tuple[bool, str]:
                 {"h": new_hash, "u": target_username}
             )
             session.commit()
-        return True, f"Password successfully reset for '{target_username}'."
+        return True, f"Password reset successfully for '{target_username}'."
     except Exception as e:
-        return False, f"Reset failed: {e}"
+        return False, f"Password reset failed: {e}"
 
-def admin_update_role(target_username: str, new_role: str) -> tuple[bool, str]:
-    """Administrative role modification."""
+def admin_update_role(conn, target_username: str, new_role: str) -> tuple[bool, str]:
     try:
         with conn.session as session:
             session.execute(
@@ -246,191 +320,224 @@ def admin_update_role(target_username: str, new_role: str) -> tuple[bool, str]:
 
 
 # ==========================================
-# 3. UI VIEWS
+# 3. VIEWS & LOGIN WINDOW
 # ==========================================
-def render_login_window():
-    """Renders centered authentication view."""
-    col1, col2, col3 = st.columns([1, 2, 1])
+def render_login_window(conn):
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1.8, 1])
+    
     with col2:
-        st.markdown("<h2 style='text-align: center;'>🏗️ Architectural Portal</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: gray;'>Creative Studios Management System</p>", unsafe_allow_html=True)
-        st.divider()
-
+        st.markdown("""
+        <div class="login-header">
+            <div class="login-brand">🏗️ Creative Studios</div>
+            <div class="login-subtitle">Architectural Management & Passport System</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         with st.form("login_form", clear_on_submit=False):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            submit = st.form_submit_button("Sign In", use_container_width=True)
+            st.subheader("Sign In")
+            username = st.text_input("Username", placeholder="e.g. admin_user")
+            password = st.text_input("Password", type="password", placeholder="••••••••")
+            
+            submit = st.form_submit_button("Authenticate", use_container_width=True, type="primary")
 
             if submit:
-                if not username or not password:
-                    st.warning("Please enter both username and password.")
+                if not username.strip() or not password.strip():
+                    st.warning("Please provide both a username and password.")
                 else:
-                    user = authenticate_user(username, password)
-                    if user:
-                        st.session_state["authenticated"] = True
-                        st.session_state["user"] = user
-                        st.rerun()
-                    else:
-                        st.error("Invalid username or password.")
+                    with st.spinner("Verifying credentials..."):
+                        user = authenticate_user(conn, username.strip(), password.strip())
+                        if user:
+                            st.session_state["authenticated"] = True
+                            st.session_state["user"] = user
+                            st.rerun()
+                        else:
+                            st.error("Invalid username or password.")
+        
+        st.caption("🔒 Secured with bcrypt password hashing and PostgreSQL role-based access.")
 
-def render_passport_view():
-    """Renders main project passport lookup and PDF export."""
+def render_passport_view(conn):
     st.title("📄 MEP & Structural Passports")
+    st.caption("Retrieve project structural parameters and download official compliance reports.")
+    
     try:
         projects_df = conn.query("SELECT id, name FROM projects ORDER BY name ASC;", ttl="5m")
         if projects_df.empty:
-            st.info("No active projects found in database.")
+            st.info("No projects registered in database.")
             return
 
         project_map = {f"{row['name']} ({row['id']})": row['id'] for _, row in projects_df.iterrows()}
-        selected_label = st.selectbox("Select Project Record", list(project_map.keys()))
+        selected_label = st.selectbox("Select Active Project", list(project_map.keys()))
         selected_id = project_map[selected_label]
 
         current_role = st.session_state["user"]["role"]
-        st.write("---")
+        st.divider()
 
-        # RBAC Export Guard
-        if current_role in EXPORT_ALLOWED_ROLES:
-            passport_data = fetch_passport_data(selected_id)
-            if passport_data:
-                # Preview Metrics
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Status", passport_data.get("status", "N/A"))
-                m2.metric("Location", passport_data.get("location", "N/A"))
-                m3.metric("Date Created", str(passport_data.get("date", "N/A")))
+        passport_data = fetch_passport_data(conn, selected_id)
+        
+        if passport_data:
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Project ID", passport_data.get("project_id", "N/A"))
+            m2.metric("Approval Status", passport_data.get("status", "Pending"))
+            m3.metric("Location", passport_data.get("location", "N/A"))
+            m4.metric("Created On", str(passport_data.get("date", "N/A")))
 
+            st.subheader("Specification Preview")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Structural Attributes**")
+                st.json({
+                    "Foundation": passport_data.get("foundation_type", "N/A"),
+                    "Load Capacity": passport_data.get("load_capacity", "N/A"),
+                    "Framing": passport_data.get("framing_material", "N/A"),
+                    "Seismic": passport_data.get("seismic_compliance", "N/A")
+                })
+            with c2:
+                st.markdown("**MEP Attributes**")
+                st.json({
+                    "HVAC": passport_data.get("hvac_spec", "N/A"),
+                    "Electrical": passport_data.get("electrical_capacity", "N/A"),
+                    "Plumbing": passport_data.get("plumbing_spec", "N/A"),
+                    "Fire Protection": passport_data.get("fire_protection", "N/A")
+                })
+
+            st.divider()
+
+            if current_role in EXPORT_ALLOWED_ROLES:
                 pdf_bytes = generate_passport_pdf(passport_data)
-                
                 st.download_button(
-                    label="📥 Download Official Passport Report (PDF)",
+                    label="📥 Export Passport Report (PDF)",
                     data=pdf_bytes,
                     file_name=f"{passport_data['project_id']}_Passport.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    use_container_width=True,
+                    type="primary"
                 )
             else:
-                st.warning("No structural/MEP record linked to this project.")
+                st.error("⛔ Permission Restricted: Your account role does not have authorization to download PDF reports.")
+                st.info(f"Authorized Export Roles: {', '.join(EXPORT_ALLOWED_ROLES)}")
         else:
-            st.error("⛔ Access Restricted: Your role does not have permission to export PDF reports.")
-            st.info(f"Authorized Export Roles: {', '.join(EXPORT_ALLOWED_ROLES)}")
+            st.warning("No structural or MEP passport records linked to this project.")
 
     except Exception as e:
-        st.error(f"Database query error: {e}")
+        st.error(f"Error executing database lookup: {e}")
 
-def render_settings_view():
-    """Renders self-service user settings."""
+def render_settings_view(conn):
     st.title("🔑 Account Settings")
-    st.subheader("Update Password")
+    st.subheader("Change Password")
     
     with st.form("pw_change_form", clear_on_submit=True):
         cur_pw = st.text_input("Current Password", type="password")
         new_pw = st.text_input("New Password", type="password")
         conf_pw = st.text_input("Confirm New Password", type="password")
-        submit = st.form_submit_button("Update Password")
+        submit = st.form_submit_button("Update Password", type="primary")
 
         if submit:
             if not cur_pw or not new_pw or not conf_pw:
-                st.error("Please fill in all fields.")
+                st.error("Please fill in all password fields.")
             elif new_pw != conf_pw:
                 st.error("New passwords do not match.")
             elif len(new_pw) < 8:
                 st.error("New password must be at least 8 characters long.")
             else:
                 success, msg = update_own_password(
-                    st.session_state["user"]["username"], cur_pw, new_pw
+                    conn, st.session_state["user"]["username"], cur_pw, new_pw
                 )
                 if success:
                     st.success(msg)
                 else:
                     st.error(msg)
 
-def render_admin_view():
-    """Renders system administration panel."""
-    st.title("🛠️ Admin User Management")
+def render_admin_view(conn):
+    st.title("🛠️ Admin Management")
     
-    # Enforce Admin Check
     if st.session_state["user"]["role"] != "Admin":
-        st.error("⛔ Access Denied: System Administrator privileges required.")
+        st.error("⛔ Access Denied: Administrator role required.")
         return
 
     try:
         users_df = conn.query("SELECT id, username, role, created_at FROM users ORDER BY username ASC;", ttl=0)
+        st.subheader("System Accounts Roster")
         st.dataframe(users_df, use_container_width=True, hide_index=True)
 
         if users_df.empty:
-            st.info("No user accounts found.")
+            st.info("No user records found.")
             return
 
         st.divider()
         usernames = users_df["username"].tolist()
-        selected_user = st.selectbox("Select User Account to Modify", usernames)
-        current_user_role = users_df[users_df["username"] == selected_user]["role"].values[0]
+        selected_user = st.selectbox("Select Account to Modify", usernames)
+        current_role = users_df[users_df["username"] == selected_user]["role"].values[0]
 
         col1, col2 = st.columns(2)
 
         with col1:
             st.subheader("Reset User Password")
             with st.form("admin_pw_form", clear_on_submit=True):
-                temp_pw = st.text_input("New Temporary Password", type="password")
-                submit_pw = st.form_submit_button("Apply Password Reset", use_container_width=True)
+                temp_pw = st.text_input("Temporary Password", type="password")
+                submit_pw = st.form_submit_button("Override Password", use_container_width=True)
 
                 if submit_pw:
                     if len(temp_pw) < 8:
-                        st.error("Password must be at least 8 characters.")
+                        st.error("Password must be at least 8 characters long.")
                     else:
-                        ok, msg = admin_reset_pw(selected_user, temp_pw)
+                        ok, msg = admin_reset_pw(conn, selected_user, temp_pw)
                         st.success(msg) if ok else st.error(msg)
 
         with col2:
-            st.subheader("Update Assigned Role")
+            st.subheader("Modify Assigned Role")
             with st.form("admin_role_form"):
                 roles = ["Admin", "Project Manager", "Lead Engineer", "Junior Inspector", "Viewer"]
-                default_idx = roles.index(current_user_role) if current_user_role in roles else 0
+                default_idx = roles.index(current_role) if current_role in roles else 0
                 new_role = st.selectbox("Assigned Role", roles, index=default_idx)
-                submit_role = st.form_submit_button("Save Role Change", use_container_width=True)
+                submit_role = st.form_submit_button("Save Role Modification", use_container_width=True)
 
                 if submit_role:
-                    if new_role == current_user_role:
-                        st.warning("User is already assigned to this role.")
+                    if new_role == current_role:
+                        st.warning("User already holds this role assignment.")
                     else:
-                        ok, msg = admin_update_role(selected_user, new_role)
+                        ok, msg = admin_update_role(conn, selected_user, new_role)
                         if ok:
                             st.success(msg)
                             st.rerun()
                         else:
                             st.error(msg)
     except Exception as e:
-        st.error(f"Admin lookup failed: {e}")
+        st.error(f"Error loading admin panel data: {e}")
 
 
 # ==========================================
-# 4. MAIN ROUTER
+# 4. MAIN APPLICATION ENTRYPOINT
 # ==========================================
-if not st.session_state["authenticated"]:
-    render_login_window()
+conn, err = get_db_connection()
+
+if conn is None:
+    render_missing_secrets_ui(err)
 else:
-    # Sidebar Navigation
-    current_u = st.session_state["user"]
-    st.sidebar.markdown(f"👤 **{current_u['username']}**")
-    st.sidebar.caption(f"Role: `{current_u['role']}`")
-    st.sidebar.divider()
+    if not st.session_state["authenticated"]:
+        render_login_window(conn)
+    else:
+        current_u = st.session_state["user"]
+        
+        st.sidebar.markdown(f"### 👤 {current_u['username']}")
+        st.sidebar.markdown(f"Role: <span class='user-badge'>{current_u['role']}</span>", unsafe_allow_html=True)
+        st.sidebar.divider()
 
-    options = ["📄 Passports", "🔑 Account Settings"]
-    if current_u["role"] == "Admin":
-        options.append("🛠️ Admin Panel")
+        options = ["📄 Passports", "🔑 Account Settings"]
+        if current_u["role"] == "Admin":
+            options.append("🛠️ Admin Panel")
 
-    selection = st.sidebar.radio("Navigation", options)
-    
-    st.sidebar.divider()
-    if st.sidebar.button("Log Out", use_container_width=True):
-        st.session_state["authenticated"] = False
-        st.session_state["user"] = None
-        st.rerun()
+        selection = st.sidebar.radio("Navigation Menu", options)
+        
+        st.sidebar.divider()
+        if st.sidebar.button("Log Out", use_container_width=True):
+            st.session_state["authenticated"] = False
+            st.session_state["user"] = None
+            st.rerun()
 
-    # View Routing
-    if selection == "📄 Passports":
-        render_passport_view()
-    elif selection == "🔑 Account Settings":
-        render_settings_view()
-    elif selection == "🛠️ Admin Panel":
-        render_admin_view()
+        if selection == "📄 Passports":
+            render_passport_view(conn)
+        elif selection == "🔑 Account Settings":
+            render_settings_view(conn)
+        elif selection == "🛠️ Admin Panel":
+            render_admin_view(conn)
