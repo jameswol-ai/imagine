@@ -1,6 +1,6 @@
 # =========================================================
 # IMAGINE – Architectural Intellect & East African Forex Engine
-# v21.8 – Black Edition, Imaginative Logo, Minimal UI
+# v21.8 – Black Edition, MEP Engine & Minimal UI
 # =========================================================
 
 import streamlit as st
@@ -43,13 +43,12 @@ st.markdown("""
         box-shadow: none;
     }
     .logo-container { text-align: center; margin-bottom: 1.5rem; }
-    /* Remove glows and bright borders */
     .stApp, .stSidebar { box-shadow: none; }
     .stMetric { box-shadow: none; }
 </style>""", unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# IMAGINATIVE LOGO – Architectural compass + minimal wordmark
+# LOGO SVG
 # ------------------------------------------------------------
 LOGO_SVG = """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="240" height="64">
@@ -59,7 +58,6 @@ LOGO_SVG = """
       <stop offset="100%" stop-color="#ccc"/>
     </linearGradient>
   </defs>
-  <!-- Compass mark -->
   <g transform="translate(130,25)">
     <circle cx="0" cy="0" r="16" stroke="url(#lg)" stroke-width="2" fill="none"/>
     <line x1="0" y1="-14" x2="0" y2="14" stroke="url(#lg)" stroke-width="2"/>
@@ -74,7 +72,7 @@ LOGO_SVG = """
 """
 
 # ------------------------------------------------------------
-# DATABASE MIGRATION & AUTH (unchanged)
+# DATABASE & AUTHENTICATION
 # ------------------------------------------------------------
 USER_DB = Path("arc_users.db")
 
@@ -147,34 +145,16 @@ def register_user(username, password, email="", role="user"):
     finally:
         conn.close()
 
-def get_all_users():
-    conn = sqlite3.connect(USER_DB)
-    c = conn.cursor()
-    c.execute("SELECT username, role, email FROM users")
-    users = c.fetchall()
-    conn.close()
-    return users
-
-def delete_user(username):
-    conn = sqlite3.connect(USER_DB)
-    c = conn.cursor()
-    c.execute("DELETE FROM users WHERE username=?", (username,))
-    conn.commit()
-    conn.close()
-
 init_user_db()
 
 # ------------------------------------------------------------
-# SESSION STATE
+# SESSION STATE MANAGEMENT
 # ------------------------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.username = None
     st.session_state.role = None
 
-# ------------------------------------------------------------
-# LOGIN / SIGN UP PAGE (Black, logo only)
-# ------------------------------------------------------------
 def login_page():
     st.markdown('<div class="login-box">', unsafe_allow_html=True)
     st.markdown('<div class="logo-container">' + LOGO_SVG + '</div>', unsafe_allow_html=True)
@@ -212,9 +192,6 @@ if not st.session_state.authenticated:
     login_page()
     st.stop()
 
-# ------------------------------------------------------------
-# LOGOUT
-# ------------------------------------------------------------
 def logout():
     for key in ["authenticated", "username", "role"]:
         if key in st.session_state:
@@ -222,7 +199,7 @@ def logout():
     st.rerun()
 
 # ------------------------------------------------------------
-# DYNAMIC FOREX RATES (unchanged)
+# DOMAIN DATA & REGIONAL CONSTANTS
 # ------------------------------------------------------------
 REGIONAL_FX_DEFAULTS = {
     "Kenya": {"currency":"KES","rate_to_usd":129.49,"symbol":"KSh","cost_multiplier":1.0,"risk_premium":0.02},
@@ -253,9 +230,6 @@ SEISMIC_ZONES = {
 WIND_ZONES = {"Low (22 m/s)":22,"Moderate (28 m/s)":28,"High (35 m/s)":35}
 ROOM_COLORS = {"Bedroom":"#a78bfa","Living Room":"#34d399","Kitchen":"#fbbf24","Bathroom":"#60a5fa","Office":"#f87171","Dining":"#f472b6","Corridor":"#94a3b8","Garage":"#64748b"}
 
-# ------------------------------------------------------------
-# MEMORY & LOGGING (unchanged)
-# ------------------------------------------------------------
 MEMORY_FILE = Path("arc_studio_v21.json")
 
 def load_memory():
@@ -289,8 +263,158 @@ if "active_design" not in st.session_state:
     st.session_state.active_design = None
 
 # ------------------------------------------------------------
-# CORE GENERATION FUNCTIONS (unchanged)
+# MEP & STRUCTURAL CALCULATIONS ENGINE
 # ------------------------------------------------------------
+def run_mep_analysis(design):
+    gfa = design["total_gfa"]
+    domain = design.get("domain", "Residential")
+    baths = design.get("bathrooms", 2)
+    
+    # 1. Mechanical (HVAC)
+    hvac_densities = {"Residential": 120.0, "Commercial": 160.0, "Industrial": 100.0}
+    w_per_m2 = hvac_densities.get(domain, 130.0)
+    total_cooling_w = gfa * w_per_m2
+    cooling_kw = total_cooling_w / 1000.0
+    cooling_tr = cooling_kw / 3.517
+    airflow_cfm = cooling_tr * 400.0
+    fresh_air_cfm = airflow_cfm * 0.15
+    
+    # 2. Electrical Engine
+    elec_densities = {"Residential": 35.0, "Commercial": 65.0, "Industrial": 85.0}
+    diversity_factors = {"Residential": 0.70, "Commercial": 0.80, "Industrial": 0.85}
+    w_elec_per_m2 = elec_densities.get(domain, 50.0)
+    diversity = diversity_factors.get(domain, 0.75)
+    pf = 0.85
+    
+    total_connected_kw = (gfa * w_elec_per_m2) / 1000.0
+    connected_kva = total_connected_kw / pf
+    max_demand_kva = connected_kva * diversity
+    transformer_kva = math.ceil(max_demand_kva * 1.2 / 50.0) * 50
+    generator_kva = math.ceil(max_demand_kva * 1.25 / 25.0) * 25
+    
+    # 3. Plumbing & Sanitation Engine
+    occ_factor = {"Residential": 15.0, "Commercial": 10.0, "Industrial": 30.0}.get(domain, 15.0)
+    est_occupants = max(2, math.ceil(gfa / occ_factor))
+    lpcd = {"Residential": 150.0, "Commercial": 50.0, "Industrial": 35.0}.get(domain, 100.0)
+    daily_water_demand_l = est_occupants * lpcd
+    storage_tank_m3 = round((daily_water_demand_l * 1.5) / 1000.0, 2)
+    wsfu = (baths * 8) + (math.ceil(gfa / 100) * 4)
+    dfu = math.ceil(wsfu * 1.25)
+    
+    return {
+        "mechanical": {
+            "cooling_load_kw": round(cooling_kw, 2),
+            "cooling_load_tr": round(cooling_tr, 2),
+            "supply_airflow_cfm": round(airflow_cfm, 0),
+            "fresh_air_cfm": round(fresh_air_cfm, 0),
+            "design_density_w_m2": w_per_m2
+        },
+        "electrical": {
+            "connected_load_kw": round(total_connected_kw, 2),
+            "connected_load_kva": round(connected_kva, 2),
+            "max_demand_kva": round(max_demand_kva, 2),
+            "transformer_rating_kva": max(50, transformer_kva),
+            "generator_rating_kva": max(30, generator_kva),
+            "diversity_factor": diversity
+        },
+        "plumbing": {
+            "est_occupants": est_occupants,
+            "daily_water_demand_liters": round(daily_water_demand_l, 0),
+            "storage_tank_capacity_m3": storage_tank_m3,
+            "total_wsfu": wsfu,
+            "total_dfu": dfu
+        }
+    }
+
+def run_eurocode_analysis(design):
+    span = design.get("layout", {}).get("span", 5.0)
+    gk = design["loads"]["g_k"]
+    qk = design["loads"]["q_k"]
+    seismic = SEISMIC_ZONES.get(design["loads"]["seismic_zone"], {"PGA":0.15})
+    wind_speed = WIND_ZONES.get(design["loads"]["wind_zone"], 28)
+    soil = SOIL_PROFILES.get(design["soil_type"], {})
+    floors = design["floors"]
+    M = (gk + 1.5*qk) * span**2 / 8
+    base_pressure = (gk + qk) * floors * 1.5
+    footing_width = math.sqrt(base_pressure / max(soil.get("cohesion", 20), 1))
+    wind_force = 0.613 * wind_speed**2 * span * floors / 1000
+    drift = wind_force * floors**3 / 2000
+    return {
+        "max_moment_kNm": round(M,2),
+        "footing_width_m": round(footing_width,2),
+        "wind_base_shear_kN": round(wind_force,2),
+        "drift_mm": round(drift,2),
+        "seismic_base_shear_kN": round(seismic["PGA"]*floors*100*span*5,2),
+        "status": "PASS" if M<100 else "REVIEW"
+    }
+
+def verify_zoning_laws(design):
+    max_cov = ARCH_DOMAINS[design["domain"]]["max_coverage"]
+    max_far = ARCH_DOMAINS[design["domain"]]["max_far"]
+    cov = design["ground_footprint"] / design["plot_size"]
+    far = design["total_gfa"] / design["plot_size"]
+    return {
+        "coverage": round(cov,2),
+        "coverage_ok": cov <= max_cov,
+        "far": round(far,2),
+        "far_ok": far <= max_far,
+        "status": "APPROVED" if (cov<=max_cov and far<=max_far) else "VIOLATION"
+    }
+
+def compute_detailed_forex_boq(design, rate_overrides=None):
+    country = design["country"]
+    fx = st.session_state.regional_fx[country]
+    mult = fx["cost_multiplier"]
+    risk = fx["risk_premium"]
+    
+    base_rates = {
+        "Reinforced Concrete (Eurocode 2)": 350,
+        "Structural Steel Profile (Eurocode 3)": 400,
+        "Timber Profile (Eurocode 5)": 280,
+        "HVAC Mechanical Services": 45,
+        "Electrical & Lighting Power": 35,
+        "Plumbing & Drainage Services": 25
+    }
+    
+    if rate_overrides is None:
+        rate_overrides = {}
+        
+    str_rate = rate_overrides.get(design["material_frame"], base_rates.get(design["material_frame"], 350))
+    hvac_rate = rate_overrides.get("HVAC Mechanical Services", base_rates["HVAC Mechanical Services"])
+    elec_rate = rate_overrides.get("Electrical & Lighting Power", base_rates["Electrical & Lighting Power"])
+    plumb_rate = rate_overrides.get("Plumbing & Drainage Services", base_rates["Plumbing & Drainage Services"])
+    
+    gfa = design["total_gfa"]
+    substructure = 0.15 * str_rate * gfa
+    superstructure = 0.70 * str_rate * gfa
+    
+    hvac_cost = hvac_rate * gfa
+    electrical_cost = elec_rate * gfa
+    plumbing_cost = plumb_rate * gfa
+    total_mep = hvac_cost + electrical_cost + plumbing_cost
+    
+    finishes = 0.10 * str_rate * gfa
+    preliminaries = 0.05 * str_rate * gfa
+    
+    raw_total_usd = (substructure + superstructure + total_mep + finishes + preliminaries)
+    total_usd = raw_total_usd * mult * (1 + risk)
+    
+    return {
+        "substructure": round(substructure, 2),
+        "superstructure": round(superstructure, 2),
+        "hvac_services": round(hvac_cost, 2),
+        "electrical_services": round(electrical_cost, 2),
+        "plumbing_services": round(plumbing_cost, 2),
+        "total_mep": round(total_mep, 2),
+        "finishes": round(finishes, 2),
+        "preliminaries": round(preliminaries, 2),
+        "total_usd": round(total_usd, 2),
+        "total_local": round(total_usd * fx["rate_to_usd"], 2),
+        "local_currency": fx["currency"],
+        "symbol": fx["symbol"],
+        "rate_used": fx["rate_to_usd"]
+    }
+
 def generate_intelligent_layout(rooms, nx, ny, span):
     grid = np.full((ny, nx), "Corridor", dtype=object)
     indices = [(i,j) for i in range(ny) for j in range(nx)]
@@ -352,6 +476,7 @@ def generate_building_model(domain, btype, floors, baths, country, material_fram
         "created": datetime.now().isoformat()
     }
     design["analysis"] = run_eurocode_analysis(design)
+    design["mep"] = run_mep_analysis(design)
     design["zoning"] = verify_zoning_laws(design)
     design["boq"] = compute_detailed_forex_boq(design)
     return design
@@ -359,7 +484,7 @@ def generate_building_model(domain, btype, floors, baths, country, material_fram
 def ensure_design_compatibility(design):
     if "layout" not in design:
         span = 5.0
-        ground_footprint = design.get("ground_footprint", design["plot_size"]*0.4)
+        ground_footprint = design.get("ground_footprint", design.get("plot_size", 500) * 0.4)
         bay_area = span * span
         total_bays = max(2, math.ceil(ground_footprint / bay_area))
         nx = max(2, math.ceil(math.sqrt(total_bays)))
@@ -367,85 +492,24 @@ def ensure_design_compatibility(design):
         layout_grid = generate_intelligent_layout(design.get("rooms", ["Living Room","Bedroom","Kitchen","Bathroom"]), nx, ny, span)
         design["layout"] = {"grid": layout_grid, "nx": nx, "ny": ny, "span": span}
     if "loads" not in design:
-        design["loads"] = {"g_k":5.5, "q_k":2.5 if design.get("domain")=="Residential" else (4.0 if design.get("domain")=="Commercial" else 7.5),
-                           "steel_section": None, "seismic_zone":"Moderate (PGA=0.15g)", "wind_zone":"Moderate (28 m/s)"}
-    else:
-        d = design["loads"]
-        if "seismic_zone" not in d: d["seismic_zone"] = "Moderate (PGA=0.15g)"
-        if "wind_zone" not in d: d["wind_zone"] = "Moderate (28 m/s)"
-        if "g_k" not in d: d["g_k"] = 5.5
-        if "q_k" not in d: d["q_k"] = 2.5 if design.get("domain")=="Residential" else (4.0 if design.get("domain")=="Commercial" else 7.5)
-        if "steel_section" not in d: d["steel_section"] = None
-    if "analysis" not in design: design["analysis"] = run_eurocode_analysis(design)
-    if "zoning" not in design: design["zoning"] = verify_zoning_laws(design)
-    if "boq" not in design: design["boq"] = compute_detailed_forex_boq(design)
+        design["loads"] = {"g_k": 5.5, "q_k": 2.5 if design.get("domain") == "Residential" else (4.0 if design.get("domain") == "Commercial" else 7.5),
+                           "steel_section": None, "seismic_zone": "Moderate (PGA=0.15g)", "wind_zone": "Moderate (28 m/s)"}
+    
+    # Auto-repair engines for legacy models
+    if "mep" not in design: 
+        design["mep"] = run_mep_analysis(design)
+    if "analysis" not in design: 
+        design["analysis"] = run_eurocode_analysis(design)
+    if "zoning" not in design: 
+        design["zoning"] = verify_zoning_laws(design)
+    if "boq" not in design: 
+        design["boq"] = compute_detailed_forex_boq(design)
+        
     return design
 
-def run_eurocode_analysis(design):
-    span = design.get("layout", {}).get("span", 5.0)
-    gk = design["loads"]["g_k"]
-    qk = design["loads"]["q_k"]
-    seismic = SEISMIC_ZONES.get(design["loads"]["seismic_zone"], {"PGA":0.15})
-    wind_speed = WIND_ZONES.get(design["loads"]["wind_zone"], 28)
-    soil = SOIL_PROFILES.get(design["soil_type"], {})
-    floors = design["floors"]
-    M = (gk + 1.5*qk) * span**2 / 8
-    base_pressure = (gk + qk) * floors * 1.5
-    footing_width = math.sqrt(base_pressure / max(soil.get("cohesion", 20), 1))
-    wind_force = 0.613 * wind_speed**2 * span * floors / 1000
-    drift = wind_force * floors**3 / 2000
-    return {
-        "max_moment_kNm": round(M,2),
-        "footing_width_m": round(footing_width,2),
-        "wind_base_shear_kN": round(wind_force,2),
-        "drift_mm": round(drift,2),
-        "seismic_base_shear_kN": round(seismic["PGA"]*floors*100*span*5,2),
-        "status": "PASS" if M<100 else "REVIEW"
-    }
-
-def verify_zoning_laws(design):
-    max_cov = ARCH_DOMAINS[design["domain"]]["max_coverage"]
-    max_far = ARCH_DOMAINS[design["domain"]]["max_far"]
-    cov = design["ground_footprint"] / design["plot_size"]
-    far = design["total_gfa"] / design["plot_size"]
-    return {
-        "coverage": round(cov,2),
-        "coverage_ok": cov <= max_cov,
-        "far": round(far,2),
-        "far_ok": far <= max_far,
-        "status": "APPROVED" if (cov<=max_cov and far<=max_far) else "VIOLATION"
-    }
-
-def compute_detailed_forex_boq(design, rate_overrides=None):
-    country = design["country"]
-    fx = st.session_state.regional_fx[country]
-    mult = fx["cost_multiplier"]
-    risk = fx["risk_premium"]
-    base_rates = {
-        "Reinforced Concrete (Eurocode 2)":350,
-        "Structural Steel Profile (Eurocode 3)":400,
-        "Timber Profile (Eurocode 5)":280
-    }
-    if rate_overrides is None:
-        rate_overrides = {}
-    rate_per_m2 = rate_overrides.get(design["material_frame"], base_rates.get(design["material_frame"], 350))
-    gfa = design["total_gfa"]
-    substructure = 0.15 * rate_per_m2 * gfa
-    superstructure = 0.70 * rate_per_m2 * gfa
-    finishes = 0.10 * rate_per_m2 * gfa
-    preliminaries = 0.05 * rate_per_m2 * gfa
-    total_usd = (substructure + superstructure + finishes + preliminaries) * mult * (1 + risk)
-    return {
-        "substructure": round(substructure,2),
-        "superstructure": round(superstructure,2),
-        "finishes": round(finishes,2),
-        "preliminaries": round(preliminaries,2),
-        "total_usd": round(total_usd,2),
-        "total_local": round(total_usd * fx["rate_to_usd"],2),
-        "local_currency": fx["currency"],
-        "symbol": fx["symbol"],
-        "rate_used": fx["rate_to_usd"]
-    }
+# Upgrade memory designs on startup
+for i, d_item in enumerate(st.session_state.memory.get("designs", [])):
+    st.session_state.memory["designs"][i] = ensure_design_compatibility(d_item)
 
 def refresh_forex_rates():
     base = {
@@ -462,7 +526,7 @@ def refresh_forex_rates():
     log_event("Forex rates updated (simulated live change)")
 
 # ------------------------------------------------------------
-# 2D & 3D VISUALS (unchanged)
+# VISUALIZATIONS
 # ------------------------------------------------------------
 def draw_2d_blueprint(design, overlay_design=None):
     layout = design["layout"]["grid"]
@@ -573,7 +637,7 @@ def generate_ifc_json(design):
     return {"project_name":f"ARC_{design['id']}","elements":elements}
 
 # ------------------------------------------------------------
-# SIDEBAR – LOGO ONLY, no other images
+# SIDEBAR NAVIGATION & CONTROLS
 # ------------------------------------------------------------
 with st.sidebar:
     st.markdown(LOGO_SVG, unsafe_allow_html=True)
@@ -630,7 +694,7 @@ with st.sidebar:
         logout()
 
 # ------------------------------------------------------------
-# MAIN WORKSPACE (unchanged functionality, cosmetic text)
+# MAIN WORKSPACE VIEWS
 # ------------------------------------------------------------
 if nav == "Control Hub":
     st.title("Regional Telemetry Dashboard")
@@ -674,35 +738,75 @@ elif nav == "Synthesis Lab":
             col4.metric("Doors/Windows", f"{d['doors']}/{d['windows']}")
 
             tabs = st.tabs([
-                "2D Interactive", "3D Isometric", "Structural Passport", "Zoning",
-                "BoQ & Forex", "Forex Forecast", "Drift Animation", "Cost Sensitivity",
-                "Design Compare", "Export IFC"
+                "2D Interactive", "3D Isometric", "Structural Passport", "MEP Passport",
+                "Zoning", "BoQ & Forex", "Forex Forecast", "Drift Animation",
+                "Cost Sensitivity", "Design Compare", "Export IFC"
             ])
+            
             with tabs[0]:
                 st.markdown("### Interactive 2D Blueprint")
                 d = draw_interactive_blueprint(d)
                 st.session_state.active_design = d
                 save_memory(st.session_state.memory)
+                
             with tabs[1]:
                 draw_3d_isometric_view(d)
+                
             with tabs[2]:
                 st.json(d["analysis"])
+                
             with tabs[3]:
+                st.markdown("### MEP Infrastructure & Load Passport")
+                mep = d.get("mep") or run_mep_analysis(d)
+                d["mep"] = mep
+                
+                col_m1, col_m2, col_m3 = st.columns(3)
+                
+                with col_m1:
+                    st.markdown("#### Mechanical (HVAC)")
+                    st.metric("Cooling Capacity", f"{mep['mechanical']['cooling_load_tr']} TR")
+                    st.write(f"**Heat Load:** {mep['mechanical']['cooling_load_kw']} kW")
+                    st.write(f"**Supply Airflow:** {mep['mechanical']['supply_airflow_cfm']:,.0f} CFM")
+                    st.write(f"**Fresh Air Intake:** {mep['mechanical']['fresh_air_cfm']:,.0f} CFM")
+                    
+                with col_m2:
+                    st.markdown("#### Electrical Power")
+                    st.metric("Max Demand", f"{mep['electrical']['max_demand_kva']} kVA")
+                    st.write(f"**Connected Load:** {mep['electrical']['connected_load_kva']} kVA")
+                    st.write(f"**Transformer Min:** {mep['electrical']['transformer_rating_kva']} kVA")
+                    st.write(f"**Standby Genset:** {mep['electrical']['generator_rating_kva']} kVA")
+                    
+                with col_m3:
+                    st.markdown("#### Plumbing & Sanitation")
+                    st.metric("Daily Water Demand", f"{mep['plumbing']['daily_water_demand_liters']:,.0f} L/day")
+                    st.write(f"**Est. Occupancy:** {mep['plumbing']['est_occupants']} Persons")
+                    st.write(f"**Storage Reserve:** {mep['plumbing']['storage_tank_capacity_m3']} m³")
+                    st.write(f"**Fixture Units:** {mep['plumbing']['total_wsfu']} WSFU / {mep['plumbing']['total_dfu']} DFU")
+                    
+            with tabs[4]:
                 zon = d["zoning"]
                 st.write(f"Coverage: {zon['coverage']} (max {ARCH_DOMAINS[d['domain']]['max_coverage']}) — {'OK' if zon['coverage_ok'] else 'VIOLATION'}")
                 st.write(f"FAR: {zon['far']} (max {ARCH_DOMAINS[d['domain']]['max_far']}) — {'OK' if zon['far_ok'] else 'VIOLATION'}")
                 st.write(f"Overall: {zon['status']}")
-            with tabs[4]:
+                
+            with tabs[5]:
                 boq = d["boq"]
-                colA, colB = st.columns(2)
+                colA, colB, colC = st.columns(3)
                 with colA:
+                    st.markdown("**Structural & Substructure**")
                     st.metric("Substructure", f"${boq['substructure']:,.2f}")
                     st.metric("Superstructure", f"${boq['superstructure']:,.2f}")
-                    st.metric("Finishes", f"${boq['finishes']:,.2f}")
                 with colB:
+                    st.markdown("**MEP Services**")
+                    st.metric("HVAC Services", f"${boq.get('hvac_services', 0.0):,.2f}")
+                    st.metric("Electrical Systems", f"${boq.get('electrical_services', 0.0):,.2f}")
+                    st.metric("Plumbing & Fire", f"${boq.get('plumbing_services', 0.0):,.2f}")
+                with colC:
+                    st.markdown("**Totals & Forex Conversion**")
                     st.metric("Total USD", f"${boq['total_usd']:,.2f}")
                     st.metric(f"Total {boq['local_currency']}", f"{boq['symbol']} {boq['total_local']:,.2f}")
-            with tabs[5]:
+                    
+            with tabs[6]:
                 st.subheader("Forex Rate Forecast")
                 cur = st.selectbox("Currency", list(st.session_state.regional_fx.keys()), key="forex_cur")
                 horizon = st.radio("Horizon", ["short","medium","long"], horizontal=True, key="fx_hor")
@@ -731,27 +835,33 @@ elif nav == "Synthesis Lab":
                 fig.patch.set_facecolor('#000000')
                 ax.tick_params(colors='white')
                 st.pyplot(fig)
-            with tabs[6]:
+                
+            with tabs[7]:
                 st.subheader("Wind Drift Animation")
                 drift_range = st.slider("Drift amplitude factor", 0.0, 1.0, 0.3, 0.05)
                 draw_3d_isometric_view(d, drift_factor=drift_range)
                 st.caption("Slide to simulate sway under wind load.")
-            with tabs[7]:
+                
+            with tabs[8]:
                 st.subheader("Cost Sensitivity Analysis")
                 base_rates = {
                     "Reinforced Concrete (Eurocode 2)":350,
                     "Structural Steel Profile (Eurocode 3)":400,
-                    "Timber Profile (Eurocode 5)":280
+                    "Timber Profile (Eurocode 5)":280,
+                    "HVAC Mechanical Services": 45,
+                    "Electrical & Lighting Power": 35,
+                    "Plumbing & Drainage Services": 25
                 }
                 new_rates = {}
                 for mat, rate in base_rates.items():
-                    new_rates[mat] = st.slider(mat, 200, 600, rate, 10)
+                    new_rates[mat] = st.slider(mat, 10, 600, rate, 5)
                 updated_boq = compute_detailed_forex_boq(d, rate_overrides=new_rates)
                 colA, colB = st.columns(2)
                 with colA: st.metric("Updated Total USD", f"${updated_boq['total_usd']:,.2f}")
                 with colB: st.metric(f"Updated {updated_boq['local_currency']}",
                                      f"{updated_boq['symbol']} {updated_boq['total_local']:,.2f}")
-            with tabs[8]:
+                                     
+            with tabs[9]:
                 st.subheader("Design Comparison")
                 my_designs_list = [d for d in st.session_state.memory["designs"] if d.get("username")==st.session_state.username]
                 if len(my_designs_list) < 2:
@@ -775,7 +885,8 @@ elif nav == "Synthesis Lab":
                             st.metric("B GFA", d2["total_gfa"])
                             st.metric("B Cost USD", d2["boq"]["total_usd"])
                             st.metric("B Floors", d2["floors"])
-            with tabs[9]:
+                            
+            with tabs[10]:
                 st.subheader("Export to IFC/Revit JSON")
                 ifc_json = generate_ifc_json(d)
                 st.download_button(
