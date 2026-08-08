@@ -1,6 +1,6 @@
 # =========================================================
 # IMAGINE – Architectural Intellect & East African Forex Engine
-# v21.8 – Black Edition, MEP Engine & Minimal UI
+# v22.0 – Studio Edition, Minimalist Login & MEP Engine
 # =========================================================
 
 import streamlit as st
@@ -15,59 +15,131 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 # ------------------------------------------------------------
-# CUSTOM THEME – Pure Black, Minimal Highlights
+# PAGE CONFIG & ELEGANT DARK THEME CSS
 # ------------------------------------------------------------
-st.set_page_config(page_title="Imagine", page_icon="🏛️", layout="wide")
+st.set_page_config(page_title="Imagine Studio", page_icon="🏛️", layout="wide")
+
 st.markdown("""
 <style>
-    .stApp { background: #000000; color: #dddddd; }
-    .stSidebar { background: #111111; border-right: 1px solid #333333; }
-    h1,h2,h3,h4,h5,h6 { color: #cccccc !important; font-weight: 600; }
-    .stMetric { background: rgba(80,80,80,0.15); border-radius:8px; padding:10px; border:1px solid #444; color:#eee; }
-    .stButton button {
-        background: #222; color: #ddd; font-weight:bold; border-radius:6px;
-        border: 1px solid #555;
+    /* Main Background & Base Typography */
+    .stApp {
+        background: radial-gradient(circle at 50% -20%, #1a1e29, #0a0c10, #030406);
+        color: #e2e8f0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    .stButton button:hover { background:#333; color:white; border-color:#777; }
+    .stSidebar {
+        background: #0d1117 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    /* Elegant Login Container */
+    .login-container {
+        max-width: 440px;
+        margin: 3rem auto 0 auto;
+        padding: 2.5rem;
+        background: rgba(18, 22, 31, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+    
+    .login-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .login-header h2 {
+        font-size: 1.5rem;
+        font-weight: 500;
+        letter-spacing: 0.15em;
+        color: #f8fafc !important;
+        margin-top: 0.75rem;
+        text-transform: uppercase;
+    }
+    .login-header p {
+        font-size: 0.85rem;
+        color: #94a3b8;
+        margin-top: 0.25rem;
+    }
+
+    /* Custom Form Fields */
+    div[data-baseweb="input"] {
+        background-color: rgba(255, 255, 255, 0.04) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 8px !important;
+        color: #ffffff !important;
+        transition: all 0.2s ease;
+    }
+    div[data-baseweb="input"]:focus-within {
+        border-color: #38bdf8 !important;
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.2) !important;
+    }
+
+    /* Buttons */
+    .stButton button {
+        width: 100%;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        color: #ffffff;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        border-radius: 8px;
+        border: none;
+        padding: 0.6rem 1rem;
+        transition: all 0.2s ease;
+    }
+    .stButton button:hover {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+        border: none;
+    }
+
+    /* Minimalist Metrics & Cards */
+    .stMetric {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
     .stTabs [data-baseweb="tab"] {
-        background: transparent; border-radius:0; border-bottom:2px solid transparent;
-        color: #999; padding: 0.5rem 1rem;
+        background: transparent;
+        border-radius: 6px 6px 0 0;
+        color: #64748b;
+        font-weight: 500;
+        padding: 0.5rem 1rem;
     }
     .stTabs [aria-selected="true"] {
-        background: transparent !important; border-bottom:2px solid #ccc;
-        color: #eee !important;
+        color: #38bdf8 !important;
+        border-bottom: 2px solid #38bdf8 !important;
     }
-    .login-box {
-        background: #111111; padding: 2rem; border-radius: 12px;
-        border: 1px solid #333; max-width: 400px; margin: 4rem auto;
-        box-shadow: none;
-    }
-    .logo-container { text-align: center; margin-bottom: 1.5rem; }
-    .stApp, .stSidebar { box-shadow: none; }
-    .stMetric { box-shadow: none; }
-</style>""", unsafe_allow_html=True)
+</style>
+""", unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# LOGO SVG
+# BRANDING LOGO
 # ------------------------------------------------------------
 LOGO_SVG = """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="240" height="64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 70" width="220" height="52">
   <defs>
-    <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#888"/>
-      <stop offset="100%" stop-color="#ccc"/>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
     </linearGradient>
   </defs>
-  <g transform="translate(130,25)">
-    <circle cx="0" cy="0" r="16" stroke="url(#lg)" stroke-width="2" fill="none"/>
-    <line x1="0" y1="-14" x2="0" y2="14" stroke="url(#lg)" stroke-width="2"/>
-    <line x1="-14" y1="0" x2="14" y2="0" stroke="url(#lg)" stroke-width="2"/>
-    <polygon points="0,-12 3,0 0,12 -3,0" fill="url(#lg)"/>
-    <circle cx="0" cy="0" r="4" fill="#000"/>
+  <g transform="translate(30, 35)">
+    <circle cx="0" cy="0" r="18" stroke="url(#brandGrad)" stroke-width="2.5" fill="none"/>
+    <line x1="-12" y1="0" x2="12" y2="0" stroke="url(#brandGrad)" stroke-width="2"/>
+    <line x1="0" y1="-12" x2="0" y2="12" stroke="url(#brandGrad)" stroke-width="2"/>
+    <circle cx="0" cy="0" r="4" fill="#38bdf8"/>
   </g>
-  <text x="150" y="65" text-anchor="middle"
-        font-family="'Segoe UI', Arial, sans-serif" font-weight="400" font-size="28"
-        fill="url(#lg)" letter-spacing="6">Imagine</text>
+  <text x="65" y="44" font-family="-apple-system, sans-serif" font-weight="600" font-size="26" fill="#f8fafc" letter-spacing="4">IMAGINE</text>
+  <text x="66" y="58" font-family="-apple-system, sans-serif" font-weight="400" font-size="9" fill="#94a3b8" letter-spacing="2">ARCHITECTURAL INTELLECT</text>
 </svg>
 """
 
@@ -139,7 +211,7 @@ def register_user(username, password, email="", role="user"):
         c.execute("INSERT INTO users (username, password_hash, salt, role, email) VALUES (?,?,?,?,?)",
                   (username, pwd_hash, salt, role, email))
         conn.commit()
-        return True, f"User '{username}' created."
+        return True, f"User '{username}' created successfully."
     except sqlite3.IntegrityError:
         return False, "Username already exists."
     finally:
@@ -148,48 +220,61 @@ def register_user(username, password, email="", role="user"):
 init_user_db()
 
 # ------------------------------------------------------------
-# SESSION STATE MANAGEMENT
+# SESSION STATE & REFINED LOGIN PORTAL
 # ------------------------------------------------------------
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.username = None
     st.session_state.role = None
 
-def login_page():
-    st.markdown('<div class="login-box">', unsafe_allow_html=True)
-    st.markdown('<div class="logo-container">' + LOGO_SVG + '</div>', unsafe_allow_html=True)
-    tab1, tab2 = st.tabs(["Login", "Sign Up"])
-    with tab1:
-        with st.form("login_form"):
-            u = st.text_input("Username")
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("Login"):
-                ok, role = authenticate_user(u, p)
-                if ok:
-                    st.session_state.authenticated = True
-                    st.session_state.username = u
-                    st.session_state.role = role
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials")
-    with tab2:
-        with st.form("register_form"):
-            new_u = st.text_input("Choose Username")
-            new_p = st.text_input("Create Password", type="password")
-            new_e = st.text_input("Email (optional)")
-            if st.form_submit_button("Sign Up"):
-                if not new_u or not new_p:
-                    st.error("Username and password required.")
-                else:
-                    ok, msg = register_user(new_u, new_p, new_e)
-                    if ok:
-                        st.success(msg + " You can now login.")
+def render_login_portal():
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    with col2:
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        st.markdown(f'<div class="login-header">{LOGO_SVG}<p>Sign in to your design studio space</p></div>', unsafe_allow_html=True)
+        
+        tab_login, tab_signup = st.tabs(["Sign In", "Create Account"])
+        
+        with tab_login:
+            with st.form("login_form", clear_on_submit=False):
+                u = st.text_input("Username", placeholder="e.g. architect", key="l_u")
+                p = st.text_input("Password", type="password", placeholder="••••••••", key="l_p")
+                submit = st.form_submit_button("Authenticate Studio Access")
+                
+                if submit:
+                    if not u or not p:
+                        st.warning("Please enter both username and password.")
                     else:
-                        st.error(msg)
-    st.markdown('</div>', unsafe_allow_html=True)
+                        ok, role = authenticate_user(u, p)
+                        if ok:
+                            st.session_state.authenticated = True
+                            st.session_state.username = u
+                            st.session_state.role = role
+                            st.rerun()
+                        else:
+                            st.error("Invalid credentials provided.")
+                            
+        with tab_signup:
+            with st.form("signup_form", clear_on_submit=False):
+                new_u = st.text_input("New Username", placeholder="e.g. j_doe", key="s_u")
+                new_p = st.text_input("Choose Password", type="password", placeholder="••••••••", key="s_p")
+                new_e = st.text_input("Email Address", placeholder="name@firm.com", key="s_e")
+                register = st.form_submit_button("Register New Account")
+                
+                if register:
+                    if not new_u or not new_p:
+                        st.warning("Username and password are required.")
+                    else:
+                        ok, msg = register_user(new_u, new_p, new_e)
+                        if ok:
+                            st.success(msg + " You can now sign in.")
+                        else:
+                            st.error(msg)
+                            
+        st.markdown('</div>', unsafe_allow_html=True)
 
 if not st.session_state.authenticated:
-    login_page()
+    render_login_portal()
     st.stop()
 
 def logout():
@@ -228,7 +313,7 @@ SEISMIC_ZONES = {
     "High (PGA=0.25g)":{"PGA":0.25,"S":1.4,"importance":1.25}
 }
 WIND_ZONES = {"Low (22 m/s)":22,"Moderate (28 m/s)":28,"High (35 m/s)":35}
-ROOM_COLORS = {"Bedroom":"#a78bfa","Living Room":"#34d399","Kitchen":"#fbbf24","Bathroom":"#60a5fa","Office":"#f87171","Dining":"#f472b6","Corridor":"#94a3b8","Garage":"#64748b"}
+ROOM_COLORS = {"Bedroom":"#818cf8","Living Room":"#34d399","Kitchen":"#fbbf24","Bathroom":"#38bdf8","Office":"#f87171","Dining":"#f472b6","Corridor":"#94a3b8","Garage":"#64748b"}
 
 MEMORY_FILE = Path("arc_studio_v21.json")
 
@@ -495,7 +580,6 @@ def ensure_design_compatibility(design):
         design["loads"] = {"g_k": 5.5, "q_k": 2.5 if design.get("domain") == "Residential" else (4.0 if design.get("domain") == "Commercial" else 7.5),
                            "steel_section": None, "seismic_zone": "Moderate (PGA=0.15g)", "wind_zone": "Moderate (28 m/s)"}
     
-    # Auto-repair engines for legacy models
     if "mep" not in design: 
         design["mep"] = run_mep_analysis(design)
     if "analysis" not in design: 
@@ -507,17 +591,11 @@ def ensure_design_compatibility(design):
         
     return design
 
-# Upgrade memory designs on startup
 for i, d_item in enumerate(st.session_state.memory.get("designs", [])):
     st.session_state.memory["designs"][i] = ensure_design_compatibility(d_item)
 
 def refresh_forex_rates():
-    base = {
-        "Kenya": 129.49,
-        "Uganda": 3665.20,
-        "Tanzania": 2625.00,
-        "South Sudan": 4626.40
-    }
+    base = {"Kenya": 129.49, "Uganda": 3665.20, "Tanzania": 2625.00, "South Sudan": 4626.40}
     for country, rate in base.items():
         new_rate = rate * random.uniform(0.98, 1.02)
         st.session_state.regional_fx[country]["rate_to_usd"] = round(new_rate, 2)
@@ -591,7 +669,7 @@ def draw_3d_isometric_view(design, drift_factor=0):
     fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(111, projection='3d')
     ax.set_facecolor('none')
-    fig.patch.set_facecolor('#000000')
+    fig.patch.set_facecolor('#0a0c10')
     ax.xaxis.pane.fill = False
     ax.yaxis.pane.fill = False
     ax.zaxis.pane.fill = False
@@ -641,22 +719,22 @@ def generate_ifc_json(design):
 # ------------------------------------------------------------
 with st.sidebar:
     st.markdown(LOGO_SVG, unsafe_allow_html=True)
-    st.markdown(f"**{st.session_state.username}** ({st.session_state.role})")
+    st.markdown(f"**User:** `{st.session_state.username}` ({st.session_state.role.upper()})")
     nav = st.pills("Workspace", ["Control Hub", "Synthesis Lab"], default="Control Hub")
     st.markdown("---")
 
     if st.session_state.role == "admin":
-        with st.expander("Forex Rates (Admin)"):
-            st.write("Current rates:")
+        with st.expander("Forex Rates (Admin Control)"):
+            st.write("Live FX Table:")
             for country, fx in st.session_state.regional_fx.items():
                 st.write(f"{country}: {fx['symbol']} {fx['rate_to_usd']:,.2f}")
-            if st.button("Simulate Live Rate Change"):
+            if st.button("Simulate Market Movement"):
                 refresh_forex_rates()
                 st.success("Rates updated!")
                 st.rerun()
             for country in st.session_state.regional_fx.keys():
                 new_val = st.number_input(
-                    f"{country} rate",
+                    f"{country} Rate",
                     value=st.session_state.regional_fx[country]["rate_to_usd"],
                     step=0.01,
                     format="%.2f",
@@ -667,30 +745,30 @@ with st.sidebar:
                     st.session_state.memory["forex_rates"] = st.session_state.regional_fx
                     save_memory(st.session_state.memory)
 
-    with st.expander("Configuration Matrix", expanded=True):
-        country = st.selectbox("Region", list(st.session_state.regional_fx.keys()))
-        domain = st.selectbox("Category", list(ARCH_DOMAINS.keys()))
+    with st.expander("Design Parameters", expanded=True):
+        country = st.selectbox("Target Region", list(st.session_state.regional_fx.keys()))
+        domain = st.selectbox("Category Domain", list(ARCH_DOMAINS.keys()))
         btype = st.selectbox("Typology", ARCH_DOMAINS[domain]["types"])
-        plot = st.slider("Plot (m²)", 200, 5000, 800, 50)
-        floors = st.slider("Storeys", 1, 12, 3)
-        baths = st.slider("Bathrooms", 1, 10, 2)
-        soil = st.selectbox("Soil", list(SOIL_PROFILES.keys()))
-        material = st.pills("Framing", [
+        plot = st.slider("Plot Footprint (m²)", 200, 5000, 800, 50)
+        floors = st.slider("Storeys / Levels", 1, 12, 3)
+        baths = st.slider("Bathrooms Count", 1, 10, 2)
+        soil = st.selectbox("Soil Profile", list(SOIL_PROFILES.keys()))
+        material = st.pills("Structural Framing", [
             "Reinforced Concrete (Eurocode 2)",
             "Structural Steel Profile (Eurocode 3)",
             "Timber Profile (Eurocode 5)"
         ], default="Reinforced Concrete (Eurocode 2)")
-        g_k = st.slider("Permanent Load (kN/m²)", 3.0, 8.0, 5.5, 0.5)
+        g_k = st.slider("Permanent Load g_k (kN/m²)", 3.0, 8.0, 5.5, 0.5)
         default_q = 2.5 if domain=="Residential" else (4.0 if domain=="Commercial" else 7.5)
-        q_k = st.slider("Imposed Load (kN/m²)", 1.5, 10.0, default_q, 0.5)
-        steel = st.selectbox("Steel Section", [
+        q_k = st.slider("Imposed Load q_k (kN/m²)", 1.5, 10.0, default_q, 0.5)
+        steel = st.selectbox("Steel Standard Section", [
             "UB 254x146x31","UB 305x165x40","UC 254x254x73","UC 305x305x97"
         ]) if "Steel" in material else None
-        seismic = st.selectbox("Seismic Zone", list(SEISMIC_ZONES.keys()), index=1)
-        wind = st.selectbox("Wind Zone", list(WIND_ZONES.keys()), index=1)
+        seismic = st.selectbox("Seismic Zone Risk", list(SEISMIC_ZONES.keys()), index=1)
+        wind = st.selectbox("Wind Speed Zone", list(WIND_ZONES.keys()), index=1)
 
-    trigger = st.sidebar.button("Execute Generation", type="primary", use_container_width=True)
-    if st.button("Logout"):
+    trigger = st.sidebar.button("Execute Generative Model", type="primary", use_container_width=True)
+    if st.button("Sign Out"):
         logout()
 
 # ------------------------------------------------------------
@@ -699,22 +777,25 @@ with st.sidebar:
 if nav == "Control Hub":
     st.title("Regional Telemetry Dashboard")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("KES", st.session_state.regional_fx["Kenya"]["rate_to_usd"])
-    col2.metric("UGX", st.session_state.regional_fx["Uganda"]["rate_to_usd"])
-    col3.metric("TZS", st.session_state.regional_fx["Tanzania"]["rate_to_usd"])
-    col4.metric("SSP", st.session_state.regional_fx["South Sudan"]["rate_to_usd"])
+    col1.metric("KES Rate", f"KSh {st.session_state.regional_fx['Kenya']['rate_to_usd']:,.2f}")
+    col2.metric("UGX Rate", f"USh {st.session_state.regional_fx['Uganda']['rate_to_usd']:,.2f}")
+    col3.metric("TZS Rate", f"TSh {st.session_state.regional_fx['Tanzania']['rate_to_usd']:,.2f}")
+    col4.metric("SSP Rate", f"SSP {st.session_state.regional_fx['South Sudan']['rate_to_usd']:,.2f}")
+    
     st.markdown("---")
     my_designs = [d for d in st.session_state.memory["designs"] if d.get("username") == st.session_state.username]
-    st.metric("My Archetypes", len(my_designs))
+    st.metric("My Saved Projects", len(my_designs))
+    
     if st.session_state.memory["logs"]:
-        st.subheader("Recent Events")
+        st.subheader("System Activity Log")
         for e in reversed(st.session_state.memory["logs"][-5:]):
-            st.caption(f"{e['time'][-11:-3]} — {e['msg']} ({e.get('user','')})")
+            st.caption(f"**{e['time'][-8:-3]}** — {e['msg']} *(by {e.get('user','')})*")
 
 elif nav == "Synthesis Lab":
-    st.title("Generative Synthesis & Analysis")
+    st.title("Generative Synthesis & Analysis Engine")
+    
     if trigger:
-        with st.spinner("Synthesizing..."):
+        with st.spinner("Synthesizing building model & calculating MEP/Eurocode metrics..."):
             design = generate_building_model(
                 domain, btype, floors, baths, country, material, plot, soil,
                 g_k, q_k, steel, seismic, wind, st.session_state.username
@@ -722,20 +803,20 @@ elif nav == "Synthesis Lab":
             design = ensure_design_compatibility(design)
             st.session_state.active_design = design
             st.session_state.memory["designs"].append(design)
-            log_event(f"Generated #{design['id']}")
+            log_event(f"Generated Archetype #{design['id']}")
             save_memory(st.session_state.memory)
 
     if st.session_state.active_design:
         d = ensure_design_compatibility(st.session_state.active_design)
         if d.get("username") != st.session_state.username:
-            st.warning("Design not owned by current user.")
+            st.warning("Active design belongs to another user space.")
         else:
-            st.subheader(f"Active Design: {d['id']} — {d['type']}")
+            st.subheader(f"Active Model: #{d['id']} — {d['type']}")
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Region", d["country"])
-            col2.metric("GFA", f"{d['total_gfa']:,.0f} m²")
-            col3.metric("Floors", d["floors"])
-            col4.metric("Doors/Windows", f"{d['doors']}/{d['windows']}")
+            col1.metric("Target Region", d["country"])
+            col2.metric("Gross Floor Area", f"{d['total_gfa']:,.0f} m²")
+            col3.metric("Storeys", d["floors"])
+            col4.metric("Doors / Windows", f"{d['doors']} / {d['windows']}")
 
             tabs = st.tabs([
                 "2D Interactive", "3D Isometric", "Structural Passport", "MEP Passport",
@@ -744,7 +825,7 @@ elif nav == "Synthesis Lab":
             ])
             
             with tabs[0]:
-                st.markdown("### Interactive 2D Blueprint")
+                st.markdown("### Interactive Floorplan Grid")
                 d = draw_interactive_blueprint(d)
                 st.session_state.active_design = d
                 save_memory(st.session_state.memory)
@@ -756,7 +837,7 @@ elif nav == "Synthesis Lab":
                 st.json(d["analysis"])
                 
             with tabs[3]:
-                st.markdown("### MEP Infrastructure & Load Passport")
+                st.markdown("### MEP Infrastructure & Service Passport")
                 mep = d.get("mep") or run_mep_analysis(d)
                 d["mep"] = mep
                 
@@ -785,33 +866,33 @@ elif nav == "Synthesis Lab":
                     
             with tabs[4]:
                 zon = d["zoning"]
-                st.write(f"Coverage: {zon['coverage']} (max {ARCH_DOMAINS[d['domain']]['max_coverage']}) — {'OK' if zon['coverage_ok'] else 'VIOLATION'}")
-                st.write(f"FAR: {zon['far']} (max {ARCH_DOMAINS[d['domain']]['max_far']}) — {'OK' if zon['far_ok'] else 'VIOLATION'}")
-                st.write(f"Overall: {zon['status']}")
+                st.write(f"Coverage Ratio: **{zon['coverage']}** (max {ARCH_DOMAINS[d['domain']]['max_coverage']}) — {'✅ PASS' if zon['coverage_ok'] else '❌ VIOLATION'}")
+                st.write(f"FAR: **{zon['far']}** (max {ARCH_DOMAINS[d['domain']]['max_far']}) — {'✅ PASS' if zon['far_ok'] else '❌ VIOLATION'}")
+                st.write(f"Overall Status: **{zon['status']}**")
                 
             with tabs[5]:
                 boq = d["boq"]
                 colA, colB, colC = st.columns(3)
                 with colA:
-                    st.markdown("**Structural & Substructure**")
+                    st.markdown("**Structural Elements**")
                     st.metric("Substructure", f"${boq['substructure']:,.2f}")
                     st.metric("Superstructure", f"${boq['superstructure']:,.2f}")
                 with colB:
-                    st.markdown("**MEP Services**")
-                    st.metric("HVAC Services", f"${boq.get('hvac_services', 0.0):,.2f}")
-                    st.metric("Electrical Systems", f"${boq.get('electrical_services', 0.0):,.2f}")
-                    st.metric("Plumbing & Fire", f"${boq.get('plumbing_services', 0.0):,.2f}")
+                    st.markdown("**MEP Systems**")
+                    st.metric("HVAC Mechanical", f"${boq.get('hvac_services', 0.0):,.2f}")
+                    st.metric("Electrical Power", f"${boq.get('electrical_services', 0.0):,.2f}")
+                    st.metric("Plumbing / Drainage", f"${boq.get('plumbing_services', 0.0):,.2f}")
                 with colC:
-                    st.markdown("**Totals & Forex Conversion**")
+                    st.markdown("**Total Valuation**")
                     st.metric("Total USD", f"${boq['total_usd']:,.2f}")
                     st.metric(f"Total {boq['local_currency']}", f"{boq['symbol']} {boq['total_local']:,.2f}")
                     
             with tabs[6]:
-                st.subheader("Forex Rate Forecast")
-                cur = st.selectbox("Currency", list(st.session_state.regional_fx.keys()), key="forex_cur")
-                horizon = st.radio("Horizon", ["short","medium","long"], horizontal=True, key="fx_hor")
+                st.subheader("Forex Rate Forecast Engine")
+                cur = st.selectbox("Currency Pair", list(st.session_state.regional_fx.keys()), key="forex_cur")
+                horizon = st.radio("Prediction Horizon", ["short","medium","long"], horizontal=True, key="fx_hor")
                 steps_map = {"short":7,"medium":30,"long":90}
-                steps = st.slider("Days", 1, 90, steps_map[horizon])
+                steps = st.slider("Projection Horizon (Days)", 1, 90, steps_map[horizon])
                 base_rate = st.session_state.regional_fx[cur]["rate_to_usd"]
                 np.random.seed(42)
                 history = base_rate + np.random.normal(0, 0.5, 90).cumsum()
@@ -822,79 +903,74 @@ elif nav == "Synthesis Lab":
                 forecast = [smoothed[-1]] * steps
                 forecast_dates = [datetime.now() + timedelta(days=i+1) for i in range(steps)]
                 hist_dates = [datetime.now() - timedelta(days=i) for i in range(90,0,-1)]
-                st.metric("Current", f"{st.session_state.regional_fx[cur]['symbol']} {base_rate}")
-                st.metric(f"{steps}-day avg", f"{st.session_state.regional_fx[cur]['symbol']} {np.mean(forecast):.2f}")
-                trend = "rising" if smoothed[-1] > np.mean(smoothed[-30:]) else "falling"
-                st.write(f"Trend: {trend}")
+                
+                st.metric("Spot Rate", f"{st.session_state.regional_fx[cur]['symbol']} {base_rate:,.2f}")
+                
                 fig, ax = plt.subplots(figsize=(8,4))
-                ax.plot(hist_dates, history, label="Historical", color="#888")
-                ax.plot(hist_dates, smoothed, "--", color="#aaa", label="Smoothed")
-                ax.plot(forecast_dates, forecast, "o-", color="#ddd", label="Forecast")
+                ax.plot(hist_dates, history, label="Historical Rate", color="#64748b")
+                ax.plot(hist_dates, smoothed, "--", color="#94a3b8", label="SMA Trend")
+                ax.plot(forecast_dates, forecast, "o-", color="#38bdf8", label="Forecasted Rate")
                 ax.legend()
-                ax.set_facecolor('#111111')
-                fig.patch.set_facecolor('#000000')
+                ax.set_facecolor('#0d1117')
+                fig.patch.set_facecolor('#030406')
                 ax.tick_params(colors='white')
                 st.pyplot(fig)
                 
             with tabs[7]:
-                st.subheader("Wind Drift Animation")
-                drift_range = st.slider("Drift amplitude factor", 0.0, 1.0, 0.3, 0.05)
+                st.subheader("Wind Drift Simulation")
+                drift_range = st.slider("Wind Shear Deflection Factor", 0.0, 1.0, 0.3, 0.05)
                 draw_3d_isometric_view(d, drift_factor=drift_range)
-                st.caption("Slide to simulate sway under wind load.")
                 
             with tabs[8]:
-                st.subheader("Cost Sensitivity Analysis")
+                st.subheader("Unit Rate Sensitivity Model")
                 base_rates = {
-                    "Reinforced Concrete (Eurocode 2)":350,
-                    "Structural Steel Profile (Eurocode 3)":400,
-                    "Timber Profile (Eurocode 5)":280,
+                    "Reinforced Concrete (Eurocode 2)": 350,
+                    "Structural Steel Profile (Eurocode 3)": 400,
+                    "Timber Profile (Eurocode 5)": 280,
                     "HVAC Mechanical Services": 45,
                     "Electrical & Lighting Power": 35,
                     "Plumbing & Drainage Services": 25
                 }
                 new_rates = {}
                 for mat, rate in base_rates.items():
-                    new_rates[mat] = st.slider(mat, 10, 600, rate, 5)
+                    new_rates[mat] = st.slider(f"{mat} ($/m²)", 10, 600, rate, 5)
                 updated_boq = compute_detailed_forex_boq(d, rate_overrides=new_rates)
                 colA, colB = st.columns(2)
-                with colA: st.metric("Updated Total USD", f"${updated_boq['total_usd']:,.2f}")
-                with colB: st.metric(f"Updated {updated_boq['local_currency']}",
+                with colA: st.metric("Adjusted Total USD", f"${updated_boq['total_usd']:,.2f}")
+                with colB: st.metric(f"Adjusted Total {updated_boq['local_currency']}",
                                      f"{updated_boq['symbol']} {updated_boq['total_local']:,.2f}")
                                      
             with tabs[9]:
-                st.subheader("Design Comparison")
+                st.subheader("Comparative Archetype Analysis")
                 my_designs_list = [d for d in st.session_state.memory["designs"] if d.get("username")==st.session_state.username]
                 if len(my_designs_list) < 2:
-                    st.warning("Save at least two designs to compare.")
+                    st.info("Create and save at least two designs to run side-by-side comparison.")
                 else:
                     ids = [f"{d['id']} - {d['type']}" for d in my_designs_list]
-                    d1_idx = st.selectbox("Design A", range(len(ids)), format_func=lambda x:ids[x])
-                    d2_idx = st.selectbox("Design B", range(len(ids)), index=min(1,len(ids)-1),
-                                         format_func=lambda x:ids[x])
-                    if st.button("Compare"):
+                    d1_idx = st.selectbox("Primary Design (A)", range(len(ids)), format_func=lambda x:ids[x])
+                    d2_idx = st.selectbox("Comparison Design (B)", range(len(ids)), index=min(1,len(ids)-1), format_func=lambda x:ids[x])
+                    if st.button("Generate Overlay View"):
                         d1 = my_designs_list[d1_idx]
                         d2 = my_designs_list[d2_idx]
-                        st.write("### Overlay Blueprint")
+                        st.write("### Spatial Footprint Comparison")
                         st.image(draw_2d_blueprint(d1, overlay_design=d2), use_container_width=True)
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.metric("A GFA", d1["total_gfa"])
-                            st.metric("A Cost USD", d1["boq"]["total_usd"])
-                            st.metric("A Floors", d1["floors"])
+                            st.metric("A GFA", f"{d1['total_gfa']:,.0f} m²")
+                            st.metric("A Cost (USD)", f"${d1['boq']['total_usd']:,.2f}")
                         with col2:
-                            st.metric("B GFA", d2["total_gfa"])
-                            st.metric("B Cost USD", d2["boq"]["total_usd"])
-                            st.metric("B Floors", d2["floors"])
+                            st.metric("B GFA", f"{d2['total_gfa']:,.0f} m²")
+                            st.metric("B Cost (USD)", f"${d2['boq']['total_usd']:,.2f}")
                             
             with tabs[10]:
-                st.subheader("Export to IFC/Revit JSON")
+                st.subheader("IFC Schema Export")
                 ifc_json = generate_ifc_json(d)
                 st.download_button(
-                    "Download IFC-like JSON",
+                    "Download BIM IFC-JSON",
                     data=json.dumps(ifc_json, indent=2),
-                    file_name=f"ARC_{d['id']}_ifc.json",
+                    file_name=f"IMAGINE_{d['id']}_ifc.json",
                     mime="application/json"
                 )
                 st.json(ifc_json, expanded=False)
     else:
-        st.info("Configure parameters and press Execute Generation.")
+        st.info("Configure design parameters in the sidebar and click **Execute Generative Model**.")
