@@ -1,6 +1,6 @@
 # =========================================================
 # IMAGINE – Architectural Intellect, MEP Engine & Enterprise System
-# Integrated Black-Edition & Glassmorphic Engine v22.0
+# Integrated Unified Edition v22.0
 # =========================================================
 
 import os
@@ -30,7 +30,7 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ------------------------------------------------------------
-# PAGE CONFIGURATION & GLASSMORPHIC BLACK THEME
+# PAGE CONFIGURATION & CUSTOM THEME
 # ------------------------------------------------------------
 st.set_page_config(
     page_title="Imagine | Architectural & Engineering Platform",
@@ -42,8 +42,8 @@ st.set_page_config(
 def inject_custom_css():
     st.markdown("""
     <style>
-        .stApp { background-color: #000000; color: #dddddd; }
-        .stSidebar { background-color: #0c0c0c; border-right: 1px solid #222222; }
+        .stApp { background-color: #000000; color: #dddddd; box-shadow: none; }
+        .stSidebar { background-color: #0c0c0c; border-right: 1px solid #222222; box-shadow: none; }
         h1, h2, h3, h4, h5, h6 { color: #eeeeee !important; font-weight: 600; }
         
         /* Glassmorphism Cards */
@@ -55,18 +55,6 @@ def inject_custom_css():
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 16px;
-            box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.5);
-        }
-        
-        .login-box {
-            background: rgba(15, 15, 15, 0.85);
-            backdrop-filter: blur(16px);
-            padding: 2.5rem;
-            border-radius: 16px;
-            border: 1px solid #333333;
-            max-width: 440px;
-            margin: 3rem auto;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.8);
         }
         
         .stMetric {
@@ -75,6 +63,7 @@ def inject_custom_css():
             padding: 12px;
             border: 1px solid #333333;
             color: #eee;
+            box-shadow: none;
         }
         
         .stButton button {
@@ -121,7 +110,7 @@ inject_custom_css()
 # LOGO BRANDING SVG
 # ------------------------------------------------------------
 LOGO_SVG = """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="220" height="60">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="240" height="64">
   <defs>
     <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#9ea5b1"/>
@@ -136,8 +125,8 @@ LOGO_SVG = """
     <circle cx="0" cy="0" r="4" fill="#000"/>
   </g>
   <text x="150" y="65" text-anchor="middle"
-        font-family="'Segoe UI', Arial, sans-serif" font-weight="400" font-size="26"
-        fill="url(#lg)" letter-spacing="5">Imagine</text>
+        font-family="'Segoe UI', Arial, sans-serif" font-weight="400" font-size="28"
+        fill="url(#lg)" letter-spacing="6">Imagine</text>
 </svg>
 """
 
@@ -286,7 +275,6 @@ def authenticate_user(username: str, password: str):
         db_hash, salt, role = row
         if hash_password(password, salt) == db_hash:
             return True, role
-        # Legacy unsalted hash fallback
         if hash_password(password, "imagine_architectural_platform_salt_2026") == db_hash:
             return True, role
     return False, None
@@ -358,7 +346,6 @@ def run_mep_analysis(design):
     domain = design.get("domain", "Residential")
     baths = design.get("bathrooms", 2)
     
-    # 1. HVAC Engine
     hvac_densities = {"Residential": 120.0, "Commercial": 160.0, "Industrial": 100.0}
     w_per_m2 = hvac_densities.get(domain, 130.0)
     total_cooling_w = gfa * w_per_m2
@@ -367,7 +354,6 @@ def run_mep_analysis(design):
     airflow_cfm = cooling_tr * 400.0
     fresh_air_cfm = airflow_cfm * 0.15
     
-    # 2. Electrical Engine
     elec_densities = {"Residential": 35.0, "Commercial": 65.0, "Industrial": 85.0}
     diversity_factors = {"Residential": 0.70, "Commercial": 0.80, "Industrial": 0.85}
     w_elec_per_m2 = elec_densities.get(domain, 50.0)
@@ -380,7 +366,6 @@ def run_mep_analysis(design):
     transformer_kva = math.ceil(max_demand_kva * 1.2 / 50.0) * 50
     generator_kva = math.ceil(max_demand_kva * 1.25 / 25.0) * 25
     
-    # 3. Plumbing Engine
     occ_factor = {"Residential": 15.0, "Commercial": 10.0, "Industrial": 30.0}.get(domain, 15.0)
     est_occupants = max(2, math.ceil(gfa / occ_factor))
     lpcd = {"Residential": 150.0, "Commercial": 50.0, "Industrial": 35.0}.get(domain, 100.0)
@@ -616,11 +601,11 @@ def draw_interactive_blueprint(design):
     nx = len(layout[0]) if layout else 0
     cols = st.columns(3)
     with cols[0]:
-        i1 = st.number_input("Row (Room 1)", 0, ny - 1, 0, key="r1")
-        j1 = st.number_input("Col (Room 1)", 0, nx - 1, 0, key="c1")
+        i1 = st.number_input("Row (Room 1)", 0, max(0, ny - 1), 0, key="r1")
+        j1 = st.number_input("Col (Room 1)", 0, max(0, nx - 1), 0, key="c1")
     with cols[1]:
-        i2 = st.number_input("Row (Room 2)", 0, ny - 1, 0, key="r2")
-        j2 = st.number_input("Col (Room 2)", 0, nx - 1, 0, key="c2")
+        i2 = st.number_input("Row (Room 2)", 0, max(0, ny - 1), 0, key="r2")
+        j2 = st.number_input("Col (Room 2)", 0, max(0, nx - 1), 0, key="c2")
     with cols[2]:
         if st.button("Swap Selected Rooms"):
             layout[i1][j1], layout[i2][j2] = layout[i2][j2], layout[i1][j1]
@@ -694,42 +679,42 @@ if "authenticated" not in st.session_state:
     st.session_state.role = None
 
 def render_login_signup():
-    st.markdown('<div class="login-box">', unsafe_allow_html=True)
-    st.markdown('<div style="text-align:center;">' + LOGO_SVG + '</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center; padding-top: 2rem; padding-bottom: 0.5rem;">' + LOGO_SVG + '</div>', unsafe_allow_html=True)
     st.caption("<p style='text-align:center;'>Architectural & Engineering Platform</p>", unsafe_allow_html=True)
     
-    tab1, tab2 = st.tabs(["Sign In", "Register"])
-    with tab1:
-        with st.form("login_form"):
-            u = st.text_input("Username", placeholder="e.g. admin")
-            p = st.text_input("Password", type="password", placeholder="••••••••")
-            if st.form_submit_button("Sign In", use_container_width=True):
-                ok, role = authenticate_user(u.strip(), p.strip())
-                if ok:
-                    st.session_state.authenticated = True
-                    st.session_state.username = u.strip()
-                    st.session_state.role = role
-                    log_system_event("User logged in")
-                    st.success("Authenticated! Loading system...")
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials.")
-    with tab2:
-        with st.form("register_form"):
-            new_u = st.text_input("Username")
-            new_p = st.text_input("Password", type="password")
-            new_e = st.text_input("Email (optional)")
-            new_r = st.selectbox("Requested Role", ["Architect", "Engineer", "Project Manager", "Viewer"])
-            if st.form_submit_button("Create Account", use_container_width=True):
-                if not new_u or not new_p:
-                    st.error("Username and password are required.")
-                else:
-                    ok, msg = register_user(new_u.strip(), new_p.strip(), new_e.strip(), new_r)
+    col_l, col_m, col_r = st.columns([1, 2, 1])
+    with col_m:
+        tab1, tab2 = st.tabs(["Sign In", "Register"])
+        with tab1:
+            with st.form("login_form"):
+                u = st.text_input("Username", placeholder="e.g. admin")
+                p = st.text_input("Password", type="password", placeholder="••••••••")
+                if st.form_submit_button("Sign In", use_container_width=True):
+                    ok, role = authenticate_user(u.strip(), p.strip())
                     if ok:
-                        st.success(msg + " You can now sign in.")
+                        st.session_state.authenticated = True
+                        st.session_state.username = u.strip()
+                        st.session_state.role = role
+                        log_system_event("User logged in")
+                        st.success("Authenticated! Loading system...")
+                        st.rerun()
                     else:
-                        st.error(msg)
-    st.markdown('</div>', unsafe_allow_html=True)
+                        st.error("Invalid credentials.")
+        with tab2:
+            with st.form("register_form"):
+                new_u = st.text_input("Username")
+                new_p = st.text_input("Password", type="password")
+                new_e = st.text_input("Email (optional)")
+                new_r = st.selectbox("Requested Role", ["Architect", "Engineer", "Project Manager", "Viewer"])
+                if st.form_submit_button("Create Account", use_container_width=True):
+                    if not new_u or not new_p:
+                        st.error("Username and password are required.")
+                    else:
+                        ok, msg = register_user(new_u.strip(), new_p.strip(), new_e.strip(), new_r)
+                        if ok:
+                            st.success(msg + " You can now sign in.")
+                        else:
+                            st.error(msg)
 
 if not st.session_state.authenticated:
     render_login_signup()
@@ -840,7 +825,6 @@ elif choice == "Generative Synthesis Lab":
             )
             st.session_state.active_design = design
             
-            # Save generated model to database
             execute_query(
                 "INSERT INTO projects (title, category, budget, status, created_by, design_data) VALUES (?, ?, ?, ?, ?, ?)",
                 (f"{design['type']} ({design['id']})", design['domain'], design['boq']['total_usd'], "Generated", st.session_state.username, json.dumps(design))
