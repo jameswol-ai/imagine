@@ -1,46 +1,26 @@
 import streamlit as st
 import pandas as pd
 from pdf_generator import generate_passport_pdf
+from auth import check_permission, EXPORT_ALLOWED_ROLES
 
-# Initialize standard SQL connection
 conn = st.connection("postgresql", type="sql")
 
-def fetch_passport_data(project_id: str) -> dict:
-    """Queries project, structural, and MEP details, returning a formatted dict."""
-    query = """
-        SELECT 
-            p.id AS project_id,
-            p.name AS project_name,
-            p.location,
-            p.status,
-            TO_CHAR(p.created_at, 'YYYY-MM-DD') AS date,
-            s.foundation_type,
-            s.load_capacity,
-            s.framing_material,
-            s.seismic_compliance,
-            m.hvac_spec,
-            m.electrical_capacity,
-            m.plumbing_spec,
-            m.fire_protection
-        FROM projects p
-        LEFT JOIN structural_passports s ON p.id = s.project_id
-        LEFT JOIN mep_passports m ON p.id = m.project_id
-        WHERE p.id = :project_id;
-    """
-    
-    # Query database and return pandas DataFrame
-    df = conn.query(query, params={"project_id": project_id}, ttl="5m")
-    
-    if df.empty:
-        return None
-    
-    # Convert first row to dictionary (matches required keys in generate_passport_pdf)
-    return df.iloc[0].to_dict()
+# --- Mock Login / Session Setup (Replace with your login handler) ---
+if "user" not in st.session_state:
+    st.sidebar.title("🔐 Authentication")
+    role_choice = st.sidebar.selectbox("Simulate Login Role", ["Admin", "Project Manager", "Junior Inspector", "Viewer"])
+    st.session_state["user"] = {
+        "username": "jdoe",
+        "role": role_choice
+    }
 
-# --- Streamlit UI ---
+user = st.session_state["user"]
+st.sidebar.caption(f"Logged in as: **{user['username']}** ({user['role']})")
+
+# --- Main App Interface ---
 st.title("MEP & Structural Passport Generator")
 
-# 1. Fetch available projects for dropdown selector
+# 1. Fetch available projects (visible to all logged-in users)
 try:
     project_list_df = conn.query("SELECT id, name FROM projects ORDER BY name ASC;", ttl="10m")
     
@@ -49,22 +29,30 @@ try:
         selected_project_label = st.selectbox("Select Project", list(project_map.keys()))
         selected_project_id = project_map[selected_project_label]
 
-        # 2. Fetch selected data and generate PDF buffer
-        passport_data = fetch_passport_data(selected_project_id)
+        # 2. Check RBAC permissions for PDF Download
+        can_export = check_permission(EXPORT_ALLOWED_ROLES)
 
-        if passport_data:
-            pdf_bytes = generate_passport_pdf(passport_data)
+        if can_export:
+            # Query full data & render download button ONLY if authorized
+            passport_data = fetch_passport_data(selected_project_id) # defined in earlier step
 
-            # 3. Download Button
-            st.download_button(
-                label="📄 Download Passport Report (PDF)",
-                data=pdf_bytes,
-                file_name=f"{passport_data['project_id']}_Passport.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+            if passport_data:
+                pdf_bytes = generate_passport_pdf(passport_data)
+
+                st.download_button(
+                    label="📄 Download Passport Report (PDF)",
+                    data=pdf_bytes,
+                    file_name=f"{passport_data['project_id']}_Passport.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            else:
+                st.warning("No structural/MEP record found for this project.")
         else:
-            st.warning("No structural/MEP record found for the selected project.")
+            # Render a lock state for unauthorized roles
+            st.error("⛔ Access Restricted: Your role does not have permission to export PDF Passports.")
+            st.info(f"Required roles: {', '.join(EXPORT_ALLOWED_ROLES)}")
+
     else:
         st.info("No projects found in database.")
 
