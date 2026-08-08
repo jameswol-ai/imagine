@@ -17,10 +17,6 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from mpl_toolkits.mplot3d import Axes3D
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 # PostgreSQL Driver Import with Fallback
 try:
@@ -227,7 +223,6 @@ def init_db():
     """
     execute_query(logs_sql)
 
-    # Seed Default User Accounts
     default_users = [
         ("admin", "admin123", "Admin", "admin@imagine.io"),
         ("lead_eng", "lead123", "Project Lead", "lead@imagine.io"),
@@ -297,20 +292,6 @@ SOIL_PROFILES = {
     "Juba Alluvial Silt Deposit": {"cohesion": 20, "friction_angle": 15, "unit_weight": 17.5}
 }
 
-SEISMIC_ZONES = {
-    "Low (PGA=0.05g)": {"PGA": 0.05, "S": 1.0, "importance": 1.0},
-    "Moderate (PGA=0.15g)": {"PGA": 0.15, "S": 1.2, "importance": 1.0},
-    "High (PGA=0.25g)": {"PGA": 0.25, "S": 1.4, "importance": 1.25}
-}
-
-WIND_ZONES = {"Low (22 m/s)": 22, "Moderate (28 m/s)": 28, "High (35 m/s)": 35}
-
-ROOM_COLORS = {
-    "Bedroom": "#a78bfa", "Living Room": "#34d399", "Kitchen": "#fbbf24",
-    "Bathroom": "#60a5fa", "Office": "#f87171", "Dining": "#f472b6",
-    "Corridor": "#94a3b8", "Garage": "#64748b"
-}
-
 if "active_design" not in st.session_state:
     st.session_state.active_design = None
 
@@ -373,7 +354,7 @@ def verify_zoning_laws(design):
         "status": "APPROVED" if (cov <= max_cov and far <= max_far) else "VIOLATION"
     }
 
-def compute_detailed_forex_boq(design, rate_overrides=None):
+def compute_detailed_forex_boq(design):
     country = design["country"]
     fx = st.session_state.regional_fx.get(country, REGIONAL_FX_DEFAULTS["Uganda"])
     mult = fx["cost_multiplier"]
@@ -496,7 +477,7 @@ if current_role == "Admin":
 nav_option = st.sidebar.radio("Platform Navigation", nav_options)
 
 # ------------------------------------------------------------
-# MODULE 1: DASHBOARD & PORTFOLIO
+# MODULES
 # ------------------------------------------------------------
 if nav_option == "📌 Dashboard & Portfolio":
     st.title("📌 Project Portfolio & System Dashboard")
@@ -524,9 +505,6 @@ if nav_option == "📌 Dashboard & Portfolio":
     else:
         st.dataframe(df_projects, use_container_width=True)
 
-# ------------------------------------------------------------
-# MODULE 2: GENERATIVE SYNTHESIS LAB
-# ------------------------------------------------------------
 elif nav_option == "📐 Generative Synthesis Lab":
     st.title("📐 Generative Synthesis & Space Programming")
     
@@ -569,9 +547,6 @@ elif nav_option == "📐 Generative Synthesis Lab":
         else:
             st.info("Configure variables and click generate.")
 
-# ------------------------------------------------------------
-# MODULE 3: EUROCODE STRUCTURAL ANALYSIS
-# ------------------------------------------------------------
 elif nav_option == "⚙️ Eurocode Structural Analysis":
     st.title("⚙️ Eurocode Structural Engineering Engine")
     
@@ -601,9 +576,6 @@ elif nav_option == "⚙️ Eurocode Structural Analysis":
         fig3d.update_layout(scene=dict(xaxis_title='Span X', yaxis_title='Bay Y', zaxis_title='Height Z'), height=400)
         st.plotly_chart(fig3d, use_container_width=True)
 
-# ------------------------------------------------------------
-# MODULE 4: MEP CALCULATION ENGINE
-# ------------------------------------------------------------
 elif nav_option == "⚡ MEP Calculation Engine":
     st.title("⚡ Mechanical, Electrical & Plumbing (MEP) Engine")
     
@@ -631,9 +603,6 @@ elif nav_option == "⚡ MEP Calculation Engine":
         wsfu = (wc * 5) + (basin * 1.5)
         st.metric("Peak Domestic Flow Rate", f"{np.sqrt(wsfu) * 0.25:.2f} L/s")
 
-# ------------------------------------------------------------
-# MODULE 5: BOQ & FOREX BUDGETING
-# ------------------------------------------------------------
 elif nav_option == "📊 BoQ & Forex Budgeting":
     st.title("📊 Multi-Currency Forex & BoQ Budgeting")
     
@@ -651,9 +620,6 @@ elif nav_option == "📊 BoQ & Forex Budgeting":
     boq_data[f"Total ({fx_data['currency']})"] = boq_data["Base Cost (USD)"] * rate
     st.table(boq_data.style.format({"Base Cost (USD)": "${:,.2f}", f"Total ({fx_data['currency']})": f"{fx_data['symbol']} {{:,.2f}}"}))
 
-# ------------------------------------------------------------
-# MODULE 6: IFC / BIM EXPORT
-# ------------------------------------------------------------
 elif nav_option == "📦 IFC / BIM Export":
     st.title("📦 Building Information Modeling (BIM) IFC Export")
     
@@ -672,9 +638,6 @@ elif nav_option == "📦 IFC / BIM Export":
     st.code(json_str, language="json")
     st.download_button("📥 Download IFC Metadata (JSON)", data=json_str, file_name="imagine_bim.json", mime="application/json")
 
-# ------------------------------------------------------------
-# MODULE 7: PROJECT GOVERNANCE & APPROVALS
-# ------------------------------------------------------------
 elif nav_option == "🔒 Project Governance & Approvals":
     st.title("🔒 Role-Based Governance & Sign-off")
     st.write(f"Active User Role: **`{current_role}`**")
@@ -691,9 +654,6 @@ elif nav_option == "🔒 Project Governance & Approvals":
                 execute_query("UPDATE projects SET status = ? WHERE code = ?", (new_status, project_code))
                 st.success(f"Project {project_code} updated to '{new_status}'.")
 
-# ------------------------------------------------------------
-# MODULE 8: USER & SYSTEM CONTROL (ADMIN ONLY)
-# ------------------------------------------------------------
 elif nav_option == "⚙️ User & System Control":
     st.title("⚙️ System Control & Directory")
     if current_role != "Admin":
