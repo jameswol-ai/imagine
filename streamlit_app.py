@@ -463,23 +463,23 @@ can_approve = current_role in ["Admin", "Project Lead"]
 
 # Navigation
 nav_options = [
-    "📌 Dashboard & Portfolio",
-    "📐 Generative Synthesis Lab",
-    "⚙️ Eurocode Structural Analysis",
-    "⚡ MEP Calculation Engine",
-    "📊 BoQ & Forex Budgeting",
-    "📦 IFC / BIM Export",
-    "🔒 Project Governance & Approvals"
+    "Dashboard & Portfolio",
+    "Generative Synthesis Lab",
+    "Eurocode Structural Analysis",
+    "MEP Calculation Engine",
+    "BoQ & Forex Budgeting",
+    "IFC / BIM Export",
+    "Project Governance & Approvals"
 ]
 if current_role == "Admin":
-    nav_options.append("⚙️ User & System Control")
+    nav_options.append("User & System Control")
 
 nav_option = st.sidebar.radio("Platform Navigation", nav_options)
 
 # ------------------------------------------------------------
 # MODULES
 # ------------------------------------------------------------
-if nav_option == "📌 Dashboard & Portfolio":
+if nav_option == "Dashboard & Portfolio":
     st.title("📌 Project Portfolio & System Dashboard")
     st.markdown("Centralized architectural lifecycle dashboard.")
 
@@ -505,7 +505,7 @@ if nav_option == "📌 Dashboard & Portfolio":
     else:
         st.dataframe(df_projects, use_container_width=True)
 
-elif nav_option == "📐 Generative Synthesis Lab":
+elif nav_option == "Generative Synthesis Lab":
     st.title("📐 Generative Synthesis & Space Programming")
     
     col_a, col_b = st.columns([1, 2])
@@ -547,7 +547,7 @@ elif nav_option == "📐 Generative Synthesis Lab":
         else:
             st.info("Configure variables and click generate.")
 
-elif nav_option == "⚙️ Eurocode Structural Analysis":
+elif nav_option == "Eurocode Structural Analysis":
     st.title("⚙️ Eurocode Structural Engineering Engine")
     
     col1, col2 = st.columns([1, 1])
@@ -576,7 +576,7 @@ elif nav_option == "⚙️ Eurocode Structural Analysis":
         fig3d.update_layout(scene=dict(xaxis_title='Span X', yaxis_title='Bay Y', zaxis_title='Height Z'), height=400)
         st.plotly_chart(fig3d, use_container_width=True)
 
-elif nav_option == "⚡ MEP Calculation Engine":
+elif nav_option == "MEP Calculation Engine":
     st.title("⚡ Mechanical, Electrical & Plumbing (MEP) Engine")
     
     mep_tab1, mep_tab2, mep_tab3 = st.tabs(["Mechanical (HVAC)", "Electrical Power", "Plumbing (WSFU)"])
@@ -603,7 +603,7 @@ elif nav_option == "⚡ MEP Calculation Engine":
         wsfu = (wc * 5) + (basin * 1.5)
         st.metric("Peak Domestic Flow Rate", f"{np.sqrt(wsfu) * 0.25:.2f} L/s")
 
-elif nav_option == "📊 BoQ & Forex Budgeting":
+elif nav_option == "BoQ & Forex Budgeting":
     st.title("📊 Multi-Currency Forex & BoQ Budgeting")
     
     currency = st.selectbox("Select Currency", list(st.session_state.regional_fx.keys()))
@@ -620,7 +620,7 @@ elif nav_option == "📊 BoQ & Forex Budgeting":
     boq_data[f"Total ({fx_data['currency']})"] = boq_data["Base Cost (USD)"] * rate
     st.table(boq_data.style.format({"Base Cost (USD)": "${:,.2f}", f"Total ({fx_data['currency']})": f"{fx_data['symbol']} {{:,.2f}}"}))
 
-elif nav_option == "📦 IFC / BIM Export":
+elif nav_option == "IFC / BIM Export":
     st.title("📦 Building Information Modeling (BIM) IFC Export")
     
     ifc_payload = {
@@ -638,7 +638,7 @@ elif nav_option == "📦 IFC / BIM Export":
     st.code(json_str, language="json")
     st.download_button("📥 Download IFC Metadata (JSON)", data=json_str, file_name="imagine_bim.json", mime="application/json")
 
-elif nav_option == "🔒 Project Governance & Approvals":
+elif nav_option == "Project Governance & Approvals":
     st.title("🔒 Role-Based Governance & Sign-off")
     st.write(f"Active User Role: **`{current_role}`**")
 
@@ -654,7 +654,7 @@ elif nav_option == "🔒 Project Governance & Approvals":
                 execute_query("UPDATE projects SET status = ? WHERE code = ?", (new_status, project_code))
                 st.success(f"Project {project_code} updated to '{new_status}'.")
 
-elif nav_option == "⚙️ User & System Control":
+elif nav_option == "User & System Control":
     st.title("⚙️ System Control & Directory")
     if current_role != "Admin":
         st.error("Access Restricted")
