@@ -1,11 +1,31 @@
+import bcrypt
 import streamlit as st
 
-# Define role permissions for actions
-EXPORT_ALLOWED_ROLES = {"Admin", "Project Manager", "Lead Engineer"}
+conn = st.connection("postgresql", type="sql")
 
-def check_permission(required_roles: set) -> bool:
-    """Verifies if the current logged-in user has an authorized role."""
-    user = st.session_state.get("user")
-    if not user:
-        return False
-    return user.get("role") in required_roles
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifies a plain-text password against a stored bcrypt hash."""
+    return bcrypt.checkpw(
+        plain_password.encode('utf-8'), 
+        hashed_password.encode('utf-8')
+    )
+
+def authenticate_user(username: str, password: str) -> dict | None:
+    """Fetches user from PostgreSQL and verifies credentials."""
+    query = "SELECT id, username, password_hash, role FROM users WHERE username = :username;"
+    
+    # ttl=0 ensures fresh lookup without caching old auth results
+    df = conn.query(query, params={"username": username}, ttl=0)
+    
+    if df.empty:
+        return None
+        
+    user_record = df.iloc[0].to_dict()
+    
+    if verify_password(password, user_record["password_hash"]):
+        return {
+            "id": user_record["id"],
+            "username": user_record["username"],
+            "role": user_record["role"]
+        }
+    return None
