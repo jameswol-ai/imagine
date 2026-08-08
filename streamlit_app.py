@@ -787,3 +787,250 @@ elif nav == "Synthesis Lab":
                 st.json(ifc_json, expanded=False)
     else:
         st.info("Configure parameters and press Execute Generation.")
+
+# ------------------------------------------------------------
+# MEP LOAD CALCULATION ENGINE
+# ------------------------------------------------------------
+def run_mep_analysis(design):
+    gfa = design["total_gfa"]
+    domain = design["domain"]
+    floors = design["floors"]
+    baths = design["bathrooms"]
+    
+    # 1. MECHANICAL (HVAC) ENGINE
+    # Cooling load density per domain (W/m2)
+    hvac_densities = {"Residential": 120.0, "Commercial": 160.0, "Industrial": 100.0}
+    w_per_m2 = hvac_densities.get(domain, 130.0)
+    
+    total_cooling_w = gfa * w_per_m2
+    cooling_kw = total_cooling_w / 1000.0
+    cooling_tr = cooling_kw / 3.517  # 1 TR = 3.517 kW
+    airflow_cfm = cooling_tr * 400.0  # ~400 CFM per TR
+    fresh_air_cfm = airflow_cfm * 0.15  # 15% fresh air intake
+    
+    # 2. ELECTRICAL ENGINE
+    # Power density (W/m2) & Diversity factor
+    elec_densities = {"Residential": 35.0, "Commercial": 65.0, "Industrial": 85.0}
+    diversity_factors = {"Residential": 0.70, "Commercial": 0.80, "Industrial": 0.85}
+    
+    w_elec_per_m2 = elec_densities.get(domain, 50.0)
+    diversity = diversity_factors.get(domain, 0.75)
+    pf = 0.85  # Power factor
+    
+    total_connected_kw = (gfa * w_elec_per_m2) / 1000.0
+    connected_kva = total_connected_kw / pf
+    max_demand_kva = connected_kva * diversity
+    
+    # Sizing Transformer & Backup Generator
+    transformer_kva = math.ceil(max_demand_kva * 1.2 / 50.0) * 50  # Round up to standard 50 kVA steps
+    generator_kva = math.ceil(max_demand_kva * 1.25 / 25.0) * 25    # 25% safety headroom
+    
+    # 3. PLUMBING & DRAINAGE ENGINE
+    # Occupancy estimation (m2 per person)
+    occ_factor = {"Residential": 15.0, "Commercial": 10.0, "Industrial": 30.0}.get(domain, 15.0)
+    est_occupants = max(2, math.ceil(gfa / occ_factor))
+    
+    # Daily water consumption per capita (Liters/day)
+    lpcd = {"Residential": 150.0, "Commercial": 50.0, "Industrial": 35.0}.get(domain, 100.0)
+    daily_water_demand_l = est_occupants * lpcd
+    
+    # Storage tank requirement (1.5 days reserve in m3)
+    storage_tank_m3 = round((daily_water_demand_l * 1.5) / 1000.0, 2)
+    
+    # Fixture unit calculations (WSFU / DFU)
+    wsfu = (baths * 8) + (math.ceil(gfa / 100) * 4)  # 8 WSFU per bath group + kitchen/utility
+    dfu = math.ceil(wsfu * 1.25)
+    
+    return {
+        "mechanical": {
+            "cooling_load_kw": round(cooling_kw, 2),
+            "cooling_load_tr": round(cooling_tr, 2),
+            "supply_airflow_cfm": round(airflow_cfm, 0),
+            "fresh_air_cfm": round(fresh_air_cfm, 0),
+            "design_density_w_m2": w_per_m2
+        },
+        "electrical": {
+            "connected_load_kw": round(total_connected_kw, 2),
+            "connected_load_kva": round(connected_kva, 2),
+            "max_demand_kva": round(max_demand_kva, 2),
+            "transformer_rating_kva": max(50, transformer_kva),
+            "generator_rating_kva": max(30, generator_kva),
+            "diversity_factor": diversity
+        },
+        "plumbing": {
+            "est_occupants": est_occupants,
+            "daily_water_demand_liters": round(daily_water_demand_l, 0),
+            "storage_tank_capacity_m3": storage_tank_m3,
+            "total_wsfu": wsfu,
+            "total_dfu": dfu
+        }
+    }
+
+
+def compute_detailed_forex_boq(design, rate_overrides=None):
+    country = design["country"]
+    fx = st.session_state.regional_fx[country]
+    mult = fx["cost_multiplier"]
+    risk = fx["risk_premium"]
+    
+    base_rates = {
+        "Reinforced Concrete (Eurocode 2)": 350,
+        "Structural Steel Profile (Eurocode 3)": 400,
+        "Timber Profile (Eurocode 5)": 280,
+        "HVAC Mechanical Services": 45,
+        "Electrical & Lighting Power": 35,
+        "Plumbing & Drainage Services": 25
+    }
+    
+    if rate_overrides is None:
+        rate_overrides = {}
+        
+    str_rate = rate_overrides.get(design["material_frame"], base_rates.get(design["material_frame"], 350))
+    hvac_rate = rate_overrides.get("HVAC Mechanical Services", base_rates["HVAC Mechanical Services"])
+    elec_rate = rate_overrides.get("Electrical & Lighting Power", base_rates["Electrical & Lighting Power"])
+    plumb_rate = rate_overrides.get("Plumbing & Drainage Services", base_rates["Plumbing & Drainage Services"])
+    
+    gfa = design["total_gfa"]
+    
+    # Substructure & Superstructure
+    substructure = 0.15 * str_rate * gfa
+    superstructure = 0.70 * str_rate * gfa
+    
+    # MEP Services Breakdown
+    hvac_cost = hvac_rate * gfa
+    electrical_cost = elec_rate * gfa
+    plumbing_cost = plumb_rate * gfa
+    total_mep = hvac_cost + electrical_cost + plumbing_cost
+    
+    finishes = 0.10 * str_rate * gfa
+    preliminaries = 0.05 * str_rate * gfa
+    
+    raw_total_usd = (substructure + superstructure + total_mep + finishes + preliminaries)
+    total_usd = raw_total_usd * mult * (1 + risk)
+    
+    return {
+        "substructure": round(substructure, 2),
+        "superstructure": round(superstructure, 2),
+        "hvac_services": round(hvac_cost, 2),
+        "electrical_services": round(electrical_cost, 2),
+        "plumbing_services": round(plumbing_cost, 2),
+        "total_mep": round(total_mep, 2),
+        "finishes": round(finishes, 2),
+        "preliminaries": round(preliminaries, 2),
+        "total_usd": round(total_usd, 2),
+        "total_local": round(total_usd * fx["rate_to_usd"], 2),
+        "local_currency": fx["currency"],
+        "symbol": fx["symbol"],
+        "rate_used": fx["rate_to_usd"]
+    }
+
+
+
+def generate_building_model(domain, btype, floors, baths, country, material_frame, plot_size,
+                           soil_type, g_k, q_k, steel_section, seismic_zone, wind_zone, username):
+    # ... [Keep initial room/grid calculations unchanged] ...
+    
+    design = {
+        "id": str(uuid.uuid4())[:6].upper(),
+        "username": username,
+        "domain": domain,
+        "type": btype,
+        "floors": floors,
+        "bathrooms": baths,
+        "country": country,
+        "material_frame": material_frame,
+        "plot_size": plot_size,
+        "soil_type": soil_type,
+        "ground_footprint": ground_footprint,
+        "rooms": rooms,
+        "layout": {"grid": layout_grid, "nx": nx, "ny": ny, "span": span},
+        "total_gfa": total_gfa,
+        "doors": doors,
+        "windows": windows,
+        "loads": {
+            "g_k": g_k,
+            "q_k": q_k,
+            "steel_section": steel_section,
+            "seismic_zone": seismic_zone,
+            "wind_zone": wind_zone
+        },
+        "created": datetime.now().isoformat()
+    }
+    
+    # Engine execution pipeline
+    design["analysis"] = run_eurocode_analysis(design)
+    design["mep"] = run_mep_analysis(design)
+    design["zoning"] = verify_zoning_laws(design)
+    design["boq"] = compute_detailed_forex_boq(design)
+    return design
+
+def ensure_design_compatibility(design):
+    # ... [Keep previous structural & layout compatibility checks] ...
+    if "mep" not in design: 
+        design["mep"] = run_mep_analysis(design)
+    if "analysis" not in design: 
+        design["analysis"] = run_eurocode_analysis(design)
+    if "zoning" not in design: 
+        design["zoning"] = verify_zoning_laws(design)
+    if "boq" not in design: 
+        design["boq"] = compute_detailed_forex_boq(design)
+    return design
+
+
+# In Synthesis Lab nav section:
+tabs = st.tabs([
+    "2D Interactive", "3D Isometric", "Structural Passport", "MEP Passport", 
+    "Zoning", "BoQ & Forex", "Forex Forecast", "Drift Animation", 
+    "Cost Sensitivity", "Design Compare", "Export IFC"
+])
+
+# ... [Tabs 0, 1, 2 unchanged] ...
+
+with tabs[3]: # MEP Passport Tab
+    st.markdown("### MEP Infrastructure & Load Passport")
+    mep = d["mep"]
+    
+    col_m1, col_m2, col_m3 = st.columns(3)
+    
+    with col_m1:
+        st.markdown("#### Mechanical (HVAC)")
+        st.metric("Cooling Capacity", f"{mep['mechanical']['cooling_load_tr']} TR")
+        st.write(f"**Heat Load:** {mep['mechanical']['cooling_load_kw']} kW")
+        st.write(f"**Supply Airflow:** {mep['mechanical']['supply_airflow_cfm']:,.0f} CFM")
+        st.write(f"**Fresh Air Intake:** {mep['mechanical']['fresh_air_cfm']:,.0f} CFM")
+        
+    with col_m2:
+        st.markdown("#### Electrical Power")
+        st.metric("Max Demand", f"{mep['electrical']['max_demand_kva']} kVA")
+        st.write(f"**Connected Load:** {mep['electrical']['connected_load_kva']} kVA")
+        st.write(f"**Transformer Min:** {mep['electrical']['transformer_rating_kva']} kVA")
+        st.write(f"**Standby Genset:** {mep['electrical']['generator_rating_kva']} kVA")
+        
+    with col_m3:
+        st.markdown("#### Plumbing & Sanitation")
+        st.metric("Daily Water Demand", f"{mep['plumbing']['daily_water_demand_liters']:,.0f} L/day")
+        st.write(f"**Est. Occupancy:** {mep['plumbing']['est_occupants']} Persons")
+        st.write(f"**Storage Reserve:** {mep['plumbing']['storage_tank_capacity_m3']} m³")
+        st.write(f"**Fixture Units:** {mep['plumbing']['total_wsfu']} WSFU / {mep['plumbing']['total_dfu']} DFU")
+
+with tabs[5]: # Updated BoQ & Forex Tab
+    st.markdown("### Integrated Forex Bill of Quantities")
+    boq = d["boq"]
+    colA, colB, colC = st.columns(3)
+    
+    with colA:
+        st.markdown("**Structural & Substructure**")
+        st.metric("Substructure", f"${boq['substructure']:,.2f}")
+        st.metric("Superstructure", f"${boq['superstructure']:,.2f}")
+        
+    with colB:
+        st.markdown("**MEP Services**")
+        st.metric("HVAC Services", f"${boq['hvac_services']:,.2f}")
+        st.metric("Electrical Systems", f"${boq['electrical_services']:,.2f}")
+        st.metric("Plumbing & Fire", f"${boq['plumbing_services']:,.2f}")
+        
+    with colC:
+        st.markdown("**Totals & Forex Conversion**")
+        st.metric("Total USD", f"${boq['total_usd']:,.2f}")
+        st.metric(f"Total {boq['local_currency']}", f"{boq['symbol']} {boq['total_local']:,.2f}")
+
