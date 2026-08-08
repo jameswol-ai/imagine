@@ -1207,3 +1207,4 @@ elif nav == "Synthesis Lab":
             st.json(ifc_json, expanded=False)
     else:
         st.info("Configure design parameters in the sidebar and click **Execute Generative Model**.")
+
