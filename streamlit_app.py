@@ -9,6 +9,7 @@ import sqlite3
 import uuid
 import math
 import hashlib
+import random
 from datetime import datetime, timedelta
 from io import BytesIO
 
@@ -21,7 +22,7 @@ import matplotlib.patches as mpatches
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-# PostgreSQL Driver Driver Import with Fallback
+# PostgreSQL Driver Import with Fallback
 try:
     import psycopg2
     import psycopg2.extras
@@ -510,9 +511,9 @@ if nav_option == "📌 Dashboard & Portfolio":
     st.divider()
     st.subheader("Project Inventory")
     
-    conn, db_type = get_db_connection()
-    df_projects = pd.read_sql_query("SELECT id, name, code, client, status, gross_area, estimated_cost_usd FROM projects", conn)
-    conn.close()
+    cols = ["id", "name", "code", "client", "status", "gross_area", "estimated_cost_usd"]
+    rows = execute_query("SELECT id, name, code, client, status, gross_area, estimated_cost_usd FROM projects", fetch="all") or []
+    df_projects = pd.DataFrame(rows, columns=cols)
 
     if df_projects.empty:
         execute_query(
@@ -698,5 +699,5 @@ elif nav_option == "⚙️ User & System Control":
     if current_role != "Admin":
         st.error("Access Restricted")
     else:
-        users = execute_query("SELECT id, username, role, email, created_at FROM users", fetch="all")
+        users = execute_query("SELECT id, username, role, email, created_at FROM users", fetch="all") or []
         st.dataframe(pd.DataFrame(users, columns=["ID", "Username", "Role", "Email", "Created At"]), use_container_width=True)
