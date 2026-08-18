@@ -246,3 +246,14 @@ IMAGINE/structural/
 ├── retaining_walls/
 ├── steel_connections/
 └── finite_element_analysis/
+
+
+IMAGINE/bim/
+│
+├── buildings/
+├── storeys/
+├── spaces/
+├── elements/
+├── ifc/
+├── cobie/
+└── digital_twin/
