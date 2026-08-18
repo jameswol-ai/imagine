@@ -1,6 +1,4 @@
 streamlit
-bcrypt
-psycopg2-binary
-sqlalchemy
-reportlab
+plotly
+numpy
 pandas
