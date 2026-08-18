@@ -357,11 +357,14 @@ def page_bim():
         with col2:
             st.metric("Temperature", "23.5°C", "+0.5")
             st.metric("Humidity", "42%", "-3%")
-        # Fixed the date_range error: use freq="1H" and ensure correct start
-        st.line_chart(pd.DataFrame({
-            "Time": pd.date_range(start=datetime.now() - timedelta(hours=23), periods=24, freq="1H"),
-            "Energy": [310, 305, 300, 295, 290, 285, 280, 275, 270, 265, 260, 255, 250, 245, 240, 235, 230, 225, 220, 215, 210, 205, 200, 195],
-        }).set_index("Time"))
+        # Fixed: generate 24 hourly timestamps without using pd.date_range
+        now = datetime.now()
+        start_time = now - timedelta(hours=23)  # so that we get 24 points
+        times = [start_time + timedelta(hours=i) for i in range(24)]
+        # Demo energy data: a decreasing trend for visual effect
+        energy_vals = [310 - i*5 for i in range(24)]
+        df_energy = pd.DataFrame({"Time": times, "Energy": energy_vals})
+        st.line_chart(df_energy.set_index("Time"))
 
     render_tabs(
         ["Buildings", "Storeys", "Spaces", "Elements", "IFC Viewer", "COBie", "Digital Twin"],
