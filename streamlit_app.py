@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
-import json
 import random
 
 # ---------------------------
@@ -27,11 +26,10 @@ def check_authentication():
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             if st.button("Sign In"):
-                # Replace with real API call
                 if username and password:
                     st.session_state.authenticated = True
                     st.session_state.user = username
-                    st.session_state.role = "Project Manager"  # mock role
+                    st.session_state.role = "Project Manager"
                     st.rerun()
                 else:
                     st.error("Invalid credentials")
@@ -43,7 +41,6 @@ check_authentication()
 # Mock API Client
 # ---------------------------
 def api_get(endpoint):
-    """Return mock data for demonstration."""
     if endpoint == "projects":
         return pd.DataFrame({
             "ID": [1, 2, 3, 4],
@@ -174,7 +171,6 @@ page = st.sidebar.radio(
 # Helper for rendering tabs
 # ---------------------------
 def render_tabs(tab_list, content_dict):
-    """Given a list of tab names and a dict mapping tab to a callable, render tabs."""
     tabs = st.tabs(tab_list)
     for tab, func in zip(tabs, [content_dict[t] for t in tab_list]):
         with tab:
@@ -361,8 +357,9 @@ def page_bim():
         with col2:
             st.metric("Temperature", "23.5°C", "+0.5")
             st.metric("Humidity", "42%", "-3%")
+        # Fixed the date_range error: use freq="1H" and ensure correct start
         st.line_chart(pd.DataFrame({
-            "Time": pd.date_range(start=datetime.now() - timedelta(hours=24), periods=24, freq="H"),
+            "Time": pd.date_range(start=datetime.now() - timedelta(hours=23), periods=24, freq="1H"),
             "Energy": [310, 305, 300, 295, 290, 285, 280, 275, 270, 265, 260, 255, 250, 245, 240, 235, 230, 225, 220, 215, 210, 205, 200, 195],
         }).set_index("Time"))
 
