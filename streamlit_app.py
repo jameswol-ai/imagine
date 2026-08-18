@@ -218,12 +218,101 @@ def editable_table(data, key, columns=None):
 # ---------------------------
 @safe_exec
 def page_dashboard():
+    from modules.dashboard_service import get_dashboard_metrics
+    from projects.projects.dashboard import dashboard_dataframe
+
     st.title("📊 Dashboard")
+
+    metrics = get_dashboard_metrics()
+
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Active Projects", "12", "+2")
-    col2.metric("Total Budget", "$184M", "+5%")
-    col3.metric("Progress (avg)", "68%", "+12%")
-    col4.metric("Open RFIs", "7", "-3")
+
+    col1.metric(
+        "Active Projects",
+        metrics.active_projects,
+    )
+
+    col2.metric(
+        "Total Budget",
+        f"${metrics.total_budget:,.0f}",
+    )
+
+    col3.metric(
+        "Progress (avg)",
+        f"{metrics.average_progress:.1f}%",
+    )
+
+    col4.metric(
+        "Open RFIs",
+        metrics.open_rfis,
+    )
+
+    st.subheader("Project Health")
+
+    df_proj = dashboard_dataframe(metrics)
+
+    if df_proj.empty:
+        st.info("No projects available.")
+    else:
+        fig = px.bar(
+            df_proj,
+            x="Name",
+            y="Progress %",
+            color="Status",
+            text="Progress %",
+            hover_data=["Budget (USD)"],
+        )
+
+        fig.update_traces(
+            texttemplate="%{text:.0f}%",
+            textposition="outside",
+        )
+
+        fig.update_layout(
+            yaxis_title="Progress (%)",
+            xaxis_title="Project",
+            yaxis_range=[0, 100],
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+        )
+
+    st.subheader("Project Budget")
+
+    if not df_proj.empty:
+        budget_df = df_proj[
+            ["Name", "Budget (USD)", "Status"]
+        ].copy()
+
+        st.dataframe(
+            budget_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.subheader("Recent Activity")
+
+    if metrics.recent_activity:
+        activity_df = pd.DataFrame(
+            metrics.recent_activity
+        )
+
+        st.dataframe(
+            activity_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No project activity recorded yet.")
+
+    st.caption(
+        f"{metrics.total_projects} total projects • "
+        f"{metrics.completed_projects} completed • "
+        f"{metrics.planning_projects} planning • "
+        f"{metrics.on_hold_projects} on hold"
+    )
 
     st.subheader("Project Health")
     df_proj = pd.DataFrame(st.session_state.projects_data)
