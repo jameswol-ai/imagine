@@ -226,3 +226,23 @@ IMAGINE/architecture/
 ├── floor_planning/
 ├── room_programming/
 └── compliance/
+
+
+IMAGINE/structural/
+│
+├── eurocode/
+│   ├── en1990/
+│   ├── en1991/
+│   ├── en1992/
+│   ├── en1993/
+│   ├── en1995/
+│   ├── en1997/
+│   └── en1998/
+│
+├── beam_design/
+├── column_design/
+├── slab_design/
+├── foundation_design/
+├── retaining_walls/
+├── steel_connections/
+└── finite_element_analysis/
