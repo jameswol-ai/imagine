@@ -1,0 +1,3 @@
+"""
+IMAGINE Core Package
+"""
