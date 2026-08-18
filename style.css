@@ -1,0 +1,52 @@
+/* style.css */
+/* Global styling */
+.stApp {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+h1, h2, h3 {
+    color: #1e3c72;
+    font-weight: 600;
+}
+.metric-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    text-align: center;
+    border-left: 5px solid #1e3c72;
+}
+.sidebar .sidebar-content {
+    background: #1e3c72;
+    color: white;
+}
+.stButton button {
+    background-color: #1e3c72;
+    color: white;
+    border-radius: 8px;
+    transition: 0.3s;
+}
+.stButton button:hover {
+    background-color: #2a5298;
+    transform: scale(1.02);
+}
+.stDataFrame, .stTable {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2px;
+    background-color: #f0f2f6;
+    border-radius: 10px;
+    padding: 6px;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px;
+    padding: 8px 16px;
+    background-color: transparent;
+    font-weight: 500;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    background-color: #1e3c72;
+    color: white;
+}
