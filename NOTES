@@ -1,0 +1,181 @@
+IMAGINE/
+│
+├── app/
+│   ├── main.py
+│   ├── config.py
+│   ├── settings.py
+│   └── dependencies.py
+│
+├── core/
+│   ├── authentication/
+│   ├── authorization/
+│   ├── organizations/
+│   ├── users/
+│   ├── roles/
+│   ├── permissions/
+│   ├── audit/
+│   └── notifications/
+│
+├── database/
+│   ├── migrations/
+│   │   ├── versions/
+│   │   └── alembic.ini
+│   │
+│   ├── models/
+│   ├── repositories/
+│   ├── seeders/
+│   └── connection.py
+│
+├── projects/
+│   ├── projects/
+│   ├── approvals/
+│   ├── revisions/
+│   ├── workflows/
+│   └── governance/
+│
+├── bim/
+│   ├── buildings/
+│   ├── storeys/
+│   ├── spaces/
+│   ├── elements/
+│   ├── ifc/
+│   ├── cobie/
+│   └── digital_twin/
+│
+├── architecture/
+│   ├── generative_design/
+│   ├── zoning/
+│   ├── site_planning/
+│   ├── floor_planning/
+│   ├── room_programming/
+│   └── compliance/
+│
+├── structural/
+│   ├── eurocode/
+│   │   ├── en1990/
+│   │   ├── en1991/
+│   │   ├── en1992/
+│   │   ├── en1993/
+│   │   ├── en1995/
+│   │   ├── en1997/
+│   │   └── en1998/
+│   │
+│   ├── beam_design/
+│   ├── column_design/
+│   ├── slab_design/
+│   ├── foundation_design/
+│   ├── retaining_walls/
+│   ├── steel_connections/
+│   └── finite_element_analysis/
+│
+├── mep/
+│   ├── mechanical/
+│   │   ├── hvac/
+│   │   ├── ventilation/
+│   │   ├── chilled_water/
+│   │   └── energy_simulation/
+│   │
+│   ├── electrical/
+│   │   ├── load_analysis/
+│   │   ├── transformers/
+│   │   ├── generators/
+│   │   ├── cable_sizing/
+│   │   └── solar_pv/
+│   │
+│   └── plumbing/
+│       ├── water_supply/
+│       ├── drainage/
+│       ├── stormwater/
+│       ├── sewer_networks/
+│       └── firefighting/
+│
+├── costing/
+│   ├── boq/
+│   ├── quantity_takeoff/
+│   ├── procurement/
+│   ├── forex/
+│   ├── inflation/
+│   ├── risk_analysis/
+│   └── cashflow/
+│
+├── construction/
+│   ├── planning/
+│   ├── scheduling/
+│   ├── rfis/
+│   ├── submittals/
+│   ├── variations/
+│   ├── snagging/
+│   ├── progress_tracking/
+│   └── site_diaries/
+│
+├── documents/
+│   ├── drawing_management/
+│   ├── specifications/
+│   ├── contracts/
+│   ├── reports/
+│   ├── version_control/
+│   └── archives/
+│
+├── ai/
+│   ├── imagine_architect/
+│   ├── imagine_engineer/
+│   ├── imagine_mep/
+│   ├── imagine_qs/
+│   ├── imagine_pm/
+│   ├── vector_store/
+│   ├── rag/
+│   └── prompt_library/
+│
+├── analytics/
+│   ├── dashboards/
+│   ├── kpis/
+│   ├── portfolio/
+│   ├── forecasting/
+│   └── reporting/
+│
+├── regional/
+│   ├── uganda/
+│   ├── kenya/
+│   ├── tanzania/
+│   ├── rwanda/
+│   ├── south_sudan/
+│   ├── codes/
+│   └── zoning_laws/
+│
+├── integrations/
+│   ├── microsoft/
+│   ├── autocad/
+│   ├── revit/
+│   ├── archicad/
+│   ├── tekla/
+│   ├── ifcopenshell/
+│   ├── arcgis/
+│   ├── azure/
+│   └── mapbox/
+│
+├── digital_twin/
+│   ├── assets/
+│   ├── sensors/
+│   ├── telemetry/
+│   ├── energy/
+│   ├── maintenance/
+│   └── predictive_ai/
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── api/
+│   └── performance/
+│
+├── deployment/
+│   ├── docker/
+│   ├── kubernetes/
+│   ├── github_actions/
+│   └── azure/
+│
+└── docs/
+    ├── architecture/
+    ├── api/
+    ├── database/
+    ├── engineering/
+    └── user_manuals/
