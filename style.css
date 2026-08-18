@@ -1,12 +1,3 @@
-/* style.css */
-/* Global styling */
-.stApp {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-}
-h1, h2, h3 {
-    color: #1e3c72;
-    font-weight: 600;
-}
 .metric-card {
     background: white;
     padding: 1rem;
@@ -14,10 +5,6 @@ h1, h2, h3 {
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     text-align: center;
     border-left: 5px solid #1e3c72;
-}
-.sidebar .sidebar-content {
-    background: #1e3c72;
-    color: white;
 }
 .stButton button {
     background-color: #1e3c72;
@@ -28,11 +15,6 @@ h1, h2, h3 {
 .stButton button:hover {
     background-color: #2a5298;
     transform: scale(1.02);
-}
-.stDataFrame, .stTable {
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 .stTabs [data-baseweb="tab-list"] {
     gap: 2px;
