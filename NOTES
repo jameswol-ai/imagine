@@ -179,3 +179,40 @@ IMAGINE/
     ├── database/
     ├── engineering/
     └── user_manuals/
+
+IMAGINE/projects/
+│
+├── projects/
+│   ├── __init__.py
+│   ├── models.py
+│   ├── schemas.py
+│   ├── service.py
+│   └── routes.py
+│
+├── approvals/
+│   ├── __init__.py
+│   ├── models.py
+│   ├── schemas.py
+│   ├── service.py
+│   └── routes.py
+│
+├── revisions/
+│   ├── __init__.py
+│   ├── models.py
+│   ├── schemas.py
+│   ├── service.py
+│   └── routes.py
+│
+├── workflows/
+│   ├── __init__.py
+│   ├── models.py
+│   ├── schemas.py
+│   ├── service.py
+│   └── routes.py
+│
+└── governance/
+    ├── __init__.py
+    ├── models.py
+    ├── schemas.py
+    ├── service.py
+    └── routes.py
