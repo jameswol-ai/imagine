@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app import config, settings, dependencies
+from core.authentication.routes import router as auth_router
 
 app = FastAPI(
     title="IMAGINE Platform",
@@ -7,15 +7,8 @@ app = FastAPI(
     version="0.1.0"
 )
 
+app.include_router(auth_router)
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "message": "IMAGINE is running"}
-
-@app.get("/")
-def root():
-    return {"message": "Welcome to IMAGINE!"}
-
-@app.get("/projects")
-def list_projects():
-    # placeholder: replace with database.repositories.projects.list()
-    return {"projects": ["Project Alpha", "Project Beta"]}
