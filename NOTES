@@ -216,3 +216,13 @@ IMAGINE/projects/
     ├── schemas.py
     ├── service.py
     └── routes.py
+
+
+IMAGINE/architecture/
+│
+├── generative_design/
+├── zoning/
+├── site_planning/
+├── floor_planning/
+├── room_programming/
+└── compliance/
