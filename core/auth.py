@@ -1,3 +1,7 @@
+"""
+Authentication Service
+"""
+
 import hashlib
 import uuid
 
@@ -5,25 +9,30 @@ from core.database import execute_query
 
 
 def hash_password(
-        password,
-        salt):
+        password: str,
+        salt: str
+) -> str:
 
     return hashlib.sha256(
-        (password + salt).encode()
+        f"{password}{salt}".encode(
+            "utf-8"
+        )
     ).hexdigest()
 
 
 def authenticate_user(
         username,
-        password):
+        password
+):
 
     row = execute_query(
         """
-        SELECT password_hash,
-               salt,
-               role
+        SELECT
+            password_hash,
+            salt,
+            role
         FROM users
-        WHERE username=?
+        WHERE username = ?
         """,
         (username,),
         fetch="one"
@@ -32,9 +41,14 @@ def authenticate_user(
     if not row:
         return False, None
 
-    password_hash, salt, role = row
+    db_hash, salt, role = row
 
-    if hash_password(password, salt) == password_hash:
+    password_hash = hash_password(
+        password,
+        salt
+    )
+
+    if password_hash == db_hash:
         return True, role
 
     return False, None
@@ -44,7 +58,8 @@ def register_user(
         username,
         password,
         role,
-        email=""):
+        email=""
+):
 
     salt = uuid.uuid4().hex
 
@@ -63,7 +78,8 @@ def register_user(
             role,
             email
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES
+        (?, ?, ?, ?, ?)
         """,
         (
             username,
@@ -72,4 +88,13 @@ def register_user(
             role,
             email
         )
+    )
+
+    return True
+
+
+def generate_uuid():
+
+    return str(
+        uuid.uuid4()
     )
