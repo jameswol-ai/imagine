@@ -1,15 +1,17 @@
 from pydantic import BaseModel
+from typing import Optional
 
-class RevisionCreate(BaseModel):
+class ApprovalCreate(BaseModel):
     project_id: int
-    description: str
-    created_by: int
+    approver_id: int
+    comment: Optional[str] = None
 
-class RevisionOut(BaseModel):
+class ApprovalOut(BaseModel):
     id: int
     project_id: int
-    description: str
-    created_by: int
+    approver_id: int
+    status: str
+    comment: Optional[str]
 
     class Config:
         orm_mode = True
