@@ -9,11 +9,24 @@ import random
 # Load custom CSS
 # ---------------------------
 def load_css():
-    with open("style.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    try:
+        with open("style.css") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        # Fallback if CSS file is missing
+        st.markdown("""
+        <style>
+        .metric-card { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; border-left: 5px solid #1e3c72; }
+        .stButton button { background-color: #1e3c72; color: white; border-radius: 8px; transition: 0.3s; }
+        .stButton button:hover { background-color: #2a5298; transform: scale(1.02); }
+        .stTabs [data-baseweb="tab-list"] { gap: 2px; background-color: #f0f2f6; border-radius: 10px; padding: 6px; }
+        .stTabs [data-baseweb="tab"] { border-radius: 8px; padding: 8px 16px; background-color: transparent; font-weight: 500; }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] { background-color: #1e3c72; color: white; }
+        </style>
+        """, unsafe_allow_html=True)
 
 # ---------------------------
-# Page configuration
+# Page config
 # ---------------------------
 st.set_page_config(
     page_title="IMAGINE Platform",
@@ -42,40 +55,159 @@ def check_authentication():
                 else:
                     st.error("Invalid credentials")
         st.stop()
+
 check_authentication()
 
 # ---------------------------
-# Session state for data editing
+# Initialize session state data
 # ---------------------------
-if "projects_data" not in st.session_state:
-    st.session_state.projects_data = [
-        {"ID": 1, "Name": "Green Tower", "Status": "Active", "Budget (M USD)": 12.5, "Progress %": 75},
-        {"ID": 2, "Name": "Harbor Bridge", "Status": "Planning", "Budget (M USD)": 8.3, "Progress %": 20},
-        {"ID": 3, "Name": "Riverside Mall", "Status": "Completed", "Budget (M USD)": 22.1, "Progress %": 100},
-        {"ID": 4, "Name": "Solar Park", "Status": "Active", "Budget (M USD)": 5.7, "Progress %": 45},
-    ]
-if "bim_buildings" not in st.session_state:
-    st.session_state.bim_buildings = [
-        {"Building": "Tower A", "Storeys": 25, "Area (m²)": 15000, "IFC Version": "IFC4"},
-        {"Building": "Tower B", "Storeys": 18, "Area (m²)": 12000, "IFC Version": "IFC4"},
-        {"Building": "Pavilion", "Storeys": 3, "Area (m²)": 2500, "IFC Version": "IFC2x3"},
-    ]
-# Add similar session state for other modules (storeys, spaces, elements, COBie, etc.)
-# For brevity, I'll include only key ones; the full script has them all.
+def init_session_state():
+    # Projects
+    if "projects_data" not in st.session_state:
+        st.session_state.projects_data = [
+            {"ID": 1, "Name": "Green Tower", "Status": "Active", "Budget (M USD)": 12.5, "Progress %": 75},
+            {"ID": 2, "Name": "Harbor Bridge", "Status": "Planning", "Budget (M USD)": 8.3, "Progress %": 20},
+            {"ID": 3, "Name": "Riverside Mall", "Status": "Completed", "Budget (M USD)": 22.1, "Progress %": 100},
+            {"ID": 4, "Name": "Solar Park", "Status": "Active", "Budget (M USD)": 5.7, "Progress %": 45},
+        ]
+    # BIM
+    if "bim_buildings" not in st.session_state:
+        st.session_state.bim_buildings = [
+            {"Building": "Tower A", "Storeys": 25, "Area (m²)": 15000, "IFC Version": "IFC4"},
+            {"Building": "Tower B", "Storeys": 18, "Area (m²)": 12000, "IFC Version": "IFC4"},
+            {"Building": "Pavilion", "Storeys": 3, "Area (m²)": 2500, "IFC Version": "IFC2x3"},
+        ]
+    if "bim_storeys" not in st.session_state:
+        st.session_state.bim_storeys = {
+            "Tower A": [{"Level": f"Level {i}", "Height (m)": 4.0 + (i%2)*0.2, "Area (m²)": 1200 - i*10} for i in range(1, 6)],
+            "Tower B": [{"Level": f"Level {i}", "Height (m)": 3.8, "Area (m²)": 1150 - i*10} for i in range(1, 5)],
+            "Pavilion": [{"Level": f"Level {i}", "Height (m)": 3.5, "Area (m²)": 2500} for i in range(1, 4)],
+        }
+    if "bim_spaces" not in st.session_state:
+        st.session_state.bim_spaces = [
+            {"Space": "Office 101", "Area (m²)": 45, "Height (m)": 3.2, "Type": "Workspace"},
+            {"Space": "Conference", "Area (m²)": 30, "Height (m)": 3.5, "Type": "Meeting"},
+            {"Space": "Lobby", "Area (m²)": 80, "Height (m)": 5.0, "Type": "Public"},
+            {"Space": "Cafeteria", "Area (m²)": 60, "Height (m)": 3.0, "Type": "Amenity"},
+        ]
+    if "bim_elements" not in st.session_state:
+        st.session_state.bim_elements = [
+            {"Element": "Wall", "Material": "Concrete", "Quantity": 120, "Unit": "m²"},
+            {"Element": "Slab", "Material": "Concrete", "Quantity": 80, "Unit": "m²"},
+            {"Element": "Column", "Material": "Steel", "Quantity": 45, "Unit": "each"},
+            {"Element": "Beam", "Material": "Steel", "Quantity": 30, "Unit": "each"},
+        ]
+    if "bim_cobie" not in st.session_state:
+        st.session_state.bim_cobie = [
+            {"Asset": "Chiller", "Serial": "CH-001", "Manufacturer": "Trane", "Warranty (years)": 5},
+            {"Asset": "Pump", "Serial": "PM-002", "Manufacturer": "Grundfos", "Warranty (years)": 3},
+            {"Asset": "AHU", "Serial": "AH-003", "Manufacturer": "Carrier", "Warranty (years)": 4},
+            {"Asset": "Boiler", "Serial": "BL-004", "Manufacturer": "Viessmann", "Warranty (years)": 6},
+        ]
+    # Architecture
+    if "zoning_data" not in st.session_state:
+        st.session_state.zoning_data = [
+            {"Zone": "Residential", "Max Height (m)": 15, "Coverage (%)": 50, "Setback (m)": 3},
+            {"Zone": "Commercial", "Max Height (m)": 30, "Coverage (%)": 60, "Setback (m)": 5},
+            {"Zone": "Mixed-Use", "Max Height (m)": 45, "Coverage (%)": 70, "Setback (m)": 4},
+        ]
+    if "room_program" not in st.session_state:
+        st.session_state.room_program = [
+            {"Room": "Office", "Area (m²)": 20, "Quantity": 10, "Adjacency": ""},
+            {"Room": "Conference", "Area (m²)": 40, "Quantity": 2, "Adjacency": "Lobby"},
+            {"Room": "Lobby", "Area (m²)": 60, "Quantity": 1, "Adjacency": "Lobby"},
+            {"Room": "Restroom", "Area (m²)": 10, "Quantity": 4, "Adjacency": "Corridor"},
+        ]
+    # Structural
+    if "structural_beams" not in st.session_state:
+        st.session_state.structural_beams = [
+            {"Beam ID": "B-101", "Span (m)": 6.5, "Load (kN/m)": 45, "Status": "OK"},
+            {"Beam ID": "B-102", "Span (m)": 8.2, "Load (kN/m)": 60, "Status": "Overstressed"},
+            {"Beam ID": "B-201", "Span (m)": 5.0, "Load (kN/m)": 30, "Status": "OK"},
+            {"Beam ID": "B-202", "Span (m)": 7.0, "Load (kN/m)": 50, "Status": "OK"},
+        ]
+    if "structural_columns" not in st.session_state:
+        st.session_state.structural_columns = [
+            {"Column ID": "C-1", "Axial Load (kN)": 1200, "Section": "400x400", "Reinf. Ratio (%)": 1.5},
+            {"Column ID": "C-2", "Axial Load (kN)": 800, "Section": "300x300", "Reinf. Ratio (%)": 1.2},
+            {"Column ID": "C-3", "Axial Load (kN)": 1500, "Section": "500x500", "Reinf. Ratio (%)": 2.0},
+            {"Column ID": "C-4", "Axial Load (kN)": 950, "Section": "350x350", "Reinf. Ratio (%)": 1.3},
+        ]
+    if "structural_slabs" not in st.session_state:
+        st.session_state.structural_slabs = [
+            {"Slab ID": "S1", "Thickness (mm)": 200, "Span (m)": 6, "Load (kN/m²)": 5},
+            {"Slab ID": "S2", "Thickness (mm)": 150, "Span (m)": 4, "Load (kN/m²)": 4},
+            {"Slab ID": "S3", "Thickness (mm)": 250, "Span (m)": 7, "Load (kN/m²)": 6},
+            {"Slab ID": "S4", "Thickness (mm)": 180, "Span (m)": 5, "Load (kN/m²)": 4.5},
+        ]
+    if "structural_foundations" not in st.session_state:
+        st.session_state.structural_foundations = [
+            {"Foundation": "Pad", "Capacity (kN)": 800, "Depth (m)": 1.5, "Type": "Isolated"},
+            {"Foundation": "Strip", "Capacity (kN)": 500, "Depth (m)": 1.0, "Type": "Continuous"},
+            {"Foundation": "Pile", "Capacity (kN)": 1200, "Depth (m)": 12, "Type": "Driven"},
+            {"Foundation": "Raft", "Capacity (kN)": 1500, "Depth (m)": 0.8, "Type": "Mat"},
+        ]
+    if "structural_retaining" not in st.session_state:
+        st.session_state.structural_retaining = [
+            {"Wall": "RW-1", "Height (m)": 4.5, "Thickness (m)": 0.3, "Stability": "OK"},
+            {"Wall": "RW-2", "Height (m)": 6.0, "Thickness (m)": 0.4, "Stability": "OK"},
+            {"Wall": "RW-3", "Height (m)": 3.2, "Thickness (m)": 0.25, "Stability": "Warning"},
+        ]
+    if "structural_connections" not in st.session_state:
+        st.session_state.structural_connections = [
+            {"Connection": "Moment", "Bolts": "M20", "Capacity (kN)": 200},
+            {"Connection": "Shear", "Bolts": "M16", "Capacity (kN)": 120},
+            {"Connection": "Base Plate", "Bolts": "M24", "Capacity (kN)": 350},
+            {"Connection": "Brace", "Bolts": "M22", "Capacity (kN)": 180},
+        ]
+    # MEP
+    if "mep_hvac" not in st.session_state:
+        st.session_state.mep_hvac = {
+            "Cooling (kW)": {"Office": 150, "Atrium": 80, "Core": 30},
+            "Heating (kW)": {"Office": 100, "Atrium": 60, "Core": 20},
+        }
+    if "mep_electrical" not in st.session_state:
+        st.session_state.mep_electrical = [
+            {"Panel": "MDP-1", "Total Load (kVA)": 250, "Reserve (%)": 20},
+            {"Panel": "MDP-2", "Total Load (kVA)": 180, "Reserve (%)": 15},
+            {"Panel": "MDP-3", "Total Load (kVA)": 90, "Reserve (%)": 25},
+        ]
+    # Costing
+    if "costing_boq" not in st.session_state:
+        st.session_state.costing_boq = [
+            {"Item": "Concrete C30", "Quantity": 500, "Unit": "m³", "Rate (USD)": 120, "Total (USD)": 60000},
+            {"Item": "Steel Rebar", "Quantity": 120, "Unit": "t", "Rate (USD)": 950, "Total (USD)": 114000},
+            {"Item": "Finishes", "Quantity": 300, "Unit": "m²", "Rate (USD)": 75, "Total (USD)": 22500},
+            {"Item": "MEP", "Quantity": 80, "Unit": "LF", "Rate (USD)": 60, "Total (USD)": 4800},
+            {"Item": "Excavation", "Quantity": 200, "Unit": "m³", "Rate (USD)": 40, "Total (USD)": 8000},
+        ]
+    # Construction
+    if "construction_rfis" not in st.session_state:
+        st.session_state.construction_rfis = [
+            {"RFI #": "RFI-001", "Subject": "Rebar spacing", "Status": "Open"},
+            {"RFI #": "RFI-002", "Subject": "Window detail", "Status": "Answered"},
+            {"RFI #": "RFI-003", "Subject": "MEP coordination", "Status": "Closed"},
+            {"RFI #": "RFI-004", "Subject": "Concrete mix", "Status": "Pending"},
+        ]
+    # Regional
+    if "regional_codes" not in st.session_state:
+        st.session_state.regional_codes = {
+            "Uganda": {"Code": "UNBC 2020", "Seismic Zone": "Zone 3", "Wind Speed": "35 m/s"},
+            "Kenya": {"Code": "KBC 2015", "Seismic Zone": "Zone 2", "Wind Speed": "30 m/s"},
+            "Tanzania": {"Code": "TBS 2018", "Seismic Zone": "Zone 2", "Wind Speed": "28 m/s"},
+            "Rwanda": {"Code": "RBC 2019", "Seismic Zone": "Zone 3", "Wind Speed": "32 m/s"},
+            "South Sudan": {"Code": "SSBC 2021", "Seismic Zone": "Zone 1", "Wind Speed": "25 m/s"},
+        }
+    # Digital Twin
+    if "dt_sensors" not in st.session_state:
+        st.session_state.dt_sensors = [
+            {"Sensor ID": "TEMP-01", "Location": "Lobby", "Value": 23.5, "Unit": "°C"},
+            {"Sensor ID": "HUM-01", "Location": "Lobby", "Value": 42, "Unit": "%"},
+            {"Sensor ID": "ENERGY-01", "Location": "Main", "Value": 320, "Unit": "kW"},
+            {"Sensor ID": "OCC-01", "Location": "Office", "Value": 245, "Unit": "people"},
+        ]
 
-# ---------------------------
-# Mock API Client (with session state integration)
-# ---------------------------
-def get_data(key, default):
-    return st.session_state.get(key, default)
-
-def set_data(key, value):
-    st.session_state[key] = value
-
-# Helper to get a dataframe from session state
-def get_df(key, columns):
-    data = get_data(key, [])
-    return pd.DataFrame(data) if data else pd.DataFrame(columns=columns)
+init_session_state()
 
 # ---------------------------
 # Navigation Sidebar
@@ -106,14 +238,14 @@ page = st.sidebar.radio(
 )
 
 # ---------------------------
-# Helper for rendering tabs with editing
+# Helper for editable tables
 # ---------------------------
-def render_editable_tab(tab_name, df, on_change=None):
-    """Display an editable dataframe and handle changes."""
-    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic", key=f"editor_{tab_name}")
-    if on_change:
-        on_change(edited_df)
-    return edited_df
+def editable_table(data, key, columns=None):
+    df = pd.DataFrame(data)
+    if columns:
+        df = df[columns]
+    edited = st.data_editor(df, use_container_width=True, num_rows="dynamic", key=key)
+    return edited.to_dict('records')
 
 # ---------------------------
 # PAGE: DASHBOARD
@@ -121,7 +253,6 @@ def render_editable_tab(tab_name, df, on_change=None):
 def page_dashboard():
     st.title("📊 Dashboard")
     col1, col2, col3, col4 = st.columns(4)
-    # Use metric cards with colored backgrounds
     with col1:
         st.markdown('<div class="metric-card"><h3>Active Projects</h3><p style="font-size:2rem;">12</p><span style="color:green;">+2</span></div>', unsafe_allow_html=True)
     with col2:
@@ -149,11 +280,7 @@ def page_dashboard():
 # ---------------------------
 def page_projects():
     st.title("📁 Projects")
-    df = pd.DataFrame(st.session_state.projects_data)
-    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic", key="projects_editor")
-    # Update session state on change
-    st.session_state.projects_data = edited_df.to_dict('records')
-
+    st.session_state.projects_data = editable_table(st.session_state.projects_data, "projects_editor")
     with st.expander("➕ Add New Project"):
         with st.form("new_project_form"):
             name = st.text_input("Project Name")
@@ -173,7 +300,7 @@ def page_projects():
                 st.rerun()
 
 # ---------------------------
-# PAGE: ARCHITECTURE (editable tabs)
+# PAGE: ARCHITECTURE
 # ---------------------------
 def page_architecture():
     st.title("📐 Architecture")
@@ -202,52 +329,34 @@ def page_architecture():
 
     with tab_objects[1]:
         st.subheader("Zoning & Land Use")
-        # Editable zoning data
-        if "zoning_data" not in st.session_state:
-            st.session_state.zoning_data = [
-                {"Zone": "Residential", "Max Height (m)": 15, "Coverage (%)": 50, "Setback (m)": 3},
-                {"Zone": "Commercial", "Max Height (m)": 30, "Coverage (%)": 60, "Setback (m)": 5},
-                {"Zone": "Mixed-Use", "Max Height (m)": 45, "Coverage (%)": 70, "Setback (m)": 4},
-            ]
-        df_zoning = pd.DataFrame(st.session_state.zoning_data)
-        edited_zoning = st.data_editor(df_zoning, use_container_width=True, num_rows="dynamic", key="zoning_editor")
-        st.session_state.zoning_data = edited_zoning.to_dict('records')
+        st.session_state.zoning_data = editable_table(st.session_state.zoning_data, "zoning_editor")
 
     with tab_objects[2]:
         st.subheader("Site Planning")
         col1, col2 = st.columns(2)
         with col1:
-            site_area = st.number_input("Site Area (m²)", value=5000)
-            slope = st.slider("Slope (%)", 0, 20, 5)
+            st.number_input("Site Area (m²)", value=5000)
+            st.slider("Slope (%)", 0, 20, 5)
         with col2:
-            soil = st.selectbox("Soil Type", ["Clay", "Sand", "Rock"])
-            orientation = st.selectbox("Orientation", ["North", "South", "East", "West"])
+            st.selectbox("Soil Type", ["Clay", "Sand", "Rock"])
+            st.selectbox("Orientation", ["North", "South", "East", "West"])
         st.text("Site layout placeholder")
 
     with tab_objects[3]:
         st.subheader("Floor Planning")
-        btype = st.selectbox("Building Type", ["Office", "Residential", "Hospital", "School"])
-        floors = st.slider("Number of floors", 1, 20, 5)
+        st.selectbox("Building Type", ["Office", "Residential", "Hospital", "School"])
+        st.slider("Number of floors", 1, 20, 5)
         if st.button("Generate Floor Plan"):
             st.success("Floor plan generated")
             st.text("Floor plan image placeholder")
 
     with tab_objects[4]:
         st.subheader("Room Programming")
-        if "room_program" not in st.session_state:
-            st.session_state.room_program = [
-                {"Room": "Office", "Area (m²)": 20, "Quantity": 10, "Adjacency": ""},
-                {"Room": "Conference", "Area (m²)": 40, "Quantity": 2, "Adjacency": "Lobby"},
-                {"Room": "Lobby", "Area (m²)": 60, "Quantity": 1, "Adjacency": "Lobby"},
-                {"Room": "Restroom", "Area (m²)": 10, "Quantity": 4, "Adjacency": "Corridor"},
-            ]
-        df_room = pd.DataFrame(st.session_state.room_program)
-        edited_room = st.data_editor(df_room, use_container_width=True, num_rows="dynamic", key="room_editor")
-        st.session_state.room_program = edited_room.to_dict('records')
+        st.session_state.room_program = editable_table(st.session_state.room_program, "room_editor")
 
     with tab_objects[5]:
         st.subheader("Compliance Checking")
-        code = st.selectbox("Select Code", ["Uganda National Building Code", "Kenya Building Code", "Tanzania Building Standards"])
+        st.selectbox("Select Code", ["Uganda National Building Code", "Kenya Building Code", "Tanzania Building Standards"])
         st.file_uploader("Upload floor plan (DXF/PDF)", type=["dxf", "pdf"])
         if st.button("Run Compliance Check"):
             results = pd.DataFrame({
@@ -259,7 +368,7 @@ def page_architecture():
             st.dataframe(results, use_container_width=True)
 
 # ---------------------------
-# PAGE: BIM (editable tabs)
+# PAGE: BIM
 # ---------------------------
 def page_bim():
     st.title("🏛️ BIM")
@@ -267,63 +376,27 @@ def page_bim():
     tab_objects = st.tabs(tabs)
 
     with tab_objects[0]:
-        # Editable buildings
-        if "bim_buildings" not in st.session_state:
-            st.session_state.bim_buildings = [
-                {"Building": "Tower A", "Storeys": 25, "Area (m²)": 15000, "IFC Version": "IFC4"},
-                {"Building": "Tower B", "Storeys": 18, "Area (m²)": 12000, "IFC Version": "IFC4"},
-                {"Building": "Pavilion", "Storeys": 3, "Area (m²)": 2500, "IFC Version": "IFC2x3"},
-            ]
-        df_buildings = pd.DataFrame(st.session_state.bim_buildings)
-        edited_buildings = st.data_editor(df_buildings, use_container_width=True, num_rows="dynamic", key="bim_buildings_editor")
-        st.session_state.bim_buildings = edited_buildings.to_dict('records')
+        st.session_state.bim_buildings = editable_table(st.session_state.bim_buildings, "bim_buildings_editor")
 
     with tab_objects[1]:
-        # Storeys - linked to selected building
         building_names = [b["Building"] for b in st.session_state.bim_buildings]
         if building_names:
             selected = st.selectbox("Select Building", building_names)
-            # Mock storeys for the selected building
-            if "storeys_data" not in st.session_state:
-                st.session_state.storeys_data = {
-                    "Tower A": [{"Level": "Level 1", "Height (m)": 4.2, "Area (m²)": 1200}],
-                    "Tower B": [{"Level": "Level 1", "Height (m)": 3.8, "Area (m²)": 1150}],
-                    "Pavilion": [{"Level": "Level 1", "Height (m)": 4.0, "Area (m²)": 2500}],
-                }
-            storeys = st.session_state.storeys_data.get(selected, [])
-            if not storeys:
-                # Create default
-                storeys = [{"Level": f"Level {i}", "Height (m)": 4.0, "Area (m²)": 1000} for i in range(1, 4)]
-                st.session_state.storeys_data[selected] = storeys
-            df_storeys = pd.DataFrame(storeys)
-            edited_storeys = st.data_editor(df_storeys, use_container_width=True, num_rows="dynamic", key=f"storeys_{selected}")
-            st.session_state.storeys_data[selected] = edited_storeys.to_dict('records')
+            if selected:
+                # Ensure session state has storeys for this building
+                if selected not in st.session_state.bim_storeys:
+                    st.session_state.bim_storeys[selected] = [
+                        {"Level": f"Level {i}", "Height (m)": 4.0, "Area (m²)": 1000} for i in range(1, 4)
+                    ]
+                storeys = st.session_state.bim_storeys[selected]
+                edited = editable_table(storeys, f"storeys_{selected}")
+                st.session_state.bim_storeys[selected] = edited
 
     with tab_objects[2]:
-        # Spaces
-        if "bim_spaces" not in st.session_state:
-            st.session_state.bim_spaces = [
-                {"Space": "Office 101", "Area (m²)": 45, "Height (m)": 3.2, "Type": "Workspace"},
-                {"Space": "Conference", "Area (m²)": 30, "Height (m)": 3.5, "Type": "Meeting"},
-                {"Space": "Lobby", "Area (m²)": 80, "Height (m)": 5.0, "Type": "Public"},
-                {"Space": "Cafeteria", "Area (m²)": 60, "Height (m)": 3.0, "Type": "Amenity"},
-            ]
-        df_spaces = pd.DataFrame(st.session_state.bim_spaces)
-        edited_spaces = st.data_editor(df_spaces, use_container_width=True, num_rows="dynamic", key="bim_spaces_editor")
-        st.session_state.bim_spaces = edited_spaces.to_dict('records')
+        st.session_state.bim_spaces = editable_table(st.session_state.bim_spaces, "bim_spaces_editor")
 
     with tab_objects[3]:
-        # Elements
-        if "bim_elements" not in st.session_state:
-            st.session_state.bim_elements = [
-                {"Element": "Wall", "Material": "Concrete", "Quantity": 120, "Unit": "m²"},
-                {"Element": "Slab", "Material": "Concrete", "Quantity": 80, "Unit": "m²"},
-                {"Element": "Column", "Material": "Steel", "Quantity": 45, "Unit": "each"},
-                {"Element": "Beam", "Material": "Steel", "Quantity": 30, "Unit": "each"},
-            ]
-        df_elements = pd.DataFrame(st.session_state.bim_elements)
-        edited_elements = st.data_editor(df_elements, use_container_width=True, num_rows="dynamic", key="bim_elements_editor")
-        st.session_state.bim_elements = edited_elements.to_dict('records')
+        st.session_state.bim_elements = editable_table(st.session_state.bim_elements, "bim_elements_editor")
 
     with tab_objects[4]:
         st.info("IFC Viewer (integrate with xeokit or Three.js)")
@@ -331,17 +404,7 @@ def page_bim():
         st.caption("Supports IFC4, IFC2x3")
 
     with tab_objects[5]:
-        # COBie
-        if "bim_cobie" not in st.session_state:
-            st.session_state.bim_cobie = [
-                {"Asset": "Chiller", "Serial": "CH-001", "Manufacturer": "Trane", "Warranty (years)": 5},
-                {"Asset": "Pump", "Serial": "PM-002", "Manufacturer": "Grundfos", "Warranty (years)": 3},
-                {"Asset": "AHU", "Serial": "AH-003", "Manufacturer": "Carrier", "Warranty (years)": 4},
-                {"Asset": "Boiler", "Serial": "BL-004", "Manufacturer": "Viessmann", "Warranty (years)": 6},
-            ]
-        df_cobie = pd.DataFrame(st.session_state.bim_cobie)
-        edited_cobie = st.data_editor(df_cobie, use_container_width=True, num_rows="dynamic", key="bim_cobie_editor")
-        st.session_state.bim_cobie = edited_cobie.to_dict('records')
+        st.session_state.bim_cobie = editable_table(st.session_state.bim_cobie, "bim_cobie_editor")
         st.download_button("Export COBie (Excel)", data="", file_name="cobie_export.xlsx")
 
     with tab_objects[6]:
@@ -353,8 +416,7 @@ def page_bim():
         with col2:
             st.metric("Temperature", "23.5°C", "+0.5")
             st.metric("Humidity", "42%", "-3%")
-        # Editable sensor data? Not needed, just display.
-        # Show a line chart
+        # Sensor timeline
         now = datetime.now()
         start_time = now - timedelta(hours=23)
         times = [start_time + timedelta(hours=i) for i in range(24)]
@@ -362,34 +424,266 @@ def page_bim():
         df_energy = pd.DataFrame({"Time": times, "Energy": energy_vals})
         st.line_chart(df_energy.set_index("Time"))
 
-# ... Similarly, all other pages (Structural, MEP, Costing, Construction, Regional, Digital Twin, AI Assistant, Analytics) follow the same pattern: editable dataframes where relevant, interactive widgets, and colorful metrics.
+# ---------------------------
+# PAGE: STRUCTURAL
+# ---------------------------
+def page_structural():
+    st.title("🔩 Structural Engineering")
+    tabs = ["Eurocode", "Beam Design", "Column Design", "Slab Design", "Foundation Design", "Retaining Walls", "Steel Connections", "FEA"]
+    tab_objects = st.tabs(tabs)
 
-# Due to length, I'll skip copying the full 800-line script here. Instead, I'll provide the complete file as a downloadable attachment in the next message.
+    with tab_objects[0]:
+        st.subheader("Eurocode Modules")
+        codes = {
+            "EN 1990 (Basis)": True,
+            "EN 1991 (Actions)": True,
+            "EN 1992 (Concrete)": True,
+            "EN 1993 (Steel)": True,
+            "EN 1995 (Timber)": True,
+            "EN 1997 (Geotech)": True,
+            "EN 1998 (Seismic)": True,
+        }
+        cols = st.columns(4)
+        for i, (code, default) in enumerate(codes.items()):
+            cols[i % 4].checkbox(code, value=default)
+        st.subheader("Load Combinations")
+        st.dataframe(pd.DataFrame({
+            "Combination": ["ULS 1", "ULS 2", "SLS 1"],
+            "G (dead)": [1.35, 1.0, 1.0],
+            "Q (live)": [1.5, 1.5, 0.7],
+            "Wind": [0, 0.6, 0.3],
+        }))
 
-# But for now, I'll include the remaining stubs:
-def page_structural(): st.title("Structural Engineering")
-def page_mep(): st.title("MEP")
-def page_costing(): st.title("Cost Estimation")
-def page_construction(): st.title("Construction Management")
-def page_regional(): st.title("Regional – East Africa Codes")
-def page_digital_twin(): st.title("Digital Twin – Live Monitoring")
-def page_ai(): st.title("AI Assistant")
-def page_analytics(): st.title("Analytics & Reporting")
+    with tab_objects[1]:
+        st.session_state.structural_beams = editable_table(st.session_state.structural_beams, "beams_editor")
+        with st.expander("New Beam Design"):
+            with st.form("beam_form"):
+                st.text_input("Beam ID")
+                st.number_input("Span (m)", min_value=1.0)
+                st.number_input("Load (kN/m)", min_value=0.0)
+                st.selectbox("Material", ["Concrete C30/37", "Steel S355"])
+                st.form_submit_button("Design")
 
-# Route to pages
-if page == "Dashboard": page_dashboard()
-elif page == "Projects": page_projects()
-elif page == "Architecture": page_architecture()
-elif page == "BIM": page_bim()
-elif page == "Structural": page_structural()
-elif page == "MEP": page_mep()
-elif page == "Costing": page_costing()
-elif page == "Construction": page_construction()
-elif page == "Regional": page_regional()
-elif page == "Digital Twin": page_digital_twin()
-elif page == "AI Assistant": page_ai()
-elif page == "Analytics": page_analytics()
+    with tab_objects[2]:
+        st.session_state.structural_columns = editable_table(st.session_state.structural_columns, "columns_editor")
 
+    with tab_objects[3]:
+        st.session_state.structural_slabs = editable_table(st.session_state.structural_slabs, "slabs_editor")
+        st.text("Slab reinforcement layout placeholder")
+
+    with tab_objects[4]:
+        st.session_state.structural_foundations = editable_table(st.session_state.structural_foundations, "foundations_editor")
+
+    with tab_objects[5]:
+        st.session_state.structural_retaining = editable_table(st.session_state.structural_retaining, "retaining_editor")
+        st.text("Retaining wall section placeholder")
+
+    with tab_objects[6]:
+        st.session_state.structural_connections = editable_table(st.session_state.structural_connections, "connections_editor")
+        st.info("Design according to EN 1993-1-8")
+
+    with tab_objects[7]:
+        st.subheader("Finite Element Analysis")
+        st.selectbox("Analysis Type", ["Linear Static", "Nonlinear", "Modal", "Pushover"])
+        if st.button("Run Analysis"):
+            with st.spinner("Solving..."):
+                st.success("Analysis complete")
+                st.text("FEA displacement contour placeholder")
+
+# ---------------------------
+# PAGE: MEP
+# ---------------------------
+def page_mep():
+    st.title("⚡ MEP")
+    tabs = ["Mechanical (HVAC)", "Electrical", "Plumbing"]
+    tab_objects = st.tabs(tabs)
+
+    with tab_objects[0]:
+        st.subheader("HVAC Load Summary")
+        hvac = st.session_state.mep_hvac
+        df_hvac = pd.DataFrame(hvac)
+        st.bar_chart(df_hvac)
+        st.subheader("Ventilation & Chilled Water")
+        st.write("Placeholder for duct sizing and pump schedules")
+
+    with tab_objects[1]:
+        st.subheader("Electrical Load Analysis")
+        st.session_state.mep_electrical = editable_table(st.session_state.mep_electrical, "electrical_editor")
+        st.subheader("Solar PV Sizing")
+        st.slider("Peak Power (kWp)", 0, 500, 150)
+
+    with tab_objects[2]:
+        st.subheader("Water Supply Network")
+        st.line_chart(pd.DataFrame({"Flow (L/s)": [2.5, 3.2, 2.8, 4.1]}))
+        st.subheader("Drainage & Stormwater")
+        st.write("Placeholder for pipe routing and catch basins")
+
+# ---------------------------
+# PAGE: COSTING
+# ---------------------------
+def page_costing():
+    st.title("💰 Cost Estimation")
+    st.session_state.costing_boq = editable_table(st.session_state.costing_boq, "boq_editor")
+    total = sum(item["Total (USD)"] for item in st.session_state.costing_boq)
+    st.metric("Total Estimated Cost", f"${total:,.0f}")
+
+    st.subheader("Cost Breakdown")
+    df_boq = pd.DataFrame(st.session_state.costing_boq)
+    fig = px.pie(df_boq, values="Total (USD)", names="Item")
+    st.plotly_chart(fig, use_container_width=True)
+
+    with st.expander("Forex & Inflation"):
+        st.write("Exchange rates: USD/UGX 3700, USD/KES 130")
+        st.slider("Inflation factor", 0.0, 0.15, 0.05)
+
+# ---------------------------
+# PAGE: CONSTRUCTION
+# ---------------------------
+def page_construction():
+    st.title("🚧 Construction Management")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Progress vs Planned")
+        dates = pd.date_range(start="2026-01-01", end="2026-08-19", freq="W")
+        planned = list(range(10, 110, 5))[:len(dates)]
+        actual = [p - random.randint(0, 8) for p in planned]
+        df_progress = pd.DataFrame({"Date": dates, "Planned": planned, "Actual": actual})
+        st.line_chart(df_progress.set_index("Date"))
+    with col2:
+        st.subheader("RFI & Submittals")
+        st.session_state.construction_rfis = editable_table(st.session_state.construction_rfis, "rfi_editor")
+
+    st.subheader("Site Diary (latest)")
+    diary = """2026-08-19: Completed foundation pour for Block A. 
+    Weather: sunny, 28°C. 12 workers on site. Equipment: 2 mixers.
+    Safety: no incidents.
+    """
+    st.text_area("Today's Log", diary, height=150)
+    st.subheader("Snagging & Variations")
+    st.write("Placeholder for snag list and variation orders")
+
+# ---------------------------
+# PAGE: REGIONAL
+# ---------------------------
+def page_regional():
+    st.title("🌍 Regional – East Africa Codes")
+    st.subheader("Building Codes by Country")
+    df_codes = pd.DataFrame.from_dict(st.session_state.regional_codes, orient='index')
+    st.dataframe(df_codes, use_container_width=True)
+
+    with st.expander("Edit Country Codes"):
+        for country, codes in st.session_state.regional_codes.items():
+            st.markdown(f"**{country}**")
+            new_code = st.text_input(f"Code ({country})", value=codes["Code"], key=f"code_{country}")
+            new_seismic = st.text_input(f"Seismic Zone ({country})", value=codes["Seismic Zone"], key=f"seismic_{country}")
+            new_wind = st.text_input(f"Wind Speed ({country})", value=codes["Wind Speed"], key=f"wind_{country}")
+            if st.button(f"Update {country}", key=f"update_{country}"):
+                st.session_state.regional_codes[country] = {
+                    "Code": new_code,
+                    "Seismic Zone": new_seismic,
+                    "Wind Speed": new_wind,
+                }
+                st.success(f"Updated {country}")
+                st.rerun()
+
+# ---------------------------
+# PAGE: DIGITAL TWIN
+# ---------------------------
+def page_digital_twin():
+    st.title("🔄 Digital Twin – Live Monitoring")
+    st.subheader("Sensor Data")
+    st.session_state.dt_sensors = editable_table(st.session_state.dt_sensors, "dt_sensors_editor")
+
+    st.subheader("Historical Energy Consumption")
+    now = datetime.now()
+    start_time = now - timedelta(days=7)
+    times = [start_time + timedelta(hours=i) for i in range(168)]
+    energy_vals = [300 + 50 * (i % 24) / 24 for i in range(168)]  # daily pattern
+    df_energy_hist = pd.DataFrame({"Time": times, "Energy (kW)": energy_vals})
+    st.line_chart(df_energy_hist.set_index("Time"))
+
+    if st.button("Run Predictive AI Maintenance"):
+        with st.spinner("Analyzing sensor data..."):
+            st.success("Prediction: No anomalies detected. Next maintenance in 14 days.")
+
+# ---------------------------
+# PAGE: AI ASSISTANT
+# ---------------------------
+def page_ai():
+    st.title("🤖 AI Assistant - IMAGINE Architect")
+    st.caption("Ask questions about your project, design, or compliance.")
+
+    prompt = st.text_area("Your query:", "Suggest a column size for a 10-storey building in seismic zone 3.")
+    if st.button("Ask AI"):
+        with st.spinner("Consulting IMAGINE's knowledge base..."):
+            response = """Based on EN 1998-1, for a 10-storey building in seismic zone 3 (Uganda),
+            a preliminary column size of 450x450 mm with C30/37 concrete and 8#25 longitudinal bars is recommended.
+            Verify with a full analysis."""
+            st.success(response)
+
+    st.subheader("RAG - Document Search")
+    query = st.text_input("Search project documents:")
+    if query:
+        results = [
+            {"Doc": "Structural_Report_v3.pdf", "Snippet": "... column design based on Eurocode ..."},
+            {"Doc": "Architectural_Drawings.dwg", "Snippet": "... dimensions and zoning compliance ..."},
+        ]
+        st.dataframe(pd.DataFrame(results))
+
+# ---------------------------
+# PAGE: ANALYTICS
+# ---------------------------
+def page_analytics():
+    st.title("📈 Analytics & Reporting")
+    st.subheader("Portfolio KPIs")
+    kpi_data = pd.DataFrame({
+        "Project": ["Green Tower", "Harbor Bridge", "Riverside Mall", "Solar Park"],
+        "Budget Variance (%)": [-5, 3, 0, -2],
+        "Schedule Variance (days)": [12, -8, 5, -3],
+        "Safety Index": [0.95, 0.88, 0.92, 0.97],
+    })
+    st.dataframe(kpi_data, use_container_width=True)
+
+    st.subheader("Cost Forecast")
+    forecast = pd.DataFrame({
+        "Month": ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+        "Actual": [120, 135, 140, 155, 160, 175],
+        "Forecast": [130, 145, 155, 170, 180, 195],
+    })
+    st.line_chart(forecast.set_index("Month"))
+
+    st.download_button("Export Report (CSV)", data=forecast.to_csv(), file_name="report.csv")
+
+# ---------------------------
+# Route to selected page
+# ---------------------------
+if page == "Dashboard":
+    page_dashboard()
+elif page == "Projects":
+    page_projects()
+elif page == "Architecture":
+    page_architecture()
+elif page == "BIM":
+    page_bim()
+elif page == "Structural":
+    page_structural()
+elif page == "MEP":
+    page_mep()
+elif page == "Costing":
+    page_costing()
+elif page == "Construction":
+    page_construction()
+elif page == "Regional":
+    page_regional()
+elif page == "Digital Twin":
+    page_digital_twin()
+elif page == "AI Assistant":
+    page_ai()
+elif page == "Analytics":
+    page_analytics()
+
+# ---------------------------
 # Footer
+# ---------------------------
 st.sidebar.markdown("---")
 st.sidebar.caption("IMAGINE Platform v1.0 | 2026")
