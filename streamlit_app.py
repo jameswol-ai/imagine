@@ -3,11 +3,35 @@ IMAGINE
 Generative Architecture & Civil Engine
 
 Main Streamlit application entry point.
+
+Application shell responsibilities:
+    - Navigation
+    - Module registry
+    - Safe renderer loading
+    - Module status
+    - Domain routing
+    - System health
+
+Domain logic belongs inside:
+    architecture/
+    structural/
+    bim/
+    mep/
+    costing/
+    construction/
+    documents/
+    ai/
+    analytics/
+    regional/
+    integrations/
+    digital_twin/
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from importlib import import_module
 from typing import Any, Callable
 
 import streamlit as st
@@ -38,7 +62,34 @@ RenderFunction = Callable[[], Any]
 
 
 # ============================================================
-# SAFE IMPORT
+# MODULE DEFINITION
+# ============================================================
+
+
+@dataclass(frozen=True)
+class ModuleDefinition:
+    """
+    Defines a navigable IMAGINE module.
+
+    A module may have an implemented renderer or may still be
+    under development.
+    """
+
+    label: str
+    icon: str
+    route: str
+    domain: str
+
+    description: str = ""
+
+    renderer_module: str | None = None
+    renderer_function: str | None = None
+
+    implemented: bool = False
+
+
+# ============================================================
+# SAFE RENDERER LOADING
 # ============================================================
 
 
@@ -49,15 +100,18 @@ def _safe_import(
     """
     Safely import a zero-argument renderer.
 
-    This helper prevents optional modules from breaking the
-    entire Streamlit application during startup.
+    Import failures are intentionally isolated from the rest
+    of the application.
     """
 
+    if not module_name:
+        return None
+
+    if not function_name:
+        return None
+
     try:
-        module = __import__(
-            module_name,
-            fromlist=[function_name],
-        )
+        module = import_module(module_name)
 
         renderer = getattr(
             module,
@@ -75,20 +129,132 @@ def _safe_import(
 
 
 # ============================================================
-# PLACEHOLDER
+# GENERIC MODULE RENDERER
 # ============================================================
 
 
-def render_placeholder(
-    module_name: str,
+def render_module_placeholder(
+    module: ModuleDefinition,
 ) -> None:
-    """Render a safe placeholder for an unavailable module."""
+    """
+    Render a domain module that does not yet have a UI renderer.
 
-    st.title(module_name)
+    This allows the entire IMAGINE repository structure to be
+    connected to navigation before every engineering module has
+    its own UI implementation.
+    """
+
+    st.title(
+        f"{module.icon} {module.label}"
+    )
+
+    if module.description:
+
+        st.caption(
+            module.description
+        )
 
     st.info(
-        f"{module_name} is registered in IMAGINE, "
-        "but its full interface is not available yet."
+        f"{module.label} is registered in IMAGINE "
+        "but its interactive interface is not available yet."
+    )
+
+    st.divider()
+
+    st.subheader("Module Status")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        st.metric(
+            "Domain",
+            module.domain,
+        )
+
+    with col2:
+
+        st.metric(
+            "UI",
+            "Not implemented",
+        )
+
+    with col3:
+
+        st.metric(
+            "Status",
+            "Registered",
+        )
+
+    st.divider()
+
+    st.markdown(
+        """
+        ### Architecture
+
+        This module is already part of the IMAGINE application
+        navigation. Its domain implementation can be added
+        without changing the application shell.
+
+        When its `ui.py` renderer is ready, register it using:
+
+        ```text
+        renderer_module
+        renderer_function
+        ```
+        """
+    )
+
+
+# ============================================================
+# REGISTERED MODULE RENDERER
+# ============================================================
+
+
+def render_registered_module(
+    module: ModuleDefinition,
+) -> None:
+    """
+    Render a registered module.
+
+    Implemented modules use their own renderer.
+
+    Modules without a renderer receive a safe placeholder.
+    """
+
+    if (
+        module.renderer_module
+        and module.renderer_function
+    ):
+
+        renderer = _safe_import(
+            module.renderer_module,
+            module.renderer_function,
+        )
+
+        if renderer is not None:
+
+            try:
+
+                renderer()
+
+            except Exception as exc:
+
+                st.error(
+                    f"{module.label} could not be rendered."
+                )
+
+                with st.expander(
+                    "Complete renderer traceback",
+                    expanded=True,
+                ):
+
+                    st.exception(exc)
+
+            return
+
+    render_module_placeholder(
+        module
     )
 
 
@@ -98,7 +264,7 @@ def render_placeholder(
 
 
 def render_overview() -> None:
-    """Render the IMAGINE overview dashboard."""
+    """Render the IMAGINE application overview."""
 
     st.title("🏗️ IMAGINE")
 
@@ -110,50 +276,58 @@ def render_overview() -> None:
         """
         ## Project Overview
 
-        IMAGINE connects architectural constraints,
-        planning, programming, compliance, and generative
-        design into one workflow.
+        IMAGINE connects architecture, structural engineering,
+        BIM, MEP, costing, construction, documents, AI,
+        analytics, regional regulations, integrations and
+        digital twins into one engineering platform.
         """
     )
 
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
+
         st.metric(
             "Projects",
             "0",
         )
 
     with col2:
+
         st.metric(
             "Design Runs",
             "0",
         )
 
     with col3:
+
         st.metric(
-            "Candidates",
+            "Engineering Modules",
             "0",
         )
 
     with col4:
+
         st.metric(
-            "Best Designs",
+            "BIM Assets",
             "0",
         )
 
     st.divider()
 
-    st.subheader("Design Pipeline")
+    st.subheader(
+        "IMAGINE Engineering Pipeline"
+    )
 
     pipeline = [
         "Project",
-        "Zoning",
-        "Site Planning",
-        "Floor Planning",
-        "Room Programming",
-        "Compliance",
-        "Generative Design",
+        "Architecture",
+        "Structural",
+        "MEP",
+        "BIM",
+        "Costing",
+        "Construction",
+        "Digital Twin",
     ]
 
     columns = st.columns(
@@ -164,7 +338,9 @@ def render_overview() -> None:
         columns,
         pipeline,
     ):
+
         with column:
+
             st.markdown(
                 f"""
                 <div style="
@@ -182,18 +358,70 @@ def render_overview() -> None:
 
     st.divider()
 
-    st.subheader("System Status")
+    st.subheader(
+        "Engineering Domains"
+    )
+
+    domain_columns = st.columns(4)
+
+    domains = [
+        (
+            "🏛️",
+            "Architecture",
+            "Planning, compliance and generative design.",
+        ),
+        (
+            "🏗️",
+            "Structural",
+            "Eurocode-based structural engineering.",
+        ),
+        (
+            "🧱",
+            "BIM",
+            "Buildings, spaces, elements and IFC.",
+        ),
+        (
+            "⚡",
+            "MEP",
+            "Mechanical, electrical and plumbing systems.",
+        ),
+    ]
+
+    for column, domain in zip(
+        domain_columns,
+        domains,
+    ):
+
+        with column:
+
+            icon, title, description = domain
+
+            st.markdown(
+                f"""
+                ### {icon} {title}
+
+                {description}
+                """
+            )
+
+    st.divider()
+
+    st.subheader(
+        "System Status"
+    )
 
     status_col1, status_col2 = st.columns(2)
 
     with status_col1:
+
         st.success(
             "IMAGINE application is running."
         )
 
     with status_col2:
+
         st.info(
-            "Generative Design is constraint-driven."
+            "Domain modules are independently connected."
         )
 
 
@@ -204,13 +432,12 @@ def render_overview() -> None:
 
 def render_generative_design_safe() -> None:
     """
-    Lazily load and render Generative Design.
-
-    Import failures remain isolated to the Generative Design
-    route instead of preventing IMAGINE from starting.
+    Safe adapter for Generative Design.
     """
 
-    st.title("✨ Generative Design")
+    st.title(
+        "✨ Generative Design"
+    )
 
     try:
 
@@ -224,14 +451,11 @@ def render_generative_design_safe() -> None:
             "The Generative Design module could not be loaded."
         )
 
-        st.warning(
-            "The rest of IMAGINE is still available."
-        )
-
         with st.expander(
             "Complete import traceback",
             expanded=True,
         ):
+
             st.exception(exc)
 
         return
@@ -250,183 +474,1074 @@ def render_generative_design_safe() -> None:
             "Complete renderer traceback",
             expanded=True,
         ):
+
             st.exception(exc)
 
 
 # ============================================================
-# SITE PLANNING REGISTRY ADAPTER
+# SITE PLANNING
 # ============================================================
 
 
 def render_site_planning_registered() -> None:
     """
-    Zero-argument registry adapter for Site Planning.
+    Zero-argument adapter for Site Planning.
 
-    The shared module registry expects renderers to have the
-    signature:
+    Registry contract:
 
         renderer()
 
-    Site Planning uses dependency injection:
+    Domain contract:
 
-        render_site_planning(service)
-
-    This adapter bridges those two interfaces.
+        Repository
+            ↓
+        Service
+            ↓
+        UI
     """
 
-    from architecture.site_planning.repository import (
-        SitePlanningRepository,
+    st.title(
+        "🌐 Site Planning"
     )
 
-    from architecture.site_planning.service import (
-        SitePlanningService,
-    )
+    try:
 
-    from architecture.site_planning.ui import (
-        render_site_planning,
-    )
+        from architecture.site_planning.repository import (
+            SitePlanningRepository,
+        )
 
-    repository = SitePlanningRepository()
+        from architecture.site_planning.service import (
+            SitePlanningService,
+        )
 
-    service = SitePlanningService(
-        repository
-    )
+        from architecture.site_planning.ui import (
+            render_site_planning,
+        )
 
-    render_site_planning(
-        service
-    )
+    except Exception as exc:
+
+        st.error(
+            "The Site Planning module could not be loaded."
+        )
+
+        with st.expander(
+            "Complete import traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    try:
+
+        repository = SitePlanningRepository()
+
+        service = SitePlanningService(
+            repository
+        )
+
+        render_site_planning(
+            service
+        )
+
+    except Exception as exc:
+
+        st.error(
+            "Site Planning could not be rendered."
+        )
+
+        with st.expander(
+            "Complete renderer traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
 
 
 # ============================================================
-# OPTIONAL MODULE RENDERERS
+# ARCHITECTURE MODULES
 # ============================================================
 
 
-OPTIONAL_RENDERERS: dict[
-    str,
-    RenderFunction | None,
-] = {
+ARCHITECTURE_MODULES = [
 
-    "projects": _safe_import(
-        "architecture.projects.ui",
-        "render_projects",
+    ModuleDefinition(
+        label="Zoning",
+        icon="📐",
+        route="architecture_zoning",
+        domain="Architecture",
+        description="Planning controls, setbacks, coverage and zoning constraints.",
+        renderer_module="architecture.zoning.ui",
+        renderer_function="render_zoning",
+        implemented=True,
     ),
 
-    "zoning": _safe_import(
-        "architecture.zoning.ui",
-        "render_zoning",
+    ModuleDefinition(
+        label="Site Planning",
+        icon="🌐",
+        route="architecture_site_planning",
+        domain="Architecture",
+        description="Site organization and development planning.",
+        implemented=True,
     ),
 
-    "floor_planning": _safe_import(
-        "architecture.floor_planning.ui",
-        "render_floor_planning",
+    ModuleDefinition(
+        label="Floor Planning",
+        icon="🏢",
+        route="architecture_floor_planning",
+        domain="Architecture",
+        description="Floor layouts and spatial planning.",
+        renderer_module="architecture.floor_planning.ui",
+        renderer_function="render_floor_planning",
+        implemented=True,
     ),
 
-    "room_programming": _safe_import(
-        "architecture.room_programming.ui",
-        "render_room_programming",
+    ModuleDefinition(
+        label="Room Programming",
+        icon="🚪",
+        route="architecture_room_programming",
+        domain="Architecture",
+        description="Room requirements, areas and adjacencies.",
+        renderer_module="architecture.room_programming.ui",
+        renderer_function="render_room_programming",
+        implemented=True,
     ),
 
-    "compliance": _safe_import(
-        "architecture.compliance.ui",
-        "render_compliance",
+    ModuleDefinition(
+        label="Compliance",
+        icon="✅",
+        route="architecture_compliance",
+        domain="Architecture",
+        description="Regulatory and design compliance constraints.",
+        renderer_module="architecture.compliance.ui",
+        renderer_function="render_compliance",
+        implemented=True,
     ),
-}
 
-
-# ============================================================
-# MODULE REGISTRY
-# ============================================================
-
-
-MODULE_REGISTRY: list[dict[str, Any]] = [
-
-    {
-        "label": "Overview",
-        "icon": "🏠",
-        "route": "overview",
-        "renderer": render_overview,
-    },
-
-    {
-        "label": "Projects",
-        "icon": "📁",
-        "route": "projects",
-        "renderer": OPTIONAL_RENDERERS[
-            "projects"
-        ],
-    },
-
-    {
-        "label": "Zoning",
-        "icon": "📐",
-        "route": "zoning",
-        "renderer": OPTIONAL_RENDERERS[
-            "zoning"
-        ],
-    },
-
-    {
-        "label": "Site Planning",
-        "icon": "🌐",
-        "route": "site_planning",
-        "renderer": render_site_planning_registered,
-    },
-
-    {
-        "label": "Floor Planning",
-        "icon": "🏢",
-        "route": "floor_planning",
-        "renderer": OPTIONAL_RENDERERS[
-            "floor_planning"
-        ],
-    },
-
-    {
-        "label": "Room Programming",
-        "icon": "🚪",
-        "route": "room_programming",
-        "renderer": OPTIONAL_RENDERERS[
-            "room_programming"
-        ],
-    },
-
-    {
-        "label": "Compliance",
-        "icon": "✅",
-        "route": "compliance",
-        "renderer": OPTIONAL_RENDERERS[
-            "compliance"
-        ],
-    },
-
-    {
-        "label": "Generative Design",
-        "icon": "✨",
-        "route": "generative_design",
-        "renderer": render_generative_design_safe,
-    },
-
-    {
-        "label": "System Health",
-        "icon": "🩺",
-        "route": "system_health",
-        "renderer": None,
-    },
+    ModuleDefinition(
+        label="Generative Design",
+        icon="✨",
+        route="architecture_generative_design",
+        domain="Architecture",
+        description="Constraint-driven design generation and ranking.",
+        implemented=True,
+    ),
 ]
 
 
 # ============================================================
-# MODULES BY ROUTE
+# PROJECT MODULES
+# ============================================================
+
+
+PROJECT_MODULES = [
+
+    ModuleDefinition(
+        label="Projects",
+        icon="📁",
+        route="projects",
+        domain="Projects",
+        description="Project lifecycle and project records.",
+    ),
+
+    ModuleDefinition(
+        label="Approvals",
+        icon="📝",
+        route="project_approvals",
+        domain="Projects",
+        description="Project approvals and authorization workflows.",
+    ),
+
+    ModuleDefinition(
+        label="Revisions",
+        icon="🔄",
+        route="project_revisions",
+        domain="Projects",
+        description="Project revisions and design history.",
+    ),
+
+    ModuleDefinition(
+        label="Workflows",
+        icon="🔀",
+        route="project_workflows",
+        domain="Projects",
+        description="Project workflow orchestration.",
+    ),
+
+    ModuleDefinition(
+        label="Governance",
+        icon="⚖️",
+        route="project_governance",
+        domain="Projects",
+        description="Project governance and controls.",
+    ),
+]
+
+
+# ============================================================
+# BIM MODULES
+# ============================================================
+
+
+BIM_MODULES = [
+
+    ModuleDefinition(
+        label="Buildings",
+        icon="🏢",
+        route="bim_buildings",
+        domain="BIM",
+        description="BIM building information.",
+    ),
+
+    ModuleDefinition(
+        label="Storeys",
+        icon="📚",
+        route="bim_storeys",
+        domain="BIM",
+        description="Building storeys and levels.",
+    ),
+
+    ModuleDefinition(
+        label="Spaces",
+        icon="🚪",
+        route="bim_spaces",
+        domain="BIM",
+        description="BIM spaces and spatial entities.",
+    ),
+
+    ModuleDefinition(
+        label="Elements",
+        icon="🧱",
+        route="bim_elements",
+        domain="BIM",
+        description="Building elements and components.",
+    ),
+
+    ModuleDefinition(
+        label="IFC",
+        icon="🔗",
+        route="bim_ifc",
+        domain="BIM",
+        description="Industry Foundation Classes workflows.",
+    ),
+
+    ModuleDefinition(
+        label="COBie",
+        icon="📋",
+        route="bim_cobie",
+        domain="BIM",
+        description="Construction Operations Building information exchange.",
+    ),
+
+    ModuleDefinition(
+        label="BIM Digital Twin",
+        icon="🌐",
+        route="bim_digital_twin",
+        domain="BIM",
+        description="BIM-connected digital twin.",
+    ),
+]
+
+
+# ============================================================
+# STRUCTURAL MODULES
+# ============================================================
+
+
+STRUCTURAL_MODULES = [
+
+    ModuleDefinition(
+        label="Eurocode EN 1990",
+        icon="📘",
+        route="structural_en1990",
+        domain="Structural",
+        description="Basis of structural design.",
+    ),
+
+    ModuleDefinition(
+        label="Eurocode EN 1991",
+        icon="📘",
+        route="structural_en1991",
+        domain="Structural",
+        description="Actions on structures.",
+    ),
+
+    ModuleDefinition(
+        label="Eurocode EN 1992",
+        icon="📘",
+        route="structural_en1992",
+        domain="Structural",
+        description="Design of concrete structures.",
+    ),
+
+    ModuleDefinition(
+        label="Eurocode EN 1993",
+        icon="📘",
+        route="structural_en1993",
+        domain="Structural",
+        description="Design of steel structures.",
+    ),
+
+    ModuleDefinition(
+        label="Eurocode EN 1995",
+        icon="📘",
+        route="structural_en1995",
+        domain="Structural",
+        description="Design of timber structures.",
+    ),
+
+    ModuleDefinition(
+        label="Eurocode EN 1997",
+        icon="📘",
+        route="structural_en1997",
+        domain="Structural",
+        description="Geotechnical design.",
+    ),
+
+    ModuleDefinition(
+        label="Eurocode EN 1998",
+        icon="📘",
+        route="structural_en1998",
+        domain="Structural",
+        description="Earthquake-resistant design.",
+    ),
+
+    ModuleDefinition(
+        label="Beam Design",
+        icon="📏",
+        route="structural_beams",
+        domain="Structural",
+        description="Structural beam analysis and design.",
+    ),
+
+    ModuleDefinition(
+        label="Column Design",
+        icon="🏛️",
+        route="structural_columns",
+        domain="Structural",
+        description="Structural column analysis and design.",
+    ),
+
+    ModuleDefinition(
+        label="Slab Design",
+        icon="▱",
+        route="structural_slabs",
+        domain="Structural",
+        description="Structural slab analysis and design.",
+    ),
+
+    ModuleDefinition(
+        label="Foundation Design",
+        icon="🏗️",
+        route="structural_foundations",
+        domain="Structural",
+        description="Foundation analysis and design.",
+    ),
+
+    ModuleDefinition(
+        label="Retaining Walls",
+        icon="🧱",
+        route="structural_retaining_walls",
+        domain="Structural",
+        description="Retaining wall analysis and design.",
+    ),
+
+    ModuleDefinition(
+        label="Steel Connections",
+        icon="🔩",
+        route="structural_steel_connections",
+        domain="Structural",
+        description="Steel connection design.",
+    ),
+
+    ModuleDefinition(
+        label="Finite Element Analysis",
+        icon="🕸️",
+        route="structural_fea",
+        domain="Structural",
+        description="Finite element analysis workflows.",
+    ),
+]
+
+
+# ============================================================
+# MEP MODULES
+# ============================================================
+
+
+MEP_MODULES = [
+
+    ModuleDefinition(
+        label="HVAC",
+        icon="❄️",
+        route="mep_hvac",
+        domain="MEP",
+        description="Heating, ventilation and air conditioning.",
+    ),
+
+    ModuleDefinition(
+        label="Ventilation",
+        icon="💨",
+        route="mep_ventilation",
+        domain="MEP",
+        description="Ventilation analysis and design.",
+    ),
+
+    ModuleDefinition(
+        label="Chilled Water",
+        icon="💧",
+        route="mep_chilled_water",
+        domain="MEP",
+        description="Chilled water system design.",
+    ),
+
+    ModuleDefinition(
+        label="Energy Simulation",
+        icon="⚡",
+        route="mep_energy",
+        domain="MEP",
+        description="Building energy simulation.",
+    ),
+
+    ModuleDefinition(
+        label="Electrical Load Analysis",
+        icon="⚡",
+        route="mep_load_analysis",
+        domain="MEP",
+        description="Electrical load calculations.",
+    ),
+
+    ModuleDefinition(
+        label="Transformers",
+        icon="🔌",
+        route="mep_transformers",
+        domain="MEP",
+        description="Transformer sizing and analysis.",
+    ),
+
+    ModuleDefinition(
+        label="Generators",
+        icon="🔋",
+        route="mep_generators",
+        domain="MEP",
+        description="Generator systems.",
+    ),
+
+    ModuleDefinition(
+        label="Cable Sizing",
+        icon="🔌",
+        route="mep_cable_sizing",
+        domain="MEP",
+        description="Electrical cable sizing.",
+    ),
+
+    ModuleDefinition(
+        label="Solar PV",
+        icon="☀️",
+        route="mep_solar_pv",
+        domain="MEP",
+        description="Solar photovoltaic system design.",
+    ),
+
+    ModuleDefinition(
+        label="Water Supply",
+        icon="🚰",
+        route="mep_water_supply",
+        domain="MEP",
+        description="Water supply system design.",
+    ),
+
+    ModuleDefinition(
+        label="Drainage",
+        icon="🚿",
+        route="mep_drainage",
+        domain="MEP",
+        description="Drainage system design.",
+    ),
+
+    ModuleDefinition(
+        label="Stormwater",
+        icon="🌧️",
+        route="mep_stormwater",
+        domain="MEP",
+        description="Stormwater management.",
+    ),
+
+    ModuleDefinition(
+        label="Sewer Networks",
+        icon="🚰",
+        route="mep_sewer",
+        domain="MEP",
+        description="Sewer network design.",
+    ),
+
+    ModuleDefinition(
+        label="Firefighting",
+        icon="🔥",
+        route="mep_firefighting",
+        domain="MEP",
+        description="Firefighting systems.",
+    ),
+]
+
+
+# ============================================================
+# COSTING MODULES
+# ============================================================
+
+
+COSTING_MODULES = [
+
+    ModuleDefinition(
+        label="BOQ",
+        icon="📋",
+        route="costing_boq",
+        domain="Costing",
+        description="Bills of quantities.",
+    ),
+
+    ModuleDefinition(
+        label="Quantity Takeoff",
+        icon="📐",
+        route="costing_quantity_takeoff",
+        domain="Costing",
+        description="Automated quantity takeoff.",
+    ),
+
+    ModuleDefinition(
+        label="Procurement",
+        icon="🛒",
+        route="costing_procurement",
+        domain="Costing",
+        description="Construction procurement costing.",
+    ),
+
+    ModuleDefinition(
+        label="Forex",
+        icon="💱",
+        route="costing_forex",
+        domain="Costing",
+        description="Foreign exchange costing.",
+    ),
+
+    ModuleDefinition(
+        label="Inflation",
+        icon="📈",
+        route="costing_inflation",
+        domain="Costing",
+        description="Construction cost inflation.",
+    ),
+
+    ModuleDefinition(
+        label="Risk Analysis",
+        icon="⚠️",
+        route="costing_risk",
+        domain="Costing",
+        description="Cost and project risk analysis.",
+    ),
+
+    ModuleDefinition(
+        label="Cashflow",
+        icon="💰",
+        route="costing_cashflow",
+        domain="Costing",
+        description="Project cashflow forecasting.",
+    ),
+]
+
+
+# ============================================================
+# CONSTRUCTION MODULES
+# ============================================================
+
+
+CONSTRUCTION_MODULES = [
+
+    ModuleDefinition(
+        label="Planning",
+        icon="🗓️",
+        route="construction_planning",
+        domain="Construction",
+    ),
+
+    ModuleDefinition(
+        label="Scheduling",
+        icon="📅",
+        route="construction_scheduling",
+        domain="Construction",
+    ),
+
+    ModuleDefinition(
+        label="RFIs",
+        icon="❓",
+        route="construction_rfis",
+        domain="Construction",
+    ),
+
+    ModuleDefinition(
+        label="Submittals",
+        icon="📨",
+        route="construction_submittals",
+        domain="Construction",
+    ),
+
+    ModuleDefinition(
+        label="Variations",
+        icon="🔄",
+        route="construction_variations",
+        domain="Construction",
+    ),
+
+    ModuleDefinition(
+        label="Snagging",
+        icon="🔎",
+        route="construction_snagging",
+        domain="Construction",
+    ),
+
+    ModuleDefinition(
+        label="Progress Tracking",
+        icon="📊",
+        route="construction_progress",
+        domain="Construction",
+    ),
+
+    ModuleDefinition(
+        label="Site Diaries",
+        icon="📓",
+        route="construction_site_diaries",
+        domain="Construction",
+    ),
+]
+
+
+# ============================================================
+# DOCUMENT MODULES
+# ============================================================
+
+
+DOCUMENT_MODULES = [
+
+    ModuleDefinition(
+        label="Drawing Management",
+        icon="📐",
+        route="documents_drawings",
+        domain="Documents",
+    ),
+
+    ModuleDefinition(
+        label="Specifications",
+        icon="📄",
+        route="documents_specifications",
+        domain="Documents",
+    ),
+
+    ModuleDefinition(
+        label="Contracts",
+        icon="📜",
+        route="documents_contracts",
+        domain="Documents",
+    ),
+
+    ModuleDefinition(
+        label="Reports",
+        icon="📊",
+        route="documents_reports",
+        domain="Documents",
+    ),
+
+    ModuleDefinition(
+        label="Version Control",
+        icon="🔖",
+        route="documents_versions",
+        domain="Documents",
+    ),
+
+    ModuleDefinition(
+        label="Archives",
+        icon="🗄️",
+        route="documents_archives",
+        domain="Documents",
+    ),
+]
+
+
+# ============================================================
+# AI MODULES
+# ============================================================
+
+
+AI_MODULES = [
+
+    ModuleDefinition(
+        label="IMAGINE Architect",
+        icon="🏛️",
+        route="ai_architect",
+        domain="AI",
+    ),
+
+    ModuleDefinition(
+        label="IMAGINE Engineer",
+        icon="🏗️",
+        route="ai_engineer",
+        domain="AI",
+    ),
+
+    ModuleDefinition(
+        label="IMAGINE MEP",
+        icon="⚡",
+        route="ai_mep",
+        domain="AI",
+    ),
+
+    ModuleDefinition(
+        label="IMAGINE QS",
+        icon="💰",
+        route="ai_qs",
+        domain="AI",
+    ),
+
+    ModuleDefinition(
+        label="IMAGINE PM",
+        icon="📊",
+        route="ai_pm",
+        domain="AI",
+    ),
+
+    ModuleDefinition(
+        label="Vector Store",
+        icon="🧠",
+        route="ai_vector_store",
+        domain="AI",
+    ),
+
+    ModuleDefinition(
+        label="RAG",
+        icon="🔎",
+        route="ai_rag",
+        domain="AI",
+    ),
+
+    ModuleDefinition(
+        label="Prompt Library",
+        icon="📝",
+        route="ai_prompt_library",
+        domain="AI",
+    ),
+]
+
+
+# ============================================================
+# ANALYTICS MODULES
+# ============================================================
+
+
+ANALYTICS_MODULES = [
+
+    ModuleDefinition(
+        label="Dashboards",
+        icon="📊",
+        route="analytics_dashboards",
+        domain="Analytics",
+    ),
+
+    ModuleDefinition(
+        label="KPIs",
+        icon="🎯",
+        route="analytics_kpis",
+        domain="Analytics",
+    ),
+
+    ModuleDefinition(
+        label="Portfolio",
+        icon="📁",
+        route="analytics_portfolio",
+        domain="Analytics",
+    ),
+
+    ModuleDefinition(
+        label="Forecasting",
+        icon="🔮",
+        route="analytics_forecasting",
+        domain="Analytics",
+    ),
+
+    ModuleDefinition(
+        label="Reporting",
+        icon="📈",
+        route="analytics_reporting",
+        domain="Analytics",
+    ),
+]
+
+
+# ============================================================
+# REGIONAL MODULES
+# ============================================================
+
+
+REGIONAL_MODULES = [
+
+    ModuleDefinition(
+        label="Uganda",
+        icon="🇺🇬",
+        route="regional_uganda",
+        domain="Regional",
+    ),
+
+    ModuleDefinition(
+        label="Kenya",
+        icon="🇰🇪",
+        route="regional_kenya",
+        domain="Regional",
+    ),
+
+    ModuleDefinition(
+        label="Tanzania",
+        icon="🇹🇿",
+        route="regional_tanzania",
+        domain="Regional",
+    ),
+
+    ModuleDefinition(
+        label="Rwanda",
+        icon="🇷🇼",
+        route="regional_rwanda",
+        domain="Regional",
+    ),
+
+    ModuleDefinition(
+        label="South Sudan",
+        icon="🇸🇸",
+        route="regional_south_sudan",
+        domain="Regional",
+    ),
+
+    ModuleDefinition(
+        label="Codes",
+        icon="📘",
+        route="regional_codes",
+        domain="Regional",
+    ),
+
+    ModuleDefinition(
+        label="Zoning Laws",
+        icon="⚖️",
+        route="regional_zoning_laws",
+        domain="Regional",
+    ),
+]
+
+
+# ============================================================
+# INTEGRATION MODULES
+# ============================================================
+
+
+INTEGRATION_MODULES = [
+
+    ModuleDefinition(
+        label="Microsoft",
+        icon="🪟",
+        route="integration_microsoft",
+        domain="Integrations",
+    ),
+
+    ModuleDefinition(
+        label="AutoCAD",
+        icon="📐",
+        route="integration_autocad",
+        domain="Integrations",
+    ),
+
+    ModuleDefinition(
+        label="Revit",
+        icon="🏢",
+        route="integration_revit",
+        domain="Integrations",
+    ),
+
+    ModuleDefinition(
+        label="Archicad",
+        icon="🏛️",
+        route="integration_archicad",
+        domain="Integrations",
+    ),
+
+    ModuleDefinition(
+        label="Tekla",
+        icon="🏗️",
+        route="integration_tekla",
+        domain="Integrations",
+    ),
+
+    ModuleDefinition(
+        label="IfcOpenShell",
+        icon="🔗",
+        route="integration_ifcopenshell",
+        domain="Integrations",
+    ),
+
+    ModuleDefinition(
+        label="ArcGIS",
+        icon="🗺️",
+        route="integration_arcgis",
+        domain="Integrations",
+    ),
+
+    ModuleDefinition(
+        label="Azure",
+        icon="☁️",
+        route="integration_azure",
+        domain="Integrations",
+    ),
+
+    ModuleDefinition(
+        label="Mapbox",
+        icon="🗺️",
+        route="integration_mapbox",
+        domain="Integrations",
+    ),
+]
+
+
+# ============================================================
+# DIGITAL TWIN MODULES
+# ============================================================
+
+
+DIGITAL_TWIN_MODULES = [
+
+    ModuleDefinition(
+        label="Assets",
+        icon="🏭",
+        route="digital_twin_assets",
+        domain="Digital Twin",
+    ),
+
+    ModuleDefinition(
+        label="Sensors",
+        icon="📡",
+        route="digital_twin_sensors",
+        domain="Digital Twin",
+    ),
+
+    ModuleDefinition(
+        label="Telemetry",
+        icon="📶",
+        route="digital_twin_telemetry",
+        domain="Digital Twin",
+    ),
+
+    ModuleDefinition(
+        label="Energy",
+        icon="⚡",
+        route="digital_twin_energy",
+        domain="Digital Twin",
+    ),
+
+    ModuleDefinition(
+        label="Maintenance",
+        icon="🔧",
+        route="digital_twin_maintenance",
+        domain="Digital Twin",
+    ),
+
+    ModuleDefinition(
+        label="Predictive AI",
+        icon="🤖",
+        route="digital_twin_predictive_ai",
+        domain="Digital Twin",
+    ),
+]
+
+
+# ============================================================
+# ALL MODULES
+# ============================================================
+
+
+ALL_MODULES: list[ModuleDefinition] = [
+
+    *PROJECT_MODULES,
+
+    *ARCHITECTURE_MODULES,
+
+    *STRUCTURAL_MODULES,
+
+    *BIM_MODULES,
+
+    *MEP_MODULES,
+
+    *COSTING_MODULES,
+
+    *CONSTRUCTION_MODULES,
+
+    *DOCUMENT_MODULES,
+
+    *AI_MODULES,
+
+    *ANALYTICS_MODULES,
+
+    *REGIONAL_MODULES,
+
+    *INTEGRATION_MODULES,
+
+    *DIGITAL_TWIN_MODULES,
+]
+
+
+# ============================================================
+# SPECIAL RENDERER OVERRIDES
+# ============================================================
+
+
+SPECIAL_RENDERERS: dict[
+    str,
+    RenderFunction,
+] = {
+
+    "architecture_site_planning":
+        render_site_planning_registered,
+
+    "architecture_generative_design":
+        render_generative_design_safe,
+}
+
+
+# ============================================================
+# MODULE ROUTE REGISTRY
 # ============================================================
 
 
 MODULES_BY_ROUTE: dict[
     str,
-    dict[str, Any],
+    ModuleDefinition,
 ] = {
-    module["route"]: module
-    for module in MODULE_REGISTRY
+
+    "overview": ModuleDefinition(
+        label="Overview",
+        icon="🏠",
+        route="overview",
+        domain="Core",
+        description="IMAGINE engineering overview.",
+        implemented=True,
+    ),
+
+    **{
+        module.route: module
+        for module in ALL_MODULES
+    },
+
+    "system_health": ModuleDefinition(
+        label="System Health",
+        icon="🩺",
+        route="system_health",
+        domain="Core",
+        description="Application and module diagnostics.",
+        implemented=True,
+    ),
 }
 
 
@@ -436,70 +1551,48 @@ MODULES_BY_ROUTE: dict[
 
 
 def validate_module_registry() -> None:
-    """Validate registry routes and required routes."""
+    """Validate all application routes."""
 
-    routes = [
-        module["route"]
-        for module in MODULE_REGISTRY
-    ]
-
-    duplicate_routes = sorted(
-        {
-            route
-            for route in routes
-            if routes.count(route) > 1
-        }
+    routes = list(
+        MODULES_BY_ROUTE.keys()
     )
 
-    if duplicate_routes:
+    if len(routes) != len(set(routes)):
 
         raise RuntimeError(
-            "Duplicate module routes detected: "
-            + ", ".join(
-                duplicate_routes
-            )
+            "Duplicate module routes detected."
         )
 
     required_routes = (
         "overview",
-        "generative_design",
+        "architecture_zoning",
+        "architecture_site_planning",
+        "architecture_generative_design",
+        "structural_beams",
+        "bim_buildings",
+        "mep_hvac",
+        "costing_boq",
+        "construction_planning",
+        "documents_drawings",
+        "ai_architect",
+        "analytics_dashboards",
+        "regional_uganda",
+        "integration_revit",
+        "digital_twin_assets",
         "system_health",
     )
 
-    for route in required_routes:
-
-        if route not in MODULES_BY_ROUTE:
-
-            raise RuntimeError(
-                f"Required module route is missing: {route}"
-            )
-
-    generative_design = MODULES_BY_ROUTE[
-        "generative_design"
+    missing = [
+        route
+        for route in required_routes
+        if route not in MODULES_BY_ROUTE
     ]
 
-    if (
-        generative_design["renderer"]
-        is not render_generative_design_safe
-    ):
+    if missing:
 
         raise RuntimeError(
-            "Generative Design must use "
-            "render_generative_design_safe."
-        )
-
-    site_planning = MODULES_BY_ROUTE[
-        "site_planning"
-    ]
-
-    if (
-        site_planning["renderer"]
-        is not render_site_planning_registered
-    ):
-
-        raise RuntimeError(
-            "Site Planning must use "
-            "render_site_planning_registered."
+            "Required module routes are missing: "
+            + ", ".join(missing)
         )
 
 
@@ -514,22 +1607,15 @@ validate_module_registry()
 def render_system_health() -> None:
     """
     Render application health and dependency diagnostics.
-
-    The latest check timestamp is updated on every check.
-
-    The last successful timestamp is updated only when every
-    monitored module passes.
     """
 
-    st.title("🩺 System Health")
-
-    st.caption(
-        "IMAGINE startup and module diagnostics"
+    st.title(
+        "🩺 System Health"
     )
 
-    # --------------------------------------------------------
-    # Run health check
-    # --------------------------------------------------------
+    st.caption(
+        "IMAGINE application and module diagnostics"
+    )
 
     results = run_startup_health_check()
 
@@ -537,27 +1623,14 @@ def render_system_health() -> None:
         timezone.utc
     )
 
-    # --------------------------------------------------------
-    # Store latest health-check timestamp
-    # --------------------------------------------------------
-
     st.session_state[
         "health_last_checked_at"
     ] = checked_at
-
-    # --------------------------------------------------------
-    # Determine complete health status
-    # --------------------------------------------------------
 
     all_modules_healthy = all(
         result.status == "ok"
         for result in results
     )
-
-    # --------------------------------------------------------
-    # Store last successful timestamp only when every
-    # monitored module succeeds.
-    # --------------------------------------------------------
 
     if all_modules_healthy:
 
@@ -565,21 +1638,17 @@ def render_system_health() -> None:
             "health_last_successful_at"
         ] = checked_at
 
-    # --------------------------------------------------------
-    # Summary
-    # --------------------------------------------------------
-
     summary = health_summary(
         results
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # TIMESTAMPS
-    # ========================================================
+    # --------------------------------------------------------
 
-    timestamp_col1, timestamp_col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-    with timestamp_col1:
+    with col1:
 
         st.markdown(
             "**Latest Health Check**"
@@ -589,7 +1658,7 @@ def render_system_health() -> None:
             "health_last_checked_at"
         )
 
-        if last_checked is not None:
+        if last_checked:
 
             st.code(
                 last_checked.strftime(
@@ -603,7 +1672,7 @@ def render_system_health() -> None:
                 "No health check recorded"
             )
 
-    with timestamp_col2:
+    with col2:
 
         st.markdown(
             "**Last Successful Check**"
@@ -613,7 +1682,7 @@ def render_system_health() -> None:
             "health_last_successful_at"
         )
 
-        if last_successful is not None:
+        if last_successful:
 
             st.code(
                 last_successful.strftime(
@@ -629,36 +1698,32 @@ def render_system_health() -> None:
 
     st.divider()
 
-    # ========================================================
-    # HEALTH METRICS
-    # ========================================================
+    # --------------------------------------------------------
+    # METRICS
+    # --------------------------------------------------------
 
-    col1, col2, col3 = st.columns(3)
+    metric1, metric2, metric3 = st.columns(3)
 
-    with col1:
+    with metric1:
 
         st.metric(
             "Modules Checked",
             summary["total"],
         )
 
-    with col2:
+    with metric2:
 
         st.metric(
             "Healthy",
             summary["healthy"],
         )
 
-    with col3:
+    with metric3:
 
         st.metric(
             "Failed",
             summary["failed"],
         )
-
-    # ========================================================
-    # OVERALL STATUS
-    # ========================================================
 
     if summary["status"] == "healthy":
 
@@ -674,11 +1739,9 @@ def render_system_health() -> None:
 
     st.divider()
 
-    # ========================================================
-    # MODULE RESULTS
-    # ========================================================
-
-    st.subheader("Module Results")
+    st.subheader(
+        "Module Results"
+    )
 
     for result in results:
 
@@ -727,10 +1790,6 @@ def render_system_health() -> None:
 
     st.divider()
 
-    # ========================================================
-    # REFRESH
-    # ========================================================
-
     if st.button(
         "🔄 Run Health Check Again",
         use_container_width=True,
@@ -740,13 +1799,54 @@ def render_system_health() -> None:
 
 
 # ============================================================
-# CONNECT SYSTEM HEALTH TO REGISTRY
+# RENDER ROUTE
 # ============================================================
 
 
-MODULES_BY_ROUTE[
-    "system_health"
-]["renderer"] = render_system_health
+def render_route(
+    route: str,
+) -> None:
+    """
+    Resolve and render an application route.
+    """
+
+    if route == "overview":
+
+        render_overview()
+
+        return
+
+    if route == "system_health":
+
+        render_system_health()
+
+        return
+
+    module = MODULES_BY_ROUTE.get(
+        route
+    )
+
+    if module is None:
+
+        st.error(
+            f"Unknown IMAGINE route: {route}"
+        )
+
+        return
+
+    special_renderer = SPECIAL_RENDERERS.get(
+        route
+    )
+
+    if special_renderer is not None:
+
+        special_renderer()
+
+        return
+
+    render_registered_module(
+        module
+    )
 
 
 # ============================================================
@@ -782,36 +1882,344 @@ with st.sidebar:
         "NAVIGATION"
     )
 
-    for module in MODULE_REGISTRY:
+    # --------------------------------------------------------
+    # Overview
+    # --------------------------------------------------------
 
-        route = module["route"]
+    if st.button(
+        "🏠 Overview",
+        key="nav_overview",
+        use_container_width=True,
+        type=(
+            "primary"
+            if st.session_state.active_route
+            == "overview"
+            else "secondary"
+        ),
+    ):
 
-        label = (
-            f'{module["icon"]} '
-            f'{module["label"]}'
+        st.session_state.active_route = (
+            "overview"
         )
 
-        is_active = (
-            st.session_state.active_route
-            == route
+        st.rerun()
+
+    # ========================================================
+    # PROJECTS
+    # ========================================================
+
+    with st.expander(
+        "📁 PROJECTS",
+        expanded=False,
+    ):
+
+        for module in PROJECT_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # ARCHITECTURE
+    # ========================================================
+
+    with st.expander(
+        "🏛️ ARCHITECTURE",
+        expanded=True,
+    ):
+
+        for module in ARCHITECTURE_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # STRUCTURAL
+    # ========================================================
+
+    with st.expander(
+        "🏗️ STRUCTURAL",
+        expanded=False,
+    ):
+
+        for module in STRUCTURAL_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # BIM
+    # ========================================================
+
+    with st.expander(
+        "🧱 BIM",
+        expanded=False,
+    ):
+
+        for module in BIM_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # MEP
+    # ========================================================
+
+    with st.expander(
+        "⚡ MEP",
+        expanded=False,
+    ):
+
+        for module in MEP_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # COSTING
+    # ========================================================
+
+    with st.expander(
+        "💰 COSTING",
+        expanded=False,
+    ):
+
+        for module in COSTING_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # CONSTRUCTION
+    # ========================================================
+
+    with st.expander(
+        "🏭 CONSTRUCTION",
+        expanded=False,
+    ):
+
+        for module in CONSTRUCTION_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # DOCUMENTS
+    # ========================================================
+
+    with st.expander(
+        "📚 DOCUMENTS",
+        expanded=False,
+    ):
+
+        for module in DOCUMENT_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # AI
+    # ========================================================
+
+    with st.expander(
+        "🤖 AI",
+        expanded=False,
+    ):
+
+        for module in AI_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # ANALYTICS
+    # ========================================================
+
+    with st.expander(
+        "📊 ANALYTICS",
+        expanded=False,
+    ):
+
+        for module in ANALYTICS_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # REGIONAL
+    # ========================================================
+
+    with st.expander(
+        "🌍 REGIONAL",
+        expanded=False,
+    ):
+
+        for module in REGIONAL_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # INTEGRATIONS
+    # ========================================================
+
+    with st.expander(
+        "🔌 INTEGRATIONS",
+        expanded=False,
+    ):
+
+        for module in INTEGRATION_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # DIGITAL TWIN
+    # ========================================================
+
+    with st.expander(
+        "🌐 DIGITAL TWIN",
+        expanded=False,
+    ):
+
+        for module in DIGITAL_TWIN_MODULES:
+
+            if st.button(
+                f"{module.icon} {module.label}",
+                key=f"nav_{module.route}",
+                use_container_width=True,
+            ):
+
+                st.session_state.active_route = (
+                    module.route
+                )
+
+                st.rerun()
+
+    st.divider()
+
+    # ========================================================
+    # SYSTEM
+    # ========================================================
+
+    if st.button(
+        "🩺 System Health",
+        key="nav_system_health",
+        use_container_width=True,
+    ):
+
+        st.session_state.active_route = (
+            "system_health"
         )
 
-        if st.button(
-            label,
-            key=f"nav_{route}",
-            use_container_width=True,
-            type=(
-                "primary"
-                if is_active
-                else "secondary"
-            ),
-        ):
-
-            st.session_state.active_route = (
-                route
-            )
-
-            st.rerun()
+        st.rerun()
 
     st.divider()
 
@@ -830,19 +2238,34 @@ active_route = st.session_state.get(
     "overview",
 )
 
-module = MODULES_BY_ROUTE.get(
+if active_route not in MODULES_BY_ROUTE:
+
+    active_route = "overview"
+
+    st.session_state.active_route = (
+        active_route
+    )
+
+
+# ============================================================
+# ACTIVE MODULE HEADER
+# ============================================================
+
+
+active_module = MODULES_BY_ROUTE.get(
     active_route
 )
 
-if module is None:
+if active_module is not None:
 
-    st.session_state.active_route = (
-        "overview"
-    )
+    if active_route not in (
+        "overview",
+        "system_health",
+    ):
 
-    module = MODULES_BY_ROUTE[
-        "overview"
-    ]
+        st.caption(
+            f"IMAGINE • {active_module.domain}"
+        )
 
 
 # ============================================================
@@ -850,33 +2273,6 @@ if module is None:
 # ============================================================
 
 
-renderer = module.get(
-    "renderer"
+render_route(
+    active_route
 )
-
-if callable(renderer):
-
-    try:
-
-        renderer()
-
-    except Exception as exc:
-
-        st.error(
-            f'{module["label"]} could not be rendered.'
-        )
-
-        with st.expander(
-            "Complete renderer traceback",
-            expanded=True,
-        ):
-
-            st.exception(
-                exc
-            )
-
-else:
-
-    render_placeholder(
-        module["label"]
-    )
