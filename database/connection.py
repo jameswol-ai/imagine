@@ -1,52 +1,91 @@
 """
-IMAGINE
-Async Database Connection
+IMAGINE database connection and SQLAlchemy configuration.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import Generator
 
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.settings import settings
 
 
-Base = declarative_base()
+# ============================================================
+# DATABASE URL
+# ============================================================
+
+DATABASE_URL = settings.database_url
 
 
-engine: AsyncEngine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
+# ============================================================
+# ENGINE OPTIONS
+# ============================================================
+
+connect_args: dict[str, object] = {}
+
+if DATABASE_URL.startswith("sqlite"):
+    connect_args["check_same_thread"] = False
+
+
+# ============================================================
+# ENGINE
+# ============================================================
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
     pool_pre_ping=True,
 )
 
 
-AsyncSessionLocal = async_sessionmaker(
+# ============================================================
+# SESSION FACTORY
+# ============================================================
+
+SessionLocal = sessionmaker(
     bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
     autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,
 )
 
 
-async def get_db() -> AsyncGenerator[
-    AsyncSession,
-    None,
-]:
-    """Yield an asynchronous database session."""
-
-    async with AsyncSessionLocal() as session:
-        yield session
+# ============================================================
+# DECLARATIVE BASE
+# ============================================================
 
 
-async def dispose_engine() -> None:
-    """Dispose the database engine."""
+class Base(DeclarativeBase):
+    """
+    Shared SQLAlchemy declarative base.
 
-    await engine.dispose()
+    All database models should inherit from this Base,
+    directly or through BaseModel.
+    """
+
+    pass
+
+
+# ============================================================
+# SESSION DEPENDENCY
+# ============================================================
+
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    Provide a database session.
+
+    The session is always closed after use.
+    """
+
+    db = SessionLocal()
+
+    try:
+
+        yield db
+
+    finally:
+
+        db.close()
