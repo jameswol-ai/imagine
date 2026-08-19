@@ -2,19 +2,15 @@
 IMAGINE
 Generative Design Constraints
 
-Constraint normalization and validation for the generative-design
-engine.
-
-This module is intentionally independent of SQLAlchemy and database
-repositories. It converts incoming project/design information into a
-validated DesignConstraints object that can safely be consumed by the
-generator and scoring layers.
+Constraint normalization, deterministic validation, and
+geometric calculations used by the generative-design engine.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -25,7 +21,6 @@ from .schemas import (
     ConstraintValidationResult,
     DesignConstraints,
     ProgramConstraints,
-    RoomRequirement,
     SiteConstraints,
     ZoningConstraints,
 )
@@ -37,15 +32,6 @@ from .schemas import (
 
 MIN_SITE_DIMENSION = 1.0
 MIN_ROOM_AREA = 0.1
-MAX_CIRCULATION_RATIO = 1.0
-MIN_CIRCULATION_RATIO = 0.0
-
-DEFAULT_MAX_SITE_COVERAGE = 0.60
-DEFAULT_MAX_FAR = 2.0
-DEFAULT_MAX_HEIGHT = 15.0
-DEFAULT_MAX_STOREYS = 3
-
-DEFAULT_MIN_EGRESS_WIDTH = 1.1
 
 SETBACK_FIELDS = (
     "setback_front",
@@ -56,43 +42,38 @@ SETBACK_FIELDS = (
 
 
 # =====================================================================
-# PUBLIC API
+# GEOMETRY VALUE OBJECT
+# =====================================================================
+
+@dataclass(frozen=True)
+class BuildableSite:
+    """Calculated rectangular buildable site."""
+
+    width: float
+    depth: float
+    area: float
+
+
+# =====================================================================
+# NORMALIZATION
 # =====================================================================
 
 def normalize_constraints(
     constraints: DesignConstraints | Mapping[str, Any],
 ) -> DesignConstraints:
     """
-    Normalize incoming constraints into DesignConstraints.
+    Normalize incoming data into DesignConstraints.
 
-    Parameters
-    ----------
-    constraints:
-        Either an existing DesignConstraints instance or a mapping
-        containing the fields required to construct one.
-
-    Returns
-    -------
-    DesignConstraints
-        A validated, normalized constraint object.
-
-    Raises
-    ------
-    ValueError
-        If the supplied structure cannot be converted into
-        DesignConstraints.
+    No database access occurs here.
     """
 
     if isinstance(
         constraints,
         DesignConstraints,
     ):
-        # Re-validation creates a deterministic normalized copy and
-        # prevents callers from accidentally mutating the object held
-        # by the generation pipeline.
         return DesignConstraints.model_validate(
             constraints.model_dump(
-                mode="python",
+                mode="python"
             )
         )
 
@@ -105,32 +86,72 @@ def normalize_constraints(
             "or a mapping."
         )
 
-    normalized_input = deepcopy(
+    payload = deepcopy(
         dict(constraints)
     )
 
     try:
         return DesignConstraints.model_validate(
-            normalized_input
+            payload
         )
     except ValidationError as exc:
         raise ValueError(
-            _format_pydantic_errors(exc)
+            _format_validation_errors(exc)
         ) from exc
 
+
+# =====================================================================
+# NORMALIZE + VALIDATE
+# =====================================================================
+
+def normalize_and_validate_constraints(
+    constraints: DesignConstraints | Mapping[str, Any],
+) -> tuple[
+    DesignConstraints | None,
+    ConstraintValidationResult,
+]:
+    """
+    Normalize and validate constraints.
+
+    Returns:
+
+        (normalized_constraints, validation_result)
+
+    Structural validation failures return ``None`` for the normalized
+    constraints.
+    """
+
+    try:
+        normalized = normalize_constraints(
+            constraints
+        )
+    except ValueError as exc:
+        return (
+            None,
+            ConstraintValidationResult(
+                valid=False,
+                errors=[
+                    str(exc)
+                ],
+                warnings=[],
+            ),
+        )
+
+    result = validate_constraints(
+        normalized
+    )
+
+    return normalized, result
+
+
+# =====================================================================
+# VALIDATION
+# =====================================================================
 
 def validate_constraints(
     constraints: DesignConstraints | Mapping[str, Any],
 ) -> ConstraintValidationResult:
-    """
-    Normalize and validate generative-design constraints.
-
-    Validation is deterministic. Errors and warnings are returned in
-    a stable order so callers and tests can reliably compare results.
-
-    Pydantic structural errors are returned as validation errors rather
-    than raised exceptions.
-    """
+    """Validate normalized generative-design constraints."""
 
     try:
         normalized = normalize_constraints(
@@ -140,7 +161,7 @@ def validate_constraints(
         return ConstraintValidationResult(
             valid=False,
             errors=[
-                str(exc),
+                str(exc)
             ],
             warnings=[],
         )
@@ -148,19 +169,11 @@ def validate_constraints(
     errors: list[str] = []
     warnings: list[str] = []
 
-    # ---------------------------------------------------------------
-    # Site
-    # ---------------------------------------------------------------
-
     _validate_site(
         normalized.site,
         errors,
         warnings,
     )
-
-    # ---------------------------------------------------------------
-    # Zoning
-    # ---------------------------------------------------------------
 
     _validate_zoning(
         normalized.zoning,
@@ -168,20 +181,11 @@ def validate_constraints(
         warnings,
     )
 
-    # ---------------------------------------------------------------
-    # Program
-    # ---------------------------------------------------------------
-
     _validate_program(
         normalized.program,
-        normalized.site,
         errors,
         warnings,
     )
-
-    # ---------------------------------------------------------------
-    # Compliance
-    # ---------------------------------------------------------------
 
     _validate_compliance(
         normalized.compliance,
@@ -189,160 +193,21 @@ def validate_constraints(
         warnings,
     )
 
-    # ---------------------------------------------------------------
-    # Cross-domain validation
-    # ---------------------------------------------------------------
-
     _validate_cross_constraints(
         normalized,
         errors,
         warnings,
     )
 
-    # ---------------------------------------------------------------
-    # Deterministic ordering
-    # ---------------------------------------------------------------
-
-    errors = _sort_messages(errors)
-    warnings = _sort_messages(warnings)
-
     return ConstraintValidationResult(
         valid=not errors,
-        errors=errors,
-        warnings=warnings,
+        errors=_sort_messages(errors),
+        warnings=_sort_messages(warnings),
     )
-
-
-def normalize_and_validate_constraints(
-    constraints: DesignConstraints | Mapping[str, Any],
-) -> tuple[
-    DesignConstraints | None,
-    ConstraintValidationResult,
-]:
-    """
-    Normalize and validate constraints in one operation.
-
-    Returns
-    -------
-    tuple
-        ``(normalized_constraints, validation_result)``
-
-        If structural normalization fails, the normalized value is
-        ``None``.
-    """
-
-    try:
-        normalized = normalize_constraints(
-            constraints
-        )
-    except ValueError as exc:
-        result = ConstraintValidationResult(
-            valid=False,
-            errors=[
-                str(exc),
-            ],
-            warnings=[],
-        )
-
-        return None, result
-
-    result = validate_constraints(
-        normalized
-    )
-
-    if not result.valid:
-        return normalized, result
-
-    return normalized, result
-
-
-def constraint_summary(
-    constraints: DesignConstraints | Mapping[str, Any],
-) -> dict[str, Any]:
-    """
-    Produce a deterministic summary suitable for UI/API display.
-
-    The summary contains normalized values only and does not contain
-    database objects.
-    """
-
-    normalized = normalize_constraints(
-        constraints
-    )
-
-    total_program_area = sum(
-        room.area * room.quantity
-        for room in normalized.program.rooms
-    )
-
-    required_room_count = sum(
-        room.quantity
-        for room in normalized.program.rooms
-        if room.required
-    )
-
-    total_room_count = sum(
-        room.quantity
-        for room in normalized.program.rooms
-    )
-
-    return {
-        "project_id": (
-            str(normalized.project_id)
-            if normalized.project_id is not None
-            else None
-        ),
-        "site": {
-            "width": normalized.site.width,
-            "depth": normalized.site.depth,
-            "area": (
-                normalized.site.width
-                * normalized.site.depth
-            ),
-            "north_access": normalized.site.north_access,
-            "setbacks": {
-                field: getattr(
-                    normalized.site,
-                    field,
-                )
-                for field in SETBACK_FIELDS
-            },
-        },
-        "zoning": {
-            "max_site_coverage": (
-                normalized.zoning.max_site_coverage
-            ),
-            "max_far": normalized.zoning.max_far,
-            "max_height": normalized.zoning.max_height,
-            "max_storeys": normalized.zoning.max_storeys,
-        },
-        "program": {
-            "room_types": len(
-                normalized.program.rooms
-            ),
-            "room_count": total_room_count,
-            "required_room_count": required_room_count,
-            "total_room_area": total_program_area,
-            "circulation_ratio": (
-                normalized.program.circulation_ratio
-            ),
-        },
-        "compliance": {
-            "minimum_egress_width": (
-                normalized.compliance.minimum_egress_width
-            ),
-            "accessibility_required": (
-                normalized.compliance.accessibility_required
-            ),
-            "fire_separation_required": (
-                normalized.compliance.fire_separation_required
-            ),
-        },
-    }
 
 
 # =====================================================================
-# SITE VALIDATION
+# SITE
 # =====================================================================
 
 def _validate_site(
@@ -350,20 +215,15 @@ def _validate_site(
     errors: list[str],
     warnings: list[str],
 ) -> None:
-    """
-    Validate physical site dimensions and setbacks.
-    """
 
     if site.width < MIN_SITE_DIMENSION:
         errors.append(
-            "site.width must be at least "
-            f"{MIN_SITE_DIMENSION:g}."
+            "site.width must be at least 1."
         )
 
     if site.depth < MIN_SITE_DIMENSION:
         errors.append(
-            "site.depth must be at least "
-            f"{MIN_SITE_DIMENSION:g}."
+            "site.depth must be at least 1."
         )
 
     for field in SETBACK_FIELDS:
@@ -392,51 +252,34 @@ def _validate_site(
 
     if buildable_width <= 0:
         errors.append(
-            "site setbacks leave no positive "
-            "buildable site width."
+            "site setbacks leave no positive buildable width."
         )
 
     if buildable_depth <= 0:
         errors.append(
-            "site setbacks leave no positive "
-            "buildable site depth."
+            "site setbacks leave no positive buildable depth."
         )
 
     if (
-        site.setback_left
-        + site.setback_right
-        >= site.width
+        buildable_width > 0
+        and buildable_depth > 0
     ):
-        errors.append(
-            "left and right setbacks must be smaller "
-            "than total site width."
+        gross_area = (
+            site.width * site.depth
         )
 
-    if (
-        site.setback_front
-        + site.setback_rear
-        >= site.depth
-    ):
-        errors.append(
-            "front and rear setbacks must be smaller "
-            "than total site depth."
+        buildable_area = (
+            buildable_width * buildable_depth
         )
 
-    buildable_area = (
-        buildable_width
-        * buildable_depth
-    )
-
-    site_area = site.width * site.depth
-
-    if (
-        site_area > 0
-        and buildable_area / site_area < 0.25
-    ):
-        warnings.append(
-            "site setbacks leave less than 25% of the "
-            "gross site area available for development."
-        )
+        if (
+            gross_area > 0
+            and buildable_area / gross_area < 0.25
+        ):
+            warnings.append(
+                "site setbacks leave less than 25% of the "
+                "gross site area available for development."
+            )
 
     if not site.north_access:
         warnings.append(
@@ -446,7 +289,7 @@ def _validate_site(
 
 
 # =====================================================================
-# ZONING VALIDATION
+# ZONING
 # =====================================================================
 
 def _validate_zoning(
@@ -454,16 +297,13 @@ def _validate_zoning(
     errors: list[str],
     warnings: list[str],
 ) -> None:
-    """
-    Validate zoning constraints.
-    """
 
     if not (
         0 < zoning.max_site_coverage <= 1
     ):
         errors.append(
-            "zoning.max_site_coverage must be "
-            "greater than 0 and no greater than 1."
+            "zoning.max_site_coverage must be greater than 0 "
+            "and no greater than 1."
         )
 
     if zoning.max_far <= 0:
@@ -483,21 +323,20 @@ def _validate_zoning(
 
     if zoning.max_site_coverage > 0.80:
         warnings.append(
-            "zoning.max_site_coverage exceeds 80%; "
-            "site planning should verify local planning requirements."
+            "zoning.max_site_coverage exceeds 80%; verify "
+            "local planning requirements."
         )
 
     if zoning.max_far > 5:
         warnings.append(
             "zoning.max_far exceeds 5.0; verify the applicable "
-            "planning authority requirements."
+            "planning requirements."
         )
 
     if zoning.max_height > 45:
         warnings.append(
-            "zoning.max_height exceeds 45 m; structural, fire, "
-            "vertical circulation, and regulatory requirements "
-            "should be reviewed."
+            "zoning.max_height exceeds 45 m; additional "
+            "structural and regulatory requirements may apply."
         )
 
     if zoning.max_storeys > 12:
@@ -508,45 +347,27 @@ def _validate_zoning(
 
 
 # =====================================================================
-# PROGRAM VALIDATION
+# PROGRAM
 # =====================================================================
 
 def _validate_program(
     program: ProgramConstraints,
-    site: SiteConstraints,
     errors: list[str],
     warnings: list[str],
 ) -> None:
-    """
-    Validate room-program requirements and circulation.
-    """
 
     if not (
-        MIN_CIRCULATION_RATIO
-        <= program.circulation_ratio
-        <= MAX_CIRCULATION_RATIO
+        0 <= program.circulation_ratio <= 1
     ):
         errors.append(
-            "program.circulation_ratio must be between "
-            "0 and 1."
+            "program.circulation_ratio must be between 0 and 1."
         )
 
-    if (
-        program.circulation_ratio > 0.40
-    ):
+    if program.circulation_ratio > 0.40:
         warnings.append(
-            "program.circulation_ratio exceeds 40%; "
-            "verify that the program requires this level "
-            "of circulation space."
+            "program.circulation_ratio exceeds 40%; verify "
+            "the required circulation allowance."
         )
-
-    if not program.rooms:
-        warnings.append(
-            "program.rooms is empty; generated candidates "
-            "will have no explicit room-program requirements."
-        )
-
-        return
 
     seen_names: set[str] = set()
 
@@ -576,8 +397,7 @@ def _validate_program(
 
         if room.area < MIN_ROOM_AREA:
             errors.append(
-                f"program.rooms[{index}].area must be at least "
-                f"{MIN_ROOM_AREA:g}."
+                f"program.rooms[{index}].area must be at least 0.1."
             )
 
         if room.quantity < 1:
@@ -585,44 +405,15 @@ def _validate_program(
                 f"program.rooms[{index}].quantity must be at least 1."
             )
 
-    total_room_area = sum(
-        room.area * room.quantity
-        for room in program.rooms
-    )
-
-    total_required_area = sum(
-        room.area * room.quantity
-        for room in program.rooms
-        if room.required
-    )
-
-    site_area = (
-        site.width
-        * site.depth
-    )
-
-    if (
-        site_area > 0
-        and total_required_area > site_area
-    ):
+    if not program.rooms:
         warnings.append(
-            "required room area exceeds gross site area; "
-            "multi-storey development will be required."
-        )
-
-    if (
-        total_room_area > 0
-        and total_room_area / site_area > 5
-    ):
-        warnings.append(
-            "total room area exceeds five times the gross "
-            "site area; verify that the permitted FAR can "
-            "accommodate the requested program."
+            "program.rooms is empty; generated candidates "
+            "will have no explicit room-program requirements."
         )
 
 
 # =====================================================================
-# COMPLIANCE VALIDATION
+# COMPLIANCE
 # =====================================================================
 
 def _validate_compliance(
@@ -630,29 +421,16 @@ def _validate_compliance(
     errors: list[str],
     warnings: list[str],
 ) -> None:
-    """
-    Validate high-level compliance requirements.
-    """
 
     if compliance.minimum_egress_width <= 0:
         errors.append(
-            "compliance.minimum_egress_width must be greater "
-            "than 0."
+            "compliance.minimum_egress_width must be greater than 0."
         )
 
     if compliance.minimum_egress_width < 0.8:
         warnings.append(
             "compliance.minimum_egress_width is below 0.8 m; "
-            "verify the applicable occupancy and fire-safety code."
-        )
-
-    if (
-        compliance.minimum_egress_width > 3
-    ):
-        warnings.append(
-            "compliance.minimum_egress_width exceeds 3 m; "
-            "verify whether the value represents a single egress "
-            "path or an aggregate requirement."
+            "verify the applicable fire-safety requirements."
         )
 
     if (
@@ -665,18 +443,15 @@ def _validate_compliance(
             "standard."
         )
 
-    if (
-        not compliance.fire_separation_required
-    ):
+    if not compliance.fire_separation_required:
         warnings.append(
             "fire separation is disabled; the generated design "
-            "must not be treated as fire-code compliant without "
-            "additional verification."
+            "must not be treated as fire-code compliant."
         )
 
 
 # =====================================================================
-# CROSS-CONSTRAINT VALIDATION
+# CROSS CONSTRAINTS
 # =====================================================================
 
 def _validate_cross_constraints(
@@ -684,98 +459,61 @@ def _validate_cross_constraints(
     errors: list[str],
     warnings: list[str],
 ) -> None:
-    """
-    Validate relationships between site, zoning, program, and
-    compliance constraints.
-    """
 
-    site = constraints.site
-    zoning = constraints.zoning
-    program = constraints.program
-
-    gross_site_area = (
-        site.width
-        * site.depth
+    buildable = calculate_buildable_site(
+        constraints
     )
 
-    buildable_width = (
-        site.width
-        - site.setback_left
-        - site.setback_right
+    required_area = calculate_required_gross_area(
+        constraints
     )
 
-    buildable_depth = (
-        site.depth
-        - site.setback_front
-        - site.setback_rear
+    site_area = (
+        constraints.site.width
+        * constraints.site.depth
     )
 
-    buildable_area = (
-        buildable_width
-        * buildable_depth
-    )
-
-    maximum_footprint = (
-        gross_site_area
-        * zoning.max_site_coverage
-    )
-
-    effective_footprint = min(
-        buildable_area,
-        maximum_footprint,
-    )
-
-    maximum_gross_floor_area = (
-        gross_site_area
-        * zoning.max_far
-    )
-
-    total_program_area = sum(
-        room.area * room.quantity
-        for room in program.rooms
+    maximum_gross_area = (
+        site_area
+        * constraints.zoning.max_far
     )
 
     if (
-        total_program_area > 0
-        and maximum_gross_floor_area > 0
-        and total_program_area
-        > maximum_gross_floor_area
+        required_area > maximum_gross_area
     ):
         errors.append(
-            "program total room area exceeds the maximum "
+            "program total gross area exceeds the maximum "
             "gross floor area permitted by the configured FAR."
         )
 
-    if (
-        effective_footprint <= 0
-    ):
+    maximum_footprint = (
+        buildable.area
+        * constraints.zoning.max_site_coverage
+    )
+
+    if maximum_footprint <= 0:
         errors.append(
-            "no positive building footprint is available "
-            "after applying site setbacks and coverage."
+            "no positive building footprint is available."
         )
 
-    if (
-        effective_footprint > 0
-        and total_program_area > 0
-    ):
-        required_storey_equivalent = (
-            total_program_area
-            * (1 + program.circulation_ratio)
-            / effective_footprint
+    if maximum_footprint > 0:
+        required_storeys = (
+            required_area
+            / maximum_footprint
         )
 
         if (
-            required_storey_equivalent
-            > zoning.max_storeys
+            required_storeys
+            > constraints.zoning.max_storeys
         ):
             errors.append(
                 "the requested program requires more storeys "
-                "than the configured zoning.max_storeys."
+                "than zoning.max_storeys permits."
             )
 
         elif (
-            required_storey_equivalent
-            > zoning.max_storeys * 0.85
+            required_storeys
+            > constraints.zoning.max_storeys * 0.85
         ):
             warnings.append(
                 "the requested program is close to the maximum "
@@ -784,15 +522,179 @@ def _validate_cross_constraints(
 
 
 # =====================================================================
-# PYDANTIC ERROR FORMATTING
+# CALCULATIONS USED BY GENERATOR
 # =====================================================================
 
-def _format_pydantic_errors(
+def calculate_buildable_site(
+    constraints: DesignConstraints,
+) -> BuildableSite:
+    """
+    Calculate the rectangular site remaining after setbacks.
+    """
+
+    width = (
+        constraints.site.width
+        - constraints.site.setback_left
+        - constraints.site.setback_right
+    )
+
+    depth = (
+        constraints.site.depth
+        - constraints.site.setback_front
+        - constraints.site.setback_rear
+    )
+
+    if width <= 0:
+        raise ValueError(
+            "Site setbacks leave no positive buildable width."
+        )
+
+    if depth <= 0:
+        raise ValueError(
+            "Site setbacks leave no positive buildable depth."
+        )
+
+    return BuildableSite(
+        width=width,
+        depth=depth,
+        area=width * depth,
+    )
+
+
+def calculate_required_gross_area(
+    constraints: DesignConstraints,
+) -> float:
+    """
+    Calculate required gross floor area.
+
+    Room areas are multiplied by quantity and then increased by
+    the configured circulation ratio.
+    """
+
+    room_area = sum(
+        room.area * room.quantity
+        for room in constraints.program.rooms
+    )
+
+    return room_area * (
+        1.0
+        + constraints.program.circulation_ratio
+    )
+
+
+# =====================================================================
+# SUMMARY
+# =====================================================================
+
+def constraint_summary(
+    constraints: DesignConstraints | Mapping[str, Any],
+) -> dict[str, Any]:
+
+    normalized = normalize_constraints(
+        constraints
+    )
+
+    buildable = calculate_buildable_site(
+        normalized
+    )
+
+    required_area = calculate_required_gross_area(
+        normalized
+    )
+
+    return {
+        "project_id": (
+            str(normalized.project_id)
+            if normalized.project_id is not None
+            else None
+        ),
+        "site": {
+            "width": normalized.site.width,
+            "depth": normalized.site.depth,
+            "gross_area": (
+                normalized.site.width
+                * normalized.site.depth
+            ),
+            "buildable_width": buildable.width,
+            "buildable_depth": buildable.depth,
+            "buildable_area": buildable.area,
+        },
+        "zoning": {
+            "max_site_coverage": (
+                normalized.zoning.max_site_coverage
+            ),
+            "max_far": normalized.zoning.max_far,
+            "max_height": normalized.zoning.max_height,
+            "max_storeys": normalized.zoning.max_storeys,
+        },
+        "program": {
+            "room_types": len(
+                normalized.program.rooms
+            ),
+            "room_count": sum(
+                room.quantity
+                for room in normalized.program.rooms
+            ),
+            "room_area": sum(
+                room.area * room.quantity
+                for room in normalized.program.rooms
+            ),
+            "required_gross_area": required_area,
+            "circulation_ratio": (
+                normalized.program.circulation_ratio
+            ),
+        },
+        "compliance": {
+            "minimum_egress_width": (
+                normalized.compliance.minimum_egress_width
+            ),
+            "accessibility_required": (
+                normalized.compliance.accessibility_required
+            ),
+            "fire_separation_required": (
+                normalized.compliance.fire_separation_required
+            ),
+        },
+    }
+
+
+# =====================================================================
+# UUID
+# =====================================================================
+
+def validate_project_id(
+    project_id: UUID | str | None,
+) -> UUID | None:
+
+    if project_id is None:
+        return None
+
+    if isinstance(
+        project_id,
+        UUID,
+    ):
+        return project_id
+
+    try:
+        return UUID(
+            str(project_id)
+        )
+    except (
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise ValueError(
+            "project_id must be a valid UUID."
+        ) from exc
+
+
+# =====================================================================
+# ERROR FORMATTING
+# =====================================================================
+
+def _format_validation_errors(
     exc: ValidationError,
 ) -> str:
-    """
-    Convert Pydantic validation errors into a deterministic string.
-    """
 
     messages: list[str] = []
 
@@ -822,59 +724,18 @@ def _format_pydantic_errors(
                 message
             )
 
-    messages = _sort_messages(
-        messages
-    )
-
     return "; ".join(
-        messages
+        _sort_messages(
+            messages
+        )
     )
 
-
-# =====================================================================
-# DETERMINISTIC MESSAGE ORDERING
-# =====================================================================
 
 def _sort_messages(
     messages: list[str],
 ) -> list[str]:
-    """
-    Return unique messages in deterministic lexical order.
-    """
 
     return sorted(
         set(messages),
-        key=lambda value: value.casefold(),
+        key=str.casefold,
     )
-
-
-# =====================================================================
-# UUID VALIDATION HELPER
-# =====================================================================
-
-def validate_project_id(
-    project_id: UUID | str | None,
-) -> UUID | None:
-    """
-    Normalize a project identifier to UUID.
-
-    This helper deliberately does not access the database.
-    """
-
-    if project_id is None:
-        return None
-
-    if isinstance(
-        project_id,
-        UUID,
-    ):
-        return project_id
-
-    try:
-        return UUID(
-            str(project_id)
-        )
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "project_id must be a valid UUID."
-        ) from exc
