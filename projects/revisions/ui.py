@@ -1,15 +1,42 @@
 """
-IMAGINE Project Revisions Streamlit UI.
+IMAGINE
+Project Revisions Streamlit UI.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
+
+
+def _get_attr(
+    obj: Any,
+    name: str,
+    default: Any = None,
+) -> Any:
+
+    return getattr(
+        obj,
+        name,
+        default,
+    )
+
+
+def _session():
+
+    from database.connection import (
+        SessionLocal,
+    )
+
+    return SessionLocal()
 
 
 def render_revisions() -> None:
 
-    st.title("Revisions")
+    st.title(
+        "Revisions"
+    )
 
     st.caption(
         "Project revision history."
@@ -24,10 +51,6 @@ def render_revisions() -> None:
         from projects.revisions.service import (
             create_revision,
             list_revisions,
-        )
-
-        from database.connection import (
-            SessionLocal,
         )
 
     except Exception as exc:
@@ -47,19 +70,27 @@ def render_revisions() -> None:
     project_id = st.number_input(
         "Project ID",
         min_value=1,
+        value=1,
         step=1,
-        key="revision_project_id",
+        key="revisions_project_id",
     )
 
-    with st.form("revision_form"):
+    st.subheader(
+        "Create Revision"
+    )
+
+    with st.form(
+        "revisions_create_form"
+    ):
 
         description = st.text_area(
             "Revision Description"
         )
 
         created_by = st.number_input(
-            "Created By",
+            "Created By User ID",
             min_value=1,
+            value=1,
             step=1,
         )
 
@@ -78,15 +109,21 @@ def render_revisions() -> None:
 
         else:
 
-            db = SessionLocal()
+            db = None
 
             try:
 
                 payload = RevisionCreate(
-                    project_id=int(project_id),
+                    project_id=int(
+                        project_id
+                    ),
                     description=description.strip(),
-                    created_by=int(created_by),
+                    created_by=int(
+                        created_by
+                    ),
                 )
+
+                db = _session()
 
                 create_revision(
                     db=db,
@@ -96,14 +133,16 @@ def render_revisions() -> None:
                 )
 
                 st.success(
-                    "Revision created."
+                    "Revision created successfully."
                 )
 
                 st.rerun()
 
             except Exception as exc:
 
-                db.rollback()
+                if db is not None:
+
+                    db.rollback()
 
                 st.error(
                     "Revision could not be created."
@@ -116,29 +155,75 @@ def render_revisions() -> None:
                     st.exception(exc)
 
             finally:
-                db.close()
+
+                if db is not None:
+
+                    db.close()
 
     st.divider()
 
-    db = SessionLocal()
+    db = None
 
     try:
 
+        db = _session()
+
         revisions = list_revisions(
             db=db,
-            project_id=int(project_id),
+            project_id=int(
+                project_id
+            ),
         )
 
-        st.dataframe(
-            [
+        revisions = list(
+            revisions or []
+        )
+
+        st.subheader(
+            "Revision Records"
+        )
+
+        if not revisions:
+
+            st.info(
+                "No revisions exist for this project."
+            )
+
+            return
+
+        rows = []
+
+        for revision in revisions:
+
+            rows.append(
                 {
-                    "ID": revision.id,
-                    "Project": revision.project_id,
-                    "Description": revision.description,
-                    "Created By": revision.created_by,
+                    "ID": _get_attr(
+                        revision,
+                        "id",
+                    ),
+                    "Project ID": _get_attr(
+                        revision,
+                        "project_id",
+                    ),
+                    "Description": _get_attr(
+                        revision,
+                        "description",
+                        "",
+                    ),
+                    "Created By": _get_attr(
+                        revision,
+                        "created_by",
+                    ),
+                    "Created": _get_attr(
+                        revision,
+                        "created_at",
+                        "",
+                    ),
                 }
-                for revision in revisions
-            ],
+            )
+
+        st.dataframe(
+            rows,
             use_container_width=True,
             hide_index=True,
         )
@@ -146,7 +231,7 @@ def render_revisions() -> None:
     except Exception as exc:
 
         st.error(
-            "Revisions could not be listed."
+            "Revision records could not be loaded."
         )
 
         with st.expander(
@@ -156,4 +241,7 @@ def render_revisions() -> None:
             st.exception(exc)
 
     finally:
-        db.close()
+
+        if db is not None:
+
+            db.close()
