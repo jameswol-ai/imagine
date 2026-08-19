@@ -2,7 +2,7 @@
 streamlit_app.py
 ----------------
 studiohome - Generative Architecture & Civil Engine
-Sidebar-free layout with top navigation header & centralized module registry.
+Sidebar-free top navigation header with glassmorphism UI & dynamic renderer registry.
 """
 
 from __future__ import annotations
@@ -32,63 +32,103 @@ st.set_page_config(
 )
 
 # ============================================================================
-# GLOBAL STYLES & SIDEBAR REMOVAL
+# GLASSMORPHISM & TOP NAVIGATION STYLES
 # ============================================================================
 
 st.markdown(
     """
     <style>
-        /* Completely remove standard sidebar */
+        /* Hide default Streamlit sidebar & default headers */
         [data-testid="stSidebar"] { display: none !important; }
         #MainMenu, footer, header { visibility: hidden; }
 
         .block-container {
-            padding-top: 1rem;
+            padding-top: 1.2rem;
             padding-bottom: 2rem;
             max-width: 96%;
         }
 
-        /* Top Navigation Glass Container */
-        .studio-navbar {
-            border: 1px solid rgba(128, 128, 128, 0.18);
-            border-radius: 12px;
-            padding: 1rem 1.5rem;
-            margin-bottom: 1.25rem;
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(8px);
+        /* Glassmorphism Header Bar Container */
+        .studio-header {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            padding: 1.2rem 1.8rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
         }
 
-        .studio-brand {
-            font-size: 1.6rem;
+        /* Brand Title & Subtitle */
+        .studio-brand-title {
+            font-size: 1.75rem;
             font-weight: 800;
-            letter-spacing: 0.03em;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
             line-height: 1.1;
         }
 
         .studio-subtitle {
-            color: #888;
-            font-size: 0.8rem;
-            margin-top: 0.15rem;
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 0.82rem;
+            font-weight: 500;
+            margin-top: 0.2rem;
+            letter-spacing: 0.02em;
         }
 
-        .studio-user-badge {
+        /* User Profile Pill */
+        .studio-user-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 0.45rem 0.9rem;
             text-align: right;
-            font-size: 0.85rem;
-            color: #aaa;
+            display: inline-block;
+            float: right;
         }
 
         .studio-user-name {
             font-weight: 700;
-            color: #fff;
+            font-size: 0.85rem;
+            color: #ffffff;
+        }
+
+        .studio-user-role {
+            font-size: 0.72rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .studio-page-label {
-            color: #777;
+            color: #6366f1;
             font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
+            font-weight: 800;
+            letter-spacing: 0.12em;
             text-transform: uppercase;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2rem;
+        }
+
+        /* Customizing Streamlit Navigation Radio Buttons */
+        div[data-testid="stRadio"] > div {
+            gap: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+
+        div[data-testid="stRadio"] label {
+            background: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 8px !important;
+            padding: 0.4rem 0.9rem !important;
+            transition: all 0.2s ease-in-out !important;
+        }
+
+        div[data-testid="stRadio"] label:hover {
+            background: rgba(255, 255, 255, 0.08) !important;
+            border-color: rgba(255, 255, 255, 0.2) !important;
         }
     </style>
     """,
@@ -511,33 +551,30 @@ for m in MODULES:
 
 
 # ============================================================================
-# TOP NAVIGATION HEADER (NO SIDEBAR)
+# GLASSMORPHISM HEADER & NAVIGATION RENDERER
 # ============================================================================
 
 def _render_top_navigation() -> None:
-    # Brand & User Bar
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        st.markdown(
-            f"""
-            <div class="studio-brand">🏠 {APP_NAME}</div>
-            <div class="studio-subtitle">{APP_SUBTITLE}</div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with c2:
-        st.markdown(
-            f"""
-            <div class="studio-user-badge">
-                <span class="studio-user-name">👤 {st.session_state.user_name}</span> ({st.session_state.user_role})
+    # Header Card
+    st.markdown(
+        f"""
+        <div class="studio-header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div class="studio-brand-title">🏠 {APP_NAME}</div>
+                    <div class="studio-subtitle">{APP_SUBTITLE}</div>
+                </div>
+                <div class="studio-user-card">
+                    <div class="studio-user-name">👤 {st.session_state.user_name}</div>
+                    <div class="studio-user-role">{st.session_state.user_role}</div>
+                </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.write("")
-
-    # Section Tabs Across Top
+    # Section Selector Radio Tabs
     selected_sec = st.radio(
         label="Navigation Sections",
         options=SECTIONS,
@@ -549,23 +586,23 @@ def _render_top_navigation() -> None:
 
     if selected_sec != st.session_state.selected_section:
         st.session_state.selected_section = selected_sec
-        # Pick first module in newly selected section
         sec_mods = [m for m in MODULES if m.section == selected_sec]
         if sec_mods:
             st.session_state.selected_module = sec_mods[0].key
         st.rerun()
 
-    # Sub-module Selector Pills
+    # Sub-module Action Pills
     section_modules = [m for m in MODULES if m.section == st.session_state.selected_section]
     if section_modules:
-        cols = st.columns(len(section_modules))
+        cols = st.columns(min(len(section_modules), 8))
         for idx, mod in enumerate(section_modules):
             is_active = st.session_state.selected_module == mod.key
             btn_label = f"{mod.icon} {mod.label}"
             if mod.renderer_path and not mod.loaded:
                 btn_label += " ⚠️"
 
-            if cols[idx].button(
+            col_target = cols[idx % len(cols)]
+            if col_target.button(
                 btn_label,
                 key=f"nav_mod_{mod.key}",
                 use_container_width=True,
