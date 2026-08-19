@@ -1,90 +1,87 @@
 """
 IMAGINE
 Generative Design Database Models
+
+Persistence models for constraint-driven architectural
+generative design runs and their generated candidates.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+)
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import JSON
+from sqlalchemy.orm import relationship
 
-try:
-    from database.connection import Base
-except ImportError:
-    from sqlalchemy.orm import DeclarativeBase
-
-    class Base(DeclarativeBase):
-        """Fallback declarative base for isolated testing."""
+from database.models.base import BaseModel
 
 
-class GenerativeDesignRun(Base):
+class GenerativeDesignRun(BaseModel):
     """
     Represents one generative-design execution.
 
-    A run receives a set of design constraints and produces
-    one or more candidate design options.
+    A run belongs to a project and contains the normalized
+    design constraints used to generate candidate options.
     """
 
     __tablename__ = "generative_design_runs"
 
-    id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        autoincrement=True,
-    )
-
-    project_id: Mapped[int | None] = mapped_column(
-        ForeignKey("projects.id"),
+    project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "projects.id",
+            ondelete="CASCADE",
+        ),
         nullable=True,
         index=True,
     )
 
-    name: Mapped[str] = mapped_column(
+    name = Column(
         String(255),
         nullable=False,
     )
 
-    status: Mapped[str] = mapped_column(
+    status = Column(
         String(50),
         nullable=False,
         default="pending",
         index=True,
     )
 
-    constraints: Mapped[dict[str, Any]] = mapped_column(
+    constraints = Column(
         MutableDict.as_mutable(JSON),
         nullable=False,
         default=dict,
     )
 
-    candidate_count: Mapped[int] = mapped_column(
+    candidate_count = Column(
         Integer,
         nullable=False,
         default=0,
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        nullable=False,
-        default=datetime.utcnow,
-    )
-
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime,
+    completed_at = Column(
+        # DateTime is intentionally imported below to keep
+        # the model declaration easy to scan.
+        __import__("sqlalchemy").DateTime,
         nullable=True,
     )
 
-    error_message: Mapped[str | None] = mapped_column(
-        Text,
+    error_message = Column(
+        __import__("sqlalchemy").Text,
         nullable=True,
     )
 
-    candidates: Mapped[list["DesignCandidateRecord"]] = relationship(
+    candidates = relationship(
         "DesignCandidateRecord",
         back_populates="run",
         cascade="all, delete-orphan",
@@ -92,20 +89,19 @@ class GenerativeDesignRun(Base):
     )
 
 
-class DesignCandidateRecord(Base):
+class DesignCandidateRecord(BaseModel):
     """
-    Persisted generated design candidate.
+    Represents one generated architectural design candidate.
+
+    Candidate geometry, calculated metrics, and evaluation
+    results are stored as JSON so the schema can evolve as
+    the generative engine becomes more sophisticated.
     """
 
     __tablename__ = "generative_design_candidates"
 
-    id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        autoincrement=True,
-    )
-
-    run_id: Mapped[int] = mapped_column(
+    run_id = Column(
+        UUID(as_uuid=True),
         ForeignKey(
             "generative_design_runs.id",
             ondelete="CASCADE",
@@ -114,53 +110,48 @@ class DesignCandidateRecord(Base):
         index=True,
     )
 
-    name: Mapped[str] = mapped_column(
+    name = Column(
         String(255),
         nullable=False,
     )
 
-    status: Mapped[str] = mapped_column(
+    status = Column(
         String(50),
         nullable=False,
         default="generated",
     )
 
-    rank: Mapped[int | None] = mapped_column(
+    rank = Column(
         Integer,
         nullable=True,
+        index=True,
     )
 
-    score: Mapped[float] = mapped_column(
+    score = Column(
         Float,
         nullable=False,
         default=0.0,
     )
 
-    geometry: Mapped[dict[str, Any]] = mapped_column(
+    geometry = Column(
         MutableDict.as_mutable(JSON),
         nullable=False,
         default=dict,
     )
 
-    metrics: Mapped[dict[str, Any]] = mapped_column(
+    metrics = Column(
         MutableDict.as_mutable(JSON),
         nullable=False,
         default=dict,
     )
 
-    evaluation: Mapped[dict[str, Any]] = mapped_column(
+    evaluation = Column(
         MutableDict.as_mutable(JSON),
         nullable=False,
         default=dict,
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        nullable=False,
-        default=datetime.utcnow,
-    )
-
-    run: Mapped[GenerativeDesignRun] = relationship(
+    run = relationship(
         "GenerativeDesignRun",
         back_populates="candidates",
     )
