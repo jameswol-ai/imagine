@@ -1,84 +1,41 @@
 """
 IMAGINE application settings.
-
-Central configuration for the IMAGINE application.
 """
 
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import List
-
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+from dataclasses import dataclass
 
 
-class Settings(BaseSettings):
-    """
-    Application configuration.
+@dataclass(frozen=True)
+class Settings:
+    """Application configuration."""
 
-    Values are loaded from environment variables and,
-    when present, a local .env file.
-    """
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore",
+    app_name: str = os.getenv(
+        "IMAGINE_APP_NAME",
+        "IMAGINE",
     )
 
-    # --------------------------------------------------------
-    # Application
-    # --------------------------------------------------------
-
-    app_name: str = "IMAGINE"
-
-    app_version: str = "1.0.0"
-
-    environment: str = "development"
-
-    debug: bool = False
-
-    # --------------------------------------------------------
-    # Database
-    # --------------------------------------------------------
-
-    database_url: str = Field(
-        default="sqlite:///./imagine.db",
+    environment: str = os.getenv(
+        "IMAGINE_ENVIRONMENT",
+        "development",
     )
 
-    # --------------------------------------------------------
-    # Authentication
-    # --------------------------------------------------------
-
-    secret_key: str = Field(
-        default="imagine-development-secret",
+    database_url: str = os.getenv(
+        "DATABASE_URL",
+        "",
     )
 
-    algorithm: str = "HS256"
-
-    access_token_expire_minutes: int = 60
-
-    # --------------------------------------------------------
-    # CORS
-    # --------------------------------------------------------
-
-    cors_origins: List[str] = Field(
-        default_factory=lambda: [
-            "http://localhost:3000",
-            "http://localhost:8000",
-        ]
-    )
+    debug: bool = os.getenv(
+        "IMAGINE_DEBUG",
+        "false",
+    ).lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
-@lru_cache
-def get_settings() -> Settings:
-    """
-    Return the cached application settings instance.
-    """
-
-    return Settings()
-
-
-settings = get_settings()
+settings = Settings()
