@@ -323,3 +323,24 @@ architecture/floor_planning/
 ├── routes.py
 ├── seed.py
 └── ui.py
+
+
+IMAGINE/
+└── architecture/
+    └── room_programming/
+        ├── __init__.py
+        ├── models.py
+        ├── schemas.py
+        ├── repository.py
+        ├── service.py
+        ├── routes.py
+        ├── seed.py
+        └── ui.py
+
+IMAGINE/
+└── tests/
+    └── architecture/
+        └── room_programming/
+            ├── __init__.py
+            ├── test_schemas.py
+            └── test_service.py
