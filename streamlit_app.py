@@ -4,22 +4,24 @@ Generative Architecture & Civil Engine
 
 Resilient Streamlit application shell.
 
-Responsibilities
-----------------
-- Configure the Streamlit application.
-- Provide centralized navigation.
-- Maintain a centralized renderer registry.
-- Keep renderer imports isolated.
-- Prevent one broken module from crashing the entire application.
-- Register Projects SQLAlchemy models before Projects services execute.
-- Provide module-status diagnostics.
-- Provide System Health diagnostics.
-- Preserve the zero-argument Streamlit renderer contract.
+This file is responsible for:
+    - Application configuration
+    - IMAGINE navigation/sidebar
+    - Centralized renderer registry
+    - Safe renderer imports
+    - Renderer runtime isolation
+    - Projects SQLAlchemy model registration
+    - Module status reporting
+    - System Health diagnostics
 
-IMPORTANT
----------
-Individual modules remain responsible for their own database/service
-contracts. This shell intentionally does not rewrite those contracts.
+Renderer contract:
+    Every module renderer exposed to this shell must be callable with
+    zero arguments, for example:
+
+        def render_projects():
+            ...
+
+The shell does not modify database models or service signatures.
 """
 
 from __future__ import annotations
@@ -36,17 +38,13 @@ import streamlit as st
 
 
 # ============================================================================
-# APPLICATION CONSTANTS
+# APPLICATION CONFIGURATION
 # ============================================================================
 
 APP_NAME = "IMAGINE"
 APP_SUBTITLE = "Generative Architecture & Civil Engine"
 APP_VERSION = "1.0.0 Alpha"
 
-
-# ============================================================================
-# PAGE CONFIG
-# ============================================================================
 
 st.set_page_config(
     page_title=f"{APP_NAME} | Generative Architecture",
@@ -57,7 +55,7 @@ st.set_page_config(
 
 
 # ============================================================================
-# GLOBAL CSS
+# GLOBAL STYLES
 # ============================================================================
 
 st.markdown(
@@ -76,7 +74,7 @@ st.markdown(
         }
 
         .block-container {
-            padding-top: 1.25rem;
+            padding-top: 1rem;
             padding-bottom: 2rem;
         }
 
@@ -84,51 +82,78 @@ st.markdown(
             border-right: 1px solid rgba(128, 128, 128, 0.18);
         }
 
+        [data-testid="stSidebar"] > div:first-child {
+            padding-top: 1rem;
+        }
+
         .imagine-brand {
             font-size: 1.45rem;
             font-weight: 800;
+            line-height: 1.2;
             letter-spacing: 0.02em;
         }
 
         .imagine-subtitle {
             color: #777;
-            font-size: 0.82rem;
-            margin-top: -0.25rem;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            margin-top: 0.2rem;
         }
 
-        .module-card {
+        .imagine-section {
+            color: #777;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            margin-top: 1rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .imagine-user-panel {
             border: 1px solid rgba(128, 128, 128, 0.18);
-            border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 0.75rem;
+            border-radius: 10px;
+            padding: 0.75rem;
+            margin-top: 0.5rem;
         }
 
-        .status-ok {
+        .imagine-user-name {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .imagine-user-role {
+            color: #777;
+            font-size: 0.75rem;
+        }
+
+        .imagine-page-label {
+            color: #777;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: -0.35rem;
+        }
+
+        .imagine-status-ready {
             color: #16803c;
             font-weight: 700;
         }
 
-        .status-error {
+        .imagine-status-error {
             color: #c62828;
             font-weight: 700;
         }
 
-        .status-warning {
-            color: #b26a00;
+        .imagine-status-warning {
+            color: #a86500;
             font-weight: 700;
         }
 
-        .status-muted {
-            color: #777;
-        }
-
-        .section-label {
-            font-size: 0.72rem;
-            font-weight: 800;
-            letter-spacing: 0.1em;
-            color: #777;
-            margin-top: 1rem;
-            margin-bottom: 0.35rem;
+        .imagine-kpi {
+            border: 1px solid rgba(128, 128, 128, 0.18);
+            border-radius: 12px;
+            padding: 1rem;
         }
     </style>
     """,
@@ -150,6 +175,7 @@ class ModuleDefinition:
     icon: str
     section: str
     description: str
+
     renderer_path: str | None = None
     renderer_name: str = ""
     implemented: bool = False
@@ -185,16 +211,22 @@ if "imagine_renderer_errors" not in st.session_state:
 if "imagine_module_status" not in st.session_state:
     st.session_state.imagine_module_status = {}
 
+if "imagine_user" not in st.session_state:
+    st.session_state.imagine_user = "admin"
+
+if "imagine_role" not in st.session_state:
+    st.session_state.imagine_role = "Administrator"
+
 
 # ============================================================================
-# SAFE IMPORT HELPERS
+# SAFE IMPORTS
 # ============================================================================
 
 def _safe_import(
     module_path: str,
 ) -> tuple[Any | None, BaseException | None, str]:
     """
-    Import a module without allowing an import failure to crash IMAGINE.
+    Import a module without allowing an import failure to crash the shell.
     """
 
     try:
@@ -212,17 +244,18 @@ def _safe_import(
 def _resolve_renderer(
     module_path: str,
     renderer_name: str,
-) -> tuple[Renderer | None, BaseException | None, str]:
+) -> tuple[
+    Renderer | None,
+    BaseException | None,
+    str,
+]:
     """
-    Import a module and resolve its renderer.
-
-    Renderer contract:
-        render_<module>() -> Any
-
-    The shell intentionally accepts only a zero-argument callable.
+    Import a module and resolve its zero-argument renderer.
     """
 
-    module, import_error, import_traceback = _safe_import(module_path)
+    module, import_error, import_traceback = _safe_import(
+        module_path
+    )
 
     if import_error is not None:
         return (
@@ -237,7 +270,7 @@ def _resolve_renderer(
             renderer_name,
         )
 
-    except AttributeError as exc:
+    except AttributeError:
         return (
             None,
             RuntimeError(
@@ -259,7 +292,7 @@ def _resolve_renderer(
     try:
         signature = inspect.signature(renderer)
 
-        required_parameters = [
+        required = [
             parameter
             for parameter in signature.parameters.values()
             if (
@@ -273,21 +306,24 @@ def _resolve_renderer(
             )
         ]
 
-        if required_parameters:
+        if required:
+            names = ", ".join(
+                parameter.name
+                for parameter in required
+            )
+
             return (
                 None,
                 TypeError(
-                    f"{module_path}.{renderer_name} does not "
-                    "satisfy the zero-argument renderer contract. "
-                    f"Required parameters: "
-                    f"{', '.join(p.name for p in required_parameters)}"
+                    f"{module_path}.{renderer_name} "
+                    f"requires arguments ({names}). "
+                    "IMAGINE renderers must expose a "
+                    "zero-argument Streamlit adapter."
                 ),
                 "",
             )
 
     except (TypeError, ValueError):
-        # Some callables do not expose signatures. The callable itself
-        # remains usable, so do not reject it here.
         pass
 
     return renderer, None, ""
@@ -297,18 +333,25 @@ def _resolve_renderer(
 # PROJECT MODEL REGISTRATION
 # ============================================================================
 
-def _register_project_models() -> tuple[bool, BaseException | None, str]:
+def _register_project_models() -> tuple[
+    bool,
+    BaseException | None,
+    str,
+]:
     """
-    Register the complete Projects SQLAlchemy model graph before any
-    Projects service query executes.
+    Register Projects relationship targets before ProjectService performs
+    an ORM query.
 
-    This deliberately imports relationship targets before Project.
+    Import order matters.
 
-    The application shell does not modify database models.
+    Organization
+    User
+    Approval
+    Revision
+    Project
     """
 
     try:
-        # Core model dependencies.
         importlib.import_module(
             "database.models.organization"
         )
@@ -317,7 +360,6 @@ def _register_project_models() -> tuple[bool, BaseException | None, str]:
             "database.models.user"
         )
 
-        # Projects relationship targets first.
         importlib.import_module(
             "projects.approvals.models"
         )
@@ -326,7 +368,6 @@ def _register_project_models() -> tuple[bool, BaseException | None, str]:
             "projects.revisions.models"
         )
 
-        # Project itself last.
         importlib.import_module(
             "projects.projects.models"
         )
@@ -341,18 +382,20 @@ def _register_project_models() -> tuple[bool, BaseException | None, str]:
         )
 
 
-_PROJECT_MODELS_OK, _PROJECT_MODELS_ERROR, _PROJECT_MODELS_TRACEBACK = (
-    _register_project_models()
-)
+(
+    _PROJECT_MODELS_OK,
+    _PROJECT_MODELS_ERROR,
+    _PROJECT_MODELS_TRACEBACK,
+) = _register_project_models()
 
 
 # ============================================================================
-# MODULE DEFINITIONS
+# CENTRALIZED MODULE REGISTRY
 # ============================================================================
 
 MODULES: list[ModuleDefinition] = [
     # ------------------------------------------------------------------------
-    # OVERVIEW
+    # MAIN
     # ------------------------------------------------------------------------
 
     ModuleDefinition(
@@ -360,9 +403,7 @@ MODULES: list[ModuleDefinition] = [
         label="Overview",
         icon="🏠",
         section="MAIN",
-        description="IMAGINE system overview and health.",
-        renderer_path=None,
-        renderer_name="",
+        description="IMAGINE business and application overview.",
         implemented=True,
     ),
 
@@ -386,7 +427,7 @@ MODULES: list[ModuleDefinition] = [
         label="Site Planning",
         icon="📐",
         section="ARCHITECTURE",
-        description="Site planning and site development.",
+        description="Site planning and development.",
         renderer_path="architecture.site_planning.ui",
         renderer_name="render_site_planning",
         implemented=True,
@@ -397,7 +438,7 @@ MODULES: list[ModuleDefinition] = [
         label="Zoning",
         icon="🗺️",
         section="ARCHITECTURE",
-        description="Zoning and land-use planning.",
+        description="Land-use and zoning planning.",
         renderer_path="architecture.zoning.ui",
         renderer_name="render_zoning",
         implemented=True,
@@ -408,7 +449,7 @@ MODULES: list[ModuleDefinition] = [
         label="Floor Planning",
         icon="🏢",
         section="ARCHITECTURE",
-        description="Floor layout and planning.",
+        description="Floor plans and spatial layouts.",
         renderer_path="architecture.floor_planning.ui",
         renderer_name="render_floor_planning",
         implemented=True,
@@ -430,7 +471,7 @@ MODULES: list[ModuleDefinition] = [
         label="Compliance",
         icon="✅",
         section="ARCHITECTURE",
-        description="Building and design compliance.",
+        description="Architecture and building compliance.",
         renderer_path="architecture.compliance.ui",
         renderer_name="render_compliance",
         implemented=True,
@@ -441,7 +482,7 @@ MODULES: list[ModuleDefinition] = [
         label="Generative Design",
         icon="✨",
         section="ARCHITECTURE",
-        description="Generative design and concept development.",
+        description="Generative architectural design.",
         renderer_path="architecture.generative_design.ui",
         renderer_name="render_generative_design",
         implemented=True,
@@ -467,7 +508,7 @@ MODULES: list[ModuleDefinition] = [
         label="Approvals",
         icon="✔️",
         section="PROJECTS",
-        description="Project approval workflows.",
+        description="Project approvals and decisions.",
         renderer_path="projects.approvals.ui",
         renderer_name="render_approvals",
         implemented=True,
@@ -515,17 +556,11 @@ MODULES: list[ModuleDefinition] = [
         label="System Health",
         icon="🩺",
         section="SYSTEM",
-        description="Application diagnostics and module status.",
-        renderer_path=None,
-        renderer_name="",
+        description="IMAGINE diagnostics and module status.",
         implemented=True,
     ),
 ]
 
-
-# ============================================================================
-# MODULE REGISTRY
-# ============================================================================
 
 MODULE_REGISTRY: dict[str, ModuleDefinition] = {
     module.key: module
@@ -541,7 +576,7 @@ def _load_module_renderer(
     module: ModuleDefinition,
 ) -> None:
     """
-    Resolve a renderer without allowing a broken module to break the shell.
+    Resolve a module renderer without allowing failures to break startup.
     """
 
     if not module.implemented:
@@ -550,6 +585,15 @@ def _load_module_renderer(
 
     if not module.renderer_path:
         module.loaded = True
+
+        st.session_state.imagine_module_status[
+            module.key
+        ] = {
+            "loaded": True,
+            "implemented": True,
+            "error": None,
+        }
+
         return
 
     renderer, error, error_traceback = _resolve_renderer(
@@ -562,14 +606,6 @@ def _load_module_renderer(
     module.traceback_text = error_traceback
     module.loaded = renderer is not None
 
-    if error is not None:
-        st.session_state.imagine_renderer_errors[
-            module.key
-        ] = {
-            "error": error,
-            "traceback": error_traceback,
-        }
-
     st.session_state.imagine_module_status[
         module.key
     ] = {
@@ -578,121 +614,184 @@ def _load_module_renderer(
         "error": error,
     }
 
+    if error is not None:
+        st.session_state.imagine_renderer_errors[
+            module.key
+        ] = {
+            "error": error,
+            "traceback": error_traceback,
+        }
+
 
 def _load_all_renderers() -> None:
-    """
-    Resolve all renderer imports once per Streamlit process/session.
-    """
-
     for module in MODULES:
-        if module.key in (
-            "overview",
-            "system_health",
-        ):
-            continue
-
         _load_module_renderer(module)
 
 
-# Load renderers after the model-registration attempt.
 _load_all_renderers()
 
 
 # ============================================================================
-# UI HELPERS
+# NAVIGATION HELPERS
 # ============================================================================
 
-def _module_status(
+def _select_module(
+    key: str,
+) -> None:
+    st.session_state.imagine_selected_module = key
+
+
+def _module_button_label(
     module: ModuleDefinition,
 ) -> str:
-    if not module.implemented:
-        return "Not implemented"
+    label = f"{module.icon} {module.label}"
 
-    if module.loaded:
-        return "Ready"
+    if module.renderer_path and not module.loaded:
+        label += " ⚠️"
 
-    return "Unavailable"
+    return label
 
 
-def _render_brand() -> None:
+def _render_navigation_section(
+    section: str,
+) -> None:
     st.markdown(
-        f"""
-        <div class="imagine-brand">
-            🏗️ {APP_NAME}
-        </div>
-        <div class="imagine-subtitle">
-            {APP_SUBTITLE}
-        </div>
-        """,
+        f'<div class="imagine-section">{section}</div>',
         unsafe_allow_html=True,
     )
 
+    section_modules = [
+        module
+        for module in MODULES
+        if module.section == section
+    ]
+
+    for module in section_modules:
+        selected = (
+            st.session_state.imagine_selected_module
+            == module.key
+        )
+
+        if st.button(
+            _module_button_label(module),
+            key=f"imagine_nav_{module.key}",
+            use_container_width=True,
+            type=(
+                "primary"
+                if selected
+                else "secondary"
+            ),
+        ):
+            _select_module(module.key)
+            st.rerun()
+
+
+# ============================================================================
+# SIDEBAR
+# ============================================================================
 
 def _render_sidebar() -> None:
+    """
+    Full IMAGINE navigation panel.
+
+    The sidebar intentionally contains navigation only. Modules remain
+    responsible for rendering their own interfaces.
+    """
+
     with st.sidebar:
-        _render_brand()
+        # ------------------------------------------------------------
+        # BRAND
+        # ------------------------------------------------------------
+
+        st.markdown(
+            f"""
+            <div class="imagine-brand">
+                🏗️ {APP_NAME}
+            </div>
+            <div class="imagine-subtitle">
+                {APP_SUBTITLE}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         st.divider()
 
-        sections: list[str] = []
+        # ------------------------------------------------------------
+        # NAVIGATION
+        # ------------------------------------------------------------
 
-        for module in MODULES:
-            if module.section not in sections:
-                sections.append(module.section)
+        _render_navigation_section("MAIN")
 
-        for section in sections:
-            st.markdown(
-                f'<div class="section-label">{section}</div>',
-                unsafe_allow_html=True,
+        _render_navigation_section("ARCHITECTURE")
+
+        _render_navigation_section("PROJECTS")
+
+        _render_navigation_section("SYSTEM")
+
+        st.divider()
+
+        # ------------------------------------------------------------
+        # USER PANEL
+        # ------------------------------------------------------------
+
+        st.markdown(
+            '<div class="imagine-section">USER PANEL</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            f"""
+            <div class="imagine-user-panel">
+                <div class="imagine-user-name">
+                    👤 {st.session_state.imagine_user}
+                </div>
+                <div class="imagine-user-role">
+                    Role: {st.session_state.imagine_role}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.write("")
+
+        if st.button(
+            "🚪 Logout",
+            key="imagine_logout",
+            use_container_width=True,
+        ):
+            st.session_state.imagine_user = "admin"
+            st.session_state.imagine_role = "Administrator"
+
+            st.session_state.imagine_selected_module = (
+                "overview"
             )
 
-            section_modules = [
-                module
-                for module in MODULES
-                if module.section == section
-            ]
-
-            for module in section_modules:
-                selected = (
-                    st.session_state.imagine_selected_module
-                    == module.key
-                )
-
-                label = f"{module.icon} {module.label}"
-
-                if not module.implemented:
-                    label += " · unavailable"
-                elif (
-                    module.renderer_path
-                    and not module.loaded
-                ):
-                    label += " · error"
-
-                if st.button(
-                    label,
-                    key=f"nav_{module.key}",
-                    use_container_width=True,
-                    type="primary" if selected else "secondary",
-                ):
-                    st.session_state.imagine_selected_module = (
-                        module.key
-                    )
-                    st.rerun()
-
-        st.divider()
+            st.rerun()
 
         st.caption(
             f"{APP_NAME} {APP_VERSION}"
         )
 
 
+# ============================================================================
+# PAGE HEADER
+# ============================================================================
+
 def _render_page_header(
     title: str,
-    subtitle: str,
+    description: str = "",
 ) -> None:
+    st.markdown(
+        '<div class="imagine-page-label">IMAGINE | Generative Architecture</div>',
+        unsafe_allow_html=True,
+    )
+
     st.title(title)
-    if subtitle:
-        st.caption(subtitle)
+
+    if description:
+        st.caption(description)
 
 
 # ============================================================================
@@ -701,13 +800,8 @@ def _render_page_header(
 
 def _render_overview() -> None:
     _render_page_header(
-        "IMAGINE",
+        "Overview",
         "Generative Architecture & Civil Engine",
-    )
-
-    st.info(
-        "Welcome to IMAGINE. Select a module from the navigation panel "
-        "to begin."
     )
 
     total = len(MODULES)
@@ -725,10 +819,10 @@ def _render_overview() -> None:
         and (
             module.loaded
             or module.key
-            in (
+            in {
                 "overview",
                 "system_health",
-            )
+            }
         )
     )
 
@@ -736,8 +830,7 @@ def _render_overview() -> None:
         1
         for module in MODULES
         if (
-            module.implemented
-            and module.renderer_path
+            module.renderer_path
             and not module.loaded
         )
     )
@@ -764,25 +857,33 @@ def _render_overview() -> None:
 
     with col4:
         st.metric(
-            "Unavailable",
+            "Errors",
             failed,
         )
 
-    st.subheader("Application Status")
+    st.subheader("System Status")
 
     if failed == 0:
         st.success(
-            "All registered renderers are available."
+            "All registered module renderers are available."
         )
     else:
         st.warning(
-            f"{failed} registered renderer(s) could not be loaded."
+            f"{failed} registered module renderer(s) "
+            "could not be imported."
         )
 
-    if not _PROJECT_MODELS_OK:
+    # ------------------------------------------------------------
+    # PROJECT MODEL STATUS
+    # ------------------------------------------------------------
+
+    if _PROJECT_MODELS_OK:
+        st.success(
+            "Projects database model registry is ready."
+        )
+    else:
         st.error(
-            "The Projects SQLAlchemy model registry could not "
-            "be initialized."
+            "Projects database model registry failed."
         )
 
         if _PROJECT_MODELS_ERROR is not None:
@@ -793,11 +894,6 @@ def _render_overview() -> None:
                     _PROJECT_MODELS_ERROR
                 )
 
-    else:
-        st.success(
-            "Projects SQLAlchemy models registered successfully."
-        )
-
 
 # ============================================================================
 # SYSTEM HEALTH
@@ -806,22 +902,28 @@ def _render_overview() -> None:
 def _render_system_health() -> None:
     _render_page_header(
         "System Health",
-        "IMAGINE application diagnostics.",
+        "IMAGINE application and module diagnostics.",
     )
+
+    # ------------------------------------------------------------
+    # RUNTIME
+    # ------------------------------------------------------------
 
     st.subheader("Runtime")
 
-    runtime_columns = st.columns(3)
+    columns = st.columns(4)
 
-    with runtime_columns[0]:
+    with columns[0]:
         st.metric(
             "Python",
-            f"{sys.version_info.major}."
-            f"{sys.version_info.minor}."
-            f"{sys.version_info.micro}",
+            (
+                f"{sys.version_info.major}."
+                f"{sys.version_info.minor}."
+                f"{sys.version_info.micro}"
+            ),
         )
 
-    with runtime_columns[1]:
+    with columns[1]:
         st.metric(
             "Streamlit",
             getattr(
@@ -831,21 +933,31 @@ def _render_system_health() -> None:
             ),
         )
 
-    with runtime_columns[2]:
+    with columns[2]:
         st.metric(
-            "Modules",
+            "Application",
+            APP_VERSION,
+        )
+
+    with columns[3]:
+        st.metric(
+            "Registered Modules",
             len(MODULES),
         )
 
-    st.subheader("Projects ORM")
+    # ------------------------------------------------------------
+    # DATABASE MODEL REGISTRY
+    # ------------------------------------------------------------
+
+    st.subheader("Database Model Registry")
 
     if _PROJECT_MODELS_OK:
         st.success(
-            "Projects model registration: READY"
+            "Projects ORM registration: READY"
         )
     else:
         st.error(
-            "Projects model registration: FAILED"
+            "Projects ORM registration: FAILED"
         )
 
         if _PROJECT_MODELS_ERROR is not None:
@@ -855,44 +967,50 @@ def _render_system_health() -> None:
 
         if _PROJECT_MODELS_TRACEBACK:
             with st.expander(
-                "Complete Projects model traceback"
+                "Complete Projects mapper/import traceback"
             ):
                 st.code(
                     _PROJECT_MODELS_TRACEBACK,
                     language="text",
                 )
 
-    st.subheader("Renderer Registry")
+    # ------------------------------------------------------------
+    # MODULE REGISTRY
+    # ------------------------------------------------------------
 
-    rows: list[dict[str, Any]] = []
+    st.subheader("Module Registry")
+
+    rows: list[dict[str, str]] = []
 
     for module in MODULES:
-        if module.key == "overview":
-            status = "Ready"
-
-        elif module.key == "system_health":
-            status = "Ready"
+        if module.key in {
+            "overview",
+            "system_health",
+        }:
+            status = "READY"
 
         elif not module.implemented:
-            status = "Not implemented"
+            status = "NOT IMPLEMENTED"
 
         elif module.loaded:
-            status = "Ready"
+            status = "READY"
 
         else:
-            status = "Failed"
+            status = "ERROR"
+
+        renderer = (
+            f"{module.renderer_path}:"
+            f"{module.renderer_name}"
+            if module.renderer_path
+            else "Built-in"
+        )
 
         rows.append(
             {
                 "Module": module.label,
                 "Section": module.section,
                 "Status": status,
-                "Renderer": (
-                    f"{module.renderer_path}."
-                    f"{module.renderer_name}"
-                    if module.renderer_path
-                    else "Built-in"
-                ),
+                "Renderer": renderer,
             }
         )
 
@@ -901,6 +1019,10 @@ def _render_system_health() -> None:
         use_container_width=True,
         hide_index=True,
     )
+
+    # ------------------------------------------------------------
+    # FAILED MODULES
+    # ------------------------------------------------------------
 
     failed_modules = [
         module
@@ -912,7 +1034,7 @@ def _render_system_health() -> None:
     ]
 
     if failed_modules:
-        st.subheader("Renderer Errors")
+        st.subheader("Module Errors")
 
         for module in failed_modules:
             with st.expander(
@@ -935,62 +1057,10 @@ def _render_system_health() -> None:
 
 
 # ============================================================================
-# SAFE RENDERER EXECUTION
+# UNAVAILABLE MODULE
 # ============================================================================
 
-def _render_registered_module(
-    module: ModuleDefinition,
-) -> None:
-    """
-    Execute a renderer while isolating runtime errors.
-
-    Every registered renderer is expected to have a zero-argument
-    Streamlit adapter.
-    """
-
-    if not module.implemented:
-        _render_unimplemented(module)
-        return
-
-    if module.renderer is None:
-        _render_renderer_unavailable(module)
-        return
-
-    try:
-        module.renderer()
-
-    except Exception as exc:
-        st.error(
-            f"{module.label} could not be loaded."
-        )
-
-        with st.expander(
-            f"Complete {module.label} error",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-            st.code(
-                traceback.format_exc(),
-                language="text",
-            )
-
-
-def _render_unimplemented(
-    module: ModuleDefinition,
-) -> None:
-    _render_page_header(
-        module.label,
-        module.description,
-    )
-
-    st.info(
-        f"{module.label} is registered in IMAGINE, "
-        "but its interactive interface is not available yet."
-    )
-
-
-def _render_renderer_unavailable(
+def _render_unavailable(
     module: ModuleDefinition,
 ) -> None:
     _render_page_header(
@@ -1019,24 +1089,83 @@ def _render_renderer_unavailable(
 
 
 # ============================================================================
+# UNIMPLEMENTED MODULE
+# ============================================================================
+
+def _render_unimplemented(
+    module: ModuleDefinition,
+) -> None:
+    _render_page_header(
+        module.label,
+        module.description,
+    )
+
+    st.info(
+        f"{module.label} is registered in IMAGINE, "
+        "but a Streamlit renderer has not yet been implemented."
+    )
+
+
+# ============================================================================
+# SAFE RENDERER EXECUTION
+# ============================================================================
+
+def _render_module(
+    module: ModuleDefinition,
+) -> None:
+    """
+    Render a registered module while isolating runtime errors.
+    """
+
+    if not module.implemented:
+        _render_unimplemented(module)
+        return
+
+    if module.renderer is None:
+        _render_unavailable(module)
+        return
+
+    try:
+        module.renderer()
+
+    except Exception as exc:
+        st.error(
+            f"{module.label} could not be loaded."
+        )
+
+        st.markdown(
+            f"**{module.label} runtime error**"
+        )
+
+        with st.expander(
+            f"Complete {module.label} error",
+            expanded=True,
+        ):
+            st.exception(exc)
+
+            st.code(
+                traceback.format_exc(),
+                language="text",
+            )
+
+
+# ============================================================================
 # ROUTING
 # ============================================================================
 
 def _render_current_module() -> None:
-    selected_key = (
+    selected = (
         st.session_state.imagine_selected_module
     )
 
-    module = MODULE_REGISTRY.get(
-        selected_key
-    )
+    module = MODULE_REGISTRY.get(selected)
 
     if module is None:
+        module = MODULE_REGISTRY["overview"]
+
         st.session_state.imagine_selected_module = (
             "overview"
         )
-
-        module = MODULE_REGISTRY["overview"]
 
     if module.key == "overview":
         _render_overview()
@@ -1046,16 +1175,16 @@ def _render_current_module() -> None:
         _render_system_health()
         return
 
-    _render_registered_module(module)
+    _render_module(module)
 
 
 # ============================================================================
-# MAIN APPLICATION
+# APPLICATION ENTRY POINT
 # ============================================================================
 
 def main() -> None:
     """
-    Main zero-argument Streamlit application entry point.
+    Zero-argument Streamlit application entry point.
     """
 
     _render_sidebar()
@@ -1064,7 +1193,7 @@ def main() -> None:
 
 
 # ============================================================================
-# ENTRY POINT
+# START APPLICATION
 # ============================================================================
 
 if __name__ == "__main__":
