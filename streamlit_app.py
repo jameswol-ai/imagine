@@ -363,55 +363,64 @@ def render_overview() -> None:
 
 
 # ============================================================
-# PROJECTS
+# PROJECT MODULES
 # ============================================================
 
 PROJECT_MODULES = [
 
     ModuleDefinition(
         label="Projects",
+        icon="Projects",
         route="projects",
         domain="Projects",
-        description=(
-            "Project records, lifecycle, budgets, progress "
-            "and project dashboard metrics."
-        ),
+        description="Project lifecycle and project records.",
+        renderer_module="projects.projects.ui",
+        renderer_function="render_projects",
+        implemented=True,
     ),
 
     ModuleDefinition(
         label="Approvals",
+        icon="Approvals",
         route="project_approvals",
         domain="Projects",
-        description=(
-            "Project approval records and authorization workflows."
-        ),
+        description="Project approvals and authorization workflows.",
+        renderer_module="projects.approvals.ui",
+        renderer_function="render_approvals",
+        implemented=True,
     ),
 
     ModuleDefinition(
         label="Revisions",
+        icon="Revisions",
         route="project_revisions",
         domain="Projects",
-        description=(
-            "Project revisions and design history."
-        ),
+        description="Project revisions and design history.",
+        renderer_module="projects.revisions.ui",
+        renderer_function="render_revisions",
+        implemented=True,
     ),
 
     ModuleDefinition(
         label="Workflows",
+        icon="Workflows",
         route="project_workflows",
         domain="Projects",
-        description=(
-            "Project workflow orchestration."
-        ),
+        description="Project workflow orchestration.",
+        renderer_module="projects.workflows.ui",
+        renderer_function="render_workflows",
+        implemented=True,
     ),
 
     ModuleDefinition(
         label="Governance",
+        icon="Governance",
         route="project_governance",
         domain="Projects",
-        description=(
-            "Project governance and controls."
-        ),
+        description="Project governance and controls.",
+        renderer_module="projects.governance.ui",
+        renderer_function="render_governance",
+        implemented=True,
     ),
 ]
 
