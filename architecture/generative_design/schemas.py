@@ -20,22 +20,10 @@ class SiteConstraints(BaseModel):
 
     north_access: bool = True
 
-    setback_front: float = Field(
-        default=0.0,
-        ge=0,
-    )
-    setback_rear: float = Field(
-        default=0.0,
-        ge=0,
-    )
-    setback_left: float = Field(
-        default=0.0,
-        ge=0,
-    )
-    setback_right: float = Field(
-        default=0.0,
-        ge=0,
-    )
+    setback_front: float = Field(default=0.0, ge=0)
+    setback_rear: float = Field(default=0.0, ge=0)
+    setback_left: float = Field(default=0.0, ge=0)
+    setback_right: float = Field(default=0, ge=0)
 
 
 class ZoningConstraints(BaseModel):
@@ -221,3 +209,17 @@ class GenerativeDesignRunResponse(BaseModel):
     candidates: list[DesignCandidateSchema] = Field(
         default_factory=list,
     )
+
+
+__all__ = [
+    "SiteConstraints",
+    "ZoningConstraints",
+    "RoomRequirement",
+    "ProgramConstraints",
+    "ComplianceConstraints",
+    "DesignConstraints",
+    "ConstraintValidationResult",
+    "DesignCandidateSchema",
+    "GenerativeDesignRunCreate",
+    "GenerativeDesignRunResponse",
+]
