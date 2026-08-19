@@ -1,2543 +1,664 @@
-"""
-IMAGINE
-Generative Architecture & Civil Engine
+# =========================================================
+# IMAGINE – Architectural Intellect, MEP Engine & Enterprise System
+# Integrated Unified Edition v23.1 (Navigation Logos Removed)
+# =========================================================
 
-Main Streamlit application entry point.
+import json
+import os
+import sqlite3
+import uuid
+import math
+import hashlib
+import random
+from datetime import datetime, timedelta
+from io import BytesIO
 
-Application shell responsibilities:
-    - Navigation
-    - Module registry
-    - Safe renderer loading
-    - Module status
-    - Domain routing
-    - System health
-
-Domain logic belongs inside:
-    architecture/
-    structural/
-    bim/
-    mep/
-    costing/
-    construction/
-    documents/
-    ai/
-    analytics/
-    regional/
-    integrations/
-    digital_twin/
-"""
-
-from __future__ import annotations
-
-import sys
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from importlib import import_module
-from typing import Any, Callable
-
-
-# ============================================================
-# APP MODULE SHADOWING PROTECTION
-# ============================================================
-#
-# The database layer imports:
-#
-#     from app.settings import settings
-#
-# Streamlit can occasionally cause a top-level `app` module
-# to be resolved before the repository's `app/` package.
-#
-# We remove only an already-loaded NON-PACKAGE `app` module.
-# A real `app` package is left untouched.
-#
-# This keeps the Streamlit shell from modifying the database,
-# service, or model contracts.
-# ============================================================
-
-_loaded_app = sys.modules.get("app")
-
-if (
-    _loaded_app is not None
-    and not hasattr(_loaded_app, "__path__")
-):
-    del sys.modules["app"]
-
-
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
-
-# ============================================================
-# OPTIONAL HEALTH IMPORT
-# ============================================================
-
+# PostgreSQL Driver Import with Fallback
 try:
-    from architecture.health import (
-        health_summary,
-        run_startup_health_check,
-    )
+    import psycopg2
+    import psycopg2.extras
+    HAS_POSTGRES = True
+except ImportError:
+    HAS_POSTGRES = False
 
-    HEALTH_AVAILABLE = True
-
-except Exception:
-    health_summary = None
-    run_startup_health_check = None
-    HEALTH_AVAILABLE = False
-
-
-# ============================================================
-# PAGE CONFIGURATION
-# ============================================================
-
+# ------------------------------------------------------------
+# PAGE CONFIGURATION & THEME
+# ------------------------------------------------------------
 st.set_page_config(
-    page_title="IMAGINE",
+    page_title="Imagine - Architectural & Engineering Platform",
+    page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
 )
 
+def inject_custom_css():
+    st.markdown("""
+    <style>
+        .stApp { background-color: #000000; color: #dddddd; }
+        .stSidebar { background-color: #0c0c0c; border-right: 1px solid #222222; }
+        h1, h2, h3, h4, h5, h6 { color: #eeeeee !important; font-weight: 600; }
+        
+        .glass-card {
+            background: rgba(20, 20, 20, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .stMetric {
+            background: rgba(30, 30, 30, 0.4);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid #333333;
+            color: #eee;
+        }
+        
+        .badge-role {
+            background-color: #2563eb;
+            color: #ffffff;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
-# ============================================================
-# TYPES
-# ============================================================
+inject_custom_css()
 
-RenderFunction = Callable[[], Any]
+LOGO_SVG = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80" width="240" height="64">
+  <defs>
+    <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9ea5b1"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(130,25)">
+    <circle cx="0" cy="0" r="16" stroke="url(#lg)" stroke-width="2" fill="none"/>
+    <line x1="0" y1="-14" x2="0" y2="14" stroke="url(#lg)" stroke-width="2"/>
+    <line x1="-14" y1="0" x2="14" y2="0" stroke="url(#lg)" stroke-width="2"/>
+    <polygon points="0,-12 3,0 0,12 -3,0" fill="url(#lg)"/>
+    <circle cx="0" cy="0" r="4" fill="#000"/>
+  </g>
+  <text x="150" y="65" text-anchor="middle"
+        font-family="'Segoe UI', Arial, sans-serif" font-weight="400" font-size="28"
+        fill="url(#lg)" letter-spacing="6">Imagine</text>
+</svg>
+"""
 
+# ------------------------------------------------------------
+# DATABASE PERSISTENCE LAYER (PostgreSQL / SQLite Hybrid)
+# ------------------------------------------------------------
+def get_db_connection():
+    pg_url = None
+    if "postgres" in st.secrets:
+        pg_url = st.secrets["postgres"].get("url") or st.secrets["postgres"].get("DATABASE_URL")
+    elif "DATABASE_URL" in os.environ:
+        pg_url = os.environ["DATABASE_URL"]
 
-# ============================================================
-# MODULE DEFINITION
-# ============================================================
+    if HAS_POSTGRES and pg_url:
+        try:
+            if pg_url.startswith("postgres://"):
+                pg_url = pg_url.replace("postgres://", "postgresql://", 1)
+            conn = psycopg2.connect(pg_url, sslmode="require")
+            return conn, "postgres"
+        except Exception:
+            pass
 
+    conn = sqlite3.connect("imagine_platform.db", check_same_thread=False)
+    return conn, "sqlite"
 
-@dataclass(frozen=True)
-class ModuleDefinition:
-    """
-    Defines a navigable IMAGINE module.
+def format_query(query: str, db_type: str) -> str:
+    return query.replace("?", "%s") if db_type == "postgres" else query
 
-    A module may have an implemented renderer or may remain
-    registered while its UI is still under development.
-    """
-
-    label: str
-    route: str
-    domain: str
-
-    icon: str = ""
-
-    description: str = ""
-
-    renderer_module: str | None = None
-    renderer_function: str | None = None
-
-    implemented: bool = False
-
-
-# ============================================================
-# SAFE IMPORT
-# ============================================================
-
-
-def _safe_import(
-    module_name: str | None,
-    function_name: str | None,
-) -> RenderFunction | None:
-    """
-    Safely import a zero-argument renderer.
-
-    Import failures are isolated from the application shell.
-    """
-
-    if not module_name:
-        return None
-
-    if not function_name:
-        return None
-
+def execute_query(query: str, params: tuple = (), fetch: str = None):
+    conn, db_type = get_db_connection()
+    formatted_q = format_query(query, db_type)
+    result = None
     try:
-        module = import_module(module_name)
+        cur = conn.cursor()
+        cur.execute(formatted_q, params)
+        if fetch == "one":
+            result = cur.fetchone()
+        elif fetch == "all":
+            result = cur.fetchall()
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Database Query Error: {e}")
+    finally:
+        conn.close()
+    return result
 
-        renderer = getattr(
-            module,
-            function_name,
-            None,
+# ------------------------------------------------------------
+# AUTHENTICATION & DATABASE INIT
+# ------------------------------------------------------------
+def hash_password(password: str, salt: str = "imagine_architectural_platform_salt_2026") -> str:
+    return hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
+
+def init_db():
+    conn, db_type = get_db_connection()
+    is_pg = (db_type == "postgres")
+    
+    users_sql = """
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) UNIQUE NOT NULL,
+            password_hash VARCHAR(128) NOT NULL,
+            salt VARCHAR(64) NOT NULL DEFAULT 'imagine_architectural_platform_salt_2026',
+            role VARCHAR(30) NOT NULL DEFAULT 'Viewer',
+            email VARCHAR(100) DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-
-        if callable(renderer):
-            return renderer
-
-    except Exception:
-        return None
-
-    return None
-
-
-# ============================================================
-# GENERIC MODULE PLACEHOLDER
-# ============================================================
-
-
-def render_module_placeholder(
-    module: ModuleDefinition,
-) -> None:
-    """
-    Render a safe placeholder for a registered module that
-    does not currently expose a Streamlit renderer.
-    """
-
-    title = module.label
-
-    if module.icon:
-        title = f"{module.icon} {module.label}"
-
-    st.title(title)
-
-    if module.description:
-        st.caption(module.description)
-
-    st.info(
-        f"{module.label} is registered in IMAGINE, "
-        "but a Streamlit renderer has not yet been implemented."
-    )
-
-    st.divider()
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric(
-            "Domain",
-            module.domain,
+    """ if is_pg else """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL DEFAULT 'imagine_architectural_platform_salt_2026',
+            role TEXT NOT NULL DEFAULT 'Viewer',
+            email TEXT DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-
-    with col2:
-        st.metric(
-            "UI",
-            "Not implemented",
-        )
-
-    with col3:
-        st.metric(
-            "Registry",
-            "Registered",
-        )
-
-
-# ============================================================
-# REGISTERED MODULE RENDERER
-# ============================================================
-
-
-def render_registered_module(
-    module: ModuleDefinition,
-) -> None:
     """
-    Render a registered module.
+    execute_query(users_sql)
 
-    Implemented modules use their own zero-argument renderer.
-
-    Missing renderers receive a safe placeholder.
-
-    Import and runtime errors are isolated so that one broken
-    module cannot destroy the entire Streamlit application.
+    projects_sql = """
+        CREATE TABLE IF NOT EXISTS projects (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            code TEXT UNIQUE NOT NULL,
+            client TEXT,
+            category TEXT DEFAULT 'New Construction',
+            status TEXT DEFAULT 'Draft',
+            gross_area FLOAT DEFAULT 0.0,
+            estimated_cost_usd FLOAT DEFAULT 0.0,
+            created_by TEXT DEFAULT 'system',
+            design_data TEXT DEFAULT '{}',
+            approval_role TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """ if is_pg else """
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            code TEXT UNIQUE NOT NULL,
+            client TEXT,
+            category TEXT DEFAULT 'New Construction',
+            status TEXT DEFAULT 'Draft',
+            gross_area REAL DEFAULT 0.0,
+            estimated_cost_usd REAL DEFAULT 0.0,
+            created_by TEXT DEFAULT 'system',
+            design_data TEXT DEFAULT '{}',
+            approval_role TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
     """
+    execute_query(projects_sql)
 
-    if not module.renderer_module:
-        render_module_placeholder(module)
-        return
+    logs_sql = """
+        CREATE TABLE IF NOT EXISTS system_logs (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50),
+            message TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """ if is_pg else """
+        CREATE TABLE IF NOT EXISTS system_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            message TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """
+    execute_query(logs_sql)
 
-    if not module.renderer_function:
-        render_module_placeholder(module)
-        return
+    default_users = [
+        ("admin", "admin123", "Admin", "admin@imagine.io"),
+        ("lead_eng", "lead123", "Project Lead", "lead@imagine.io"),
+        ("arch_user", "arch123", "Architect", "arch@imagine.io"),
+        ("mep_eng", "mep123", "MEP Engineer", "mep@imagine.io"),
+        ("viewer", "view123", "Viewer", "client@imagine.io")
+    ]
+    
+    for u, p, r, e in default_users:
+        if not execute_query("SELECT id FROM users WHERE username = ?", (u,), fetch="one"):
+            salt = uuid.uuid4().hex
+            pwd_hash = hash_password(p, salt)
+            execute_query(
+                "INSERT INTO users (username, password_hash, salt, role, email) VALUES (?, ?, ?, ?, ?)",
+                (u, pwd_hash, salt, r, e)
+            )
 
+init_db()
+
+def authenticate_user(username: str, password: str):
+    row = execute_query("SELECT password_hash, salt, role FROM users WHERE username = ?", (username,), fetch="one")
+    if row:
+        db_hash, salt, role = row
+        if hash_password(password, salt) == db_hash or hash_password(password, "imagine_architectural_platform_salt_2026") == db_hash:
+            return True, role
+    return False, None
+
+def register_user(username, password, email="", role="Viewer"):
+    salt = uuid.uuid4().hex
+    pwd_hash = hash_password(password, salt)
     try:
-        renderer = import_module(
-            module.renderer_module
+        execute_query(
+            "INSERT INTO users (username, password_hash, salt, role, email) VALUES (?, ?, ?, ?, ?)",
+            (username, pwd_hash, salt, role, email)
         )
+        return True, f"User '{username}' registered successfully."
+    except Exception as e:
+        return False, f"Registration failed: {e}"
 
-    except Exception as exc:
+def log_system_event(msg):
+    username = st.session_state.get("user", {}).get("username", "system") if st.session_state.get("user") else "system"
+    execute_query("INSERT INTO system_logs (username, message) VALUES (?, ?)", (username, msg))
 
-        title = module.label
+# ------------------------------------------------------------
+# DOMAIN DATA & REGIONAL CONSTANTS
+# ------------------------------------------------------------
+REGIONAL_FX_DEFAULTS = {
+    "Kenya": {"currency": "KES", "rate_to_usd": 129.49, "symbol": "KSh", "cost_multiplier": 1.0, "risk_premium": 0.02},
+    "Uganda": {"currency": "UGX", "rate_to_usd": 3700.00, "symbol": "USh", "cost_multiplier": 0.95, "risk_premium": 0.03},
+    "Tanzania": {"currency": "TZS", "rate_to_usd": 2625.00, "symbol": "TSh", "cost_multiplier": 0.98, "risk_premium": 0.025},
+    "South Sudan": {"currency": "SSP", "rate_to_usd": 4626.40, "symbol": "SSP", "cost_multiplier": 1.35, "risk_premium": 0.08}
+}
 
-        if module.icon:
-            title = f"{module.icon} {module.label}"
+if "regional_fx" not in st.session_state:
+    st.session_state.regional_fx = REGIONAL_FX_DEFAULTS.copy()
 
-        st.title(title)
+ARCH_DOMAINS = {
+    "Residential": {"types": ["Luxury Villa", "Modern Apartment", "Townhouse Studio"], "max_coverage": 0.5, "max_far": 2.5},
+    "Commercial": {"types": ["Corporate Hub Block", "Boutique Retail Space", "Medical Clinic Center"], "max_coverage": 0.7, "max_far": 4.5},
+    "Industrial": {"types": ["Distribution Depot", "Heavy Machinery Plant Warehouse"], "max_coverage": 0.6, "max_far": 1.8}
+}
 
-        st.error(
-            f"{module.label} could not be loaded."
-        )
+SOIL_PROFILES = {
+    "Kampala Red Lateritic Clay": {"cohesion": 35, "friction_angle": 12, "unit_weight": 18.0},
+    "Nairobi Black Cotton Soil": {"cohesion": 15, "friction_angle": 8, "unit_weight": 16.5},
+    "Coastal Quartz Sand (Dar)": {"cohesion": 0, "friction_angle": 32, "unit_weight": 19.0},
+    "Juba Alluvial Silt Deposit": {"cohesion": 20, "friction_angle": 15, "unit_weight": 17.5}
+}
 
-        with st.expander(
-            "Complete import traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
+if "active_design" not in st.session_state:
+    st.session_state.active_design = None
 
-        return
+# ------------------------------------------------------------
+# COMPUTATION ENGINES
+# ------------------------------------------------------------
+def run_mep_analysis(design):
+    gfa = design["total_gfa"]
+    domain = design.get("domain", "Residential")
+    baths = design.get("bathrooms", 2)
+    
+    hvac_densities = {"Residential": 120.0, "Commercial": 160.0, "Industrial": 100.0}
+    w_per_m2 = hvac_densities.get(domain, 130.0)
+    cooling_kw = (gfa * w_per_m2) / 1000.0
+    cooling_tr = cooling_kw / 3.517
+    airflow_cfm = cooling_tr * 400.0
+    
+    elec_densities = {"Residential": 35.0, "Commercial": 65.0, "Industrial": 85.0}
+    w_elec_per_m2 = elec_densities.get(domain, 50.0)
+    diversity = {"Residential": 0.70, "Commercial": 0.80, "Industrial": 0.85}.get(domain, 0.75)
+    
+    total_connected_kw = (gfa * w_elec_per_m2) / 1000.0
+    connected_kva = total_connected_kw / 0.85
+    max_demand_kva = connected_kva * diversity
+    
+    est_occupants = max(2, math.ceil(gfa / 15.0))
+    daily_water_l = est_occupants * 150.0
+    wsfu = (baths * 8) + (math.ceil(gfa / 100) * 4)
+    
+    return {
+        "mechanical": {"cooling_load_kw": round(cooling_kw, 2), "cooling_load_tr": round(cooling_tr, 2), "supply_airflow_cfm": round(airflow_cfm, 0)},
+        "electrical": {"connected_load_kw": round(total_connected_kw, 2), "max_demand_kva": round(max_demand_kva, 2), "transformer_rating_kva": math.ceil(max_demand_kva * 1.2 / 50.0) * 50},
+        "plumbing": {"est_occupants": est_occupants, "daily_water_demand_liters": round(daily_water_l, 0), "total_wsfu": wsfu}
+    }
 
-    try:
-        render_function = getattr(
-            renderer,
-            module.renderer_function,
-            None,
-        )
+def run_eurocode_analysis(design):
+    span = design.get("layout", {}).get("span", 6.0)
+    gk = design["loads"]["g_k"]
+    qk = design["loads"]["q_k"]
+    med_load = (1.35 * gk) + (1.50 * qk)
+    m_ed = (med_load * (span ** 2)) / 8.0
+    v_ed = (med_load * span) / 2.0
+    return {
+        "q_ed": round(med_load, 2),
+        "max_moment_kNm": round(m_ed, 2),
+        "shear_v_ed_kN": round(v_ed, 2),
+        "status": "PASS" if m_ed < 250 else "REVIEW"
+    }
 
-    except Exception as exc:
+def verify_zoning_laws(design):
+    max_cov = ARCH_DOMAINS[design["domain"]]["max_coverage"]
+    max_far = ARCH_DOMAINS[design["domain"]]["max_far"]
+    cov = design["ground_footprint"] / design["plot_size"]
+    far = design["total_gfa"] / design["plot_size"]
+    return {
+        "coverage": round(cov, 2),
+        "coverage_ok": cov <= max_cov,
+        "far": round(far, 2),
+        "far_ok": far <= max_far,
+        "status": "APPROVED" if (cov <= max_cov and far <= max_far) else "VIOLATION"
+    }
 
-        st.error(
-            f"{module.label} renderer could not be resolved."
-        )
+def compute_detailed_forex_boq(design):
+    country = design["country"]
+    fx = st.session_state.regional_fx.get(country, REGIONAL_FX_DEFAULTS["Uganda"])
+    mult = fx["cost_multiplier"]
+    risk = fx["risk_premium"]
+    
+    gfa = design["total_gfa"]
+    substructure = 150.0 * gfa
+    superstructure = 420.0 * gfa
+    mep_cost = 210.0 * gfa
+    finishes = 180.0 * gfa
+    
+    raw_total_usd = substructure + superstructure + mep_cost + finishes
+    total_usd = raw_total_usd * mult * (1 + risk)
+    
+    return {
+        "substructure": round(substructure, 2),
+        "superstructure": round(superstructure, 2),
+        "mep_services": round(mep_cost, 2),
+        "finishes": round(finishes, 2),
+        "total_usd": round(total_usd, 2),
+        "total_local": round(total_usd * fx["rate_to_usd"], 2),
+        "local_currency": fx["currency"],
+        "symbol": fx["symbol"],
+        "rate_used": fx["rate_to_usd"]
+    }
 
-        with st.expander(
-            "Complete renderer lookup traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
+def generate_building_model(domain, btype, floors, baths, country, material_frame, plot_size,
+                           soil_type, g_k, q_k, steel_section, seismic_zone, wind_zone, username):
+    rooms = ["Living Room", "Bedroom", "Kitchen", "Bathroom", "Office", "Dining"]
+    span = 6.0
+    ground_footprint = plot_size * 0.4
+    nx, ny = 3, 2
+    layout_grid = [rooms[:3], rooms[3:]]
+    total_gfa = ground_footprint * floors
+    
+    design = {
+        "id": f"PRJ-2026-{random.randint(100, 999)}",
+        "username": username,
+        "domain": domain,
+        "type": btype,
+        "floors": floors,
+        "bathrooms": baths,
+        "country": country,
+        "material_frame": material_frame,
+        "plot_size": plot_size,
+        "soil_type": soil_type,
+        "ground_footprint": ground_footprint,
+        "rooms": rooms,
+        "layout": {"grid": layout_grid, "nx": nx, "ny": ny, "span": span},
+        "total_gfa": total_gfa,
+        "loads": {"g_k": g_k, "q_k": q_k, "steel_section": steel_section, "seismic_zone": seismic_zone, "wind_zone": wind_zone},
+        "created": datetime.now().isoformat()
+    }
+    design["analysis"] = run_eurocode_analysis(design)
+    design["mep"] = run_mep_analysis(design)
+    design["zoning"] = verify_zoning_laws(design)
+    design["boq"] = compute_detailed_forex_boq(design)
+    return design
 
-        return
+# ------------------------------------------------------------
+# SESSION & SIDEBAR AUTHENTICATION
+# ------------------------------------------------------------
+if "user" not in st.session_state:
+    st.session_state["user"] = None
 
-    if not callable(render_function):
+# Main brand logo displayed only at the top of the sidebar
+st.sidebar.markdown(LOGO_SVG, unsafe_allow_html=True)
 
-        st.error(
-            f"{module.label} does not expose the expected "
-            f"renderer `{module.renderer_function}()`."
-        )
+if st.session_state["user"] is None:
+    st.sidebar.subheader("🔒 Access Control Portal")
+    tab_log, tab_reg = st.sidebar.tabs(["Login", "Register"])
+    
+    with tab_log:
+        username = st.text_input("Username", key="l_u")
+        password = st.text_input("Password", type="password", key="l_p")
+        if st.button("Sign In", use_container_width=True):
+            ok, role = authenticate_user(username.strip(), password.strip())
+            if ok:
+                st.session_state["user"] = {"username": username.strip(), "role": role}
+                log_system_event("User logged in")
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
+                
+    with tab_reg:
+        r_u = st.text_input("Username", key="r_u")
+        r_p = st.text_input("Password", type="password", key="r_p")
+        r_r = st.selectbox("Role", ["Architect", "MEP Engineer", "Project Lead", "Viewer"])
+        if st.button("Create Account", use_container_width=True):
+            ok, msg = register_user(r_u.strip(), r_p.strip(), role=r_r)
+            if ok:
+                st.success(msg)
+            else:
+                st.error(msg)
+    st.stop()
+else:
+    u = st.session_state["user"]
+    st.sidebar.write(f"**Logged in as:** {u['username']}")
+    st.sidebar.caption(f"Role: `{u['role']}`")
+    if st.sidebar.button("Logout", use_container_width=True):
+        log_system_event("User logged out")
+        st.session_state["user"] = None
+        st.rerun()
 
-        return
+current_role = st.session_state["user"]["role"]
+can_approve = current_role in ["Admin", "Project Lead"]
 
-    try:
-        render_function()
+# Navigation options (logos removed from navigation keys per instruction)
+nav_options = [
+    "Dashboard & Portfolio",
+    "Generative Synthesis Lab",
+    "Eurocode Structural Analysis",
+    "MEP Calculation Engine",
+    "BoQ & Forex Budgeting",
+    "IFC / BIM Export",
+    "Project Governance & Approvals"
+]
+if current_role == "Admin":
+    nav_options.append("User & System Control")
 
-    except Exception as exc:
+nav_option = st.sidebar.radio("Platform Navigation", nav_options)
 
-        st.error(
-            f"{module.label} could not be rendered."
-        )
-
-        with st.expander(
-            "Complete renderer traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-
-# ============================================================
-# OVERVIEW
-# ============================================================
-
-
-def render_overview() -> None:
-    """Render the IMAGINE application overview."""
-
-    st.title("IMAGINE")
-
-    st.caption(
-        "Generative Architecture & Civil Engine"
-    )
-
-    st.markdown(
-        """
-        ## Project Overview
-
-        IMAGINE connects architecture, structural engineering,
-        BIM, MEP, costing, construction, documents, AI,
-        analytics, regional regulations, integrations and
-        digital twins into one engineering platform.
-        """
-    )
+# ------------------------------------------------------------
+# MODULES
+# ------------------------------------------------------------
+if nav_option == "Dashboard & Portfolio":
+    st.title("📌 Project Portfolio & System Dashboard")
+    st.markdown("Centralized architectural lifecycle dashboard.")
 
     col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric(
-            "Projects",
-            "0",
-        )
-
-    with col2:
-        st.metric(
-            "Design Runs",
-            "0",
-        )
-
-    with col3:
-        st.metric(
-            "Engineering Modules",
-            str(len(ALL_MODULES)),
-        )
-
-    with col4:
-        st.metric(
-            "BIM Assets",
-            "0",
-        )
+    col1.metric("Active Projects", "12", "+2 this month")
+    col2.metric("Total Gross Area", "48,500 m²", "+12%")
+    col3.metric("Est. Portfolio Value", "$18.4 M", "+5.2%")
+    col4.metric("Pending Approvals", "3", "Action Required")
 
     st.divider()
+    st.subheader("Project Inventory")
+    
+    cols = ["id", "name", "code", "client", "status", "gross_area", "estimated_cost_usd"]
+    rows = execute_query("SELECT id, name, code, client, status, gross_area, estimated_cost_usd FROM projects", fetch="all") or []
+    df_projects = pd.DataFrame(rows, columns=cols)
 
-    st.subheader(
-        "IMAGINE Engineering Pipeline"
-    )
-
-    pipeline = [
-        "Projects",
-        "Architecture",
-        "Structural",
-        "MEP",
-        "BIM",
-        "Costing",
-        "Construction",
-        "Digital Twin",
-    ]
-
-    columns = st.columns(
-        len(pipeline)
-    )
-
-    for column, step in zip(
-        columns,
-        pipeline,
-    ):
-        with column:
-            st.markdown(
-                f"""
-                <div style="
-                    border:1px solid rgba(128,128,128,.25);
-                    border-radius:12px;
-                    padding:14px;
-                    text-align:center;
-                    min-height:80px;
-                ">
-                    <strong>{step}</strong>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.divider()
-
-    st.subheader(
-        "Engineering Domains"
-    )
-
-    domains = [
-        (
-            "Architecture",
-            "Planning, compliance and generative design.",
-        ),
-        (
-            "Structural",
-            "Eurocode-based structural engineering.",
-        ),
-        (
-            "BIM",
-            "Buildings, spaces, elements and IFC.",
-        ),
-        (
-            "MEP",
-            "Mechanical, electrical and plumbing systems.",
-        ),
-        (
-            "Costing",
-            "BOQ, quantity takeoff and cost analysis.",
-        ),
-        (
-            "Construction",
-            "Planning, scheduling and site management.",
-        ),
-        (
-            "Documents",
-            "Drawings, specifications and project records.",
-        ),
-        (
-            "AI",
-            "Engineering intelligence and retrieval.",
-        ),
-    ]
-
-    domain_columns = st.columns(4)
-
-    for index, domain in enumerate(domains):
-
-        column = domain_columns[
-            index % 4
-        ]
-
-        with column:
-
-            title, description = domain
-
-            st.markdown(
-                f"""
-                ### {title}
-
-                {description}
-                """
-            )
-
-    st.divider()
-
-    st.subheader(
-        "System Status"
-    )
-
-    status_col1, status_col2 = st.columns(2)
-
-    with status_col1:
-        st.success(
-            "IMAGINE application shell is running."
+    if df_projects.empty:
+        execute_query(
+            "INSERT INTO projects (name, code, client, status, gross_area, estimated_cost_usd) VALUES (?, ?, ?, ?, ?, ?)",
+            ("Civic Commercial Tower", "PRJ-2026-001", "Metropolitan Dev", "Pending Review", 12500.0, 4500000.0)
         )
-
-    with status_col2:
-
-        if HEALTH_AVAILABLE:
-            st.info(
-                "System Health diagnostics are available."
-            )
-        else:
-            st.warning(
-                "System Health diagnostics are unavailable."
-            )
-
-
-# ============================================================
-# GENERATIVE DESIGN
-# ============================================================
-
-
-def render_generative_design_safe() -> None:
-    """
-    Safe adapter for Generative Design.
-
-    The domain UI remains responsible for its own logic.
-    """
-
-    st.title(
-        "Generative Design"
-    )
-
-    try:
-
-        from architecture.generative_design.ui import (
-            render_generative_design,
-        )
-
-    except Exception as exc:
-
-        st.error(
-            "The Generative Design module could not be loaded."
-        )
-
-        with st.expander(
-            "Complete import traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-        return
-
-    try:
-
-        render_generative_design()
-
-    except Exception as exc:
-
-        st.error(
-            "Generative Design encountered an error."
-        )
-
-        with st.expander(
-            "Complete renderer traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-
-# ============================================================
-# SITE PLANNING
-# ============================================================
-
-
-def render_site_planning_registered() -> None:
-    """
-    Zero-argument Streamlit adapter for Site Planning.
-
-    The Site Planning domain follows:
-
-        Repository
-            |
-        Service
-            |
-          UI
-
-    The adapter constructs the synchronous service once and
-    passes that service to the UI renderer.
-    """
-
-    st.title(
-        "Site Planning"
-    )
-
-    try:
-
-        from architecture.site_planning.repository import (
-            SitePlanningRepository,
-        )
-
-        from architecture.site_planning.service import (
-            SitePlanningService,
-        )
-
-        from architecture.site_planning.ui import (
-            render_site_planning,
-        )
-
-    except Exception as exc:
-
-        st.error(
-            "The Site Planning module could not be loaded."
-        )
-
-        with st.expander(
-            "Complete import traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-        return
-
-    try:
-
-        repository = SitePlanningRepository()
-
-        service = SitePlanningService(
-            repository
-        )
-
-        render_site_planning(
-            service
-        )
-
-    except Exception as exc:
-
-        st.error(
-            "Site Planning could not be rendered."
-        )
-
-        with st.expander(
-            "Complete renderer traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-
-# ============================================================
-# PROJECT MODULES
-# ============================================================
-
-
-PROJECT_MODULES = [
-
-    ModuleDefinition(
-        label="Projects",
-        icon="Projects",
-        route="projects",
-        domain="Projects",
-        description="Project lifecycle and project records.",
-        renderer_module="projects.projects.ui",
-        renderer_function="render_projects",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Approvals",
-        icon="Approvals",
-        route="project_approvals",
-        domain="Projects",
-        description="Project approvals and authorization workflows.",
-        renderer_module="projects.approvals.ui",
-        renderer_function="render_approvals",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Revisions",
-        icon="Revisions",
-        route="project_revisions",
-        domain="Projects",
-        description="Project revisions and design history.",
-        renderer_module="projects.revisions.ui",
-        renderer_function="render_revisions",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Workflows",
-        icon="Workflows",
-        route="project_workflows",
-        domain="Projects",
-        description="Project workflow orchestration.",
-        renderer_module="projects.workflows.ui",
-        renderer_function="render_workflows",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Governance",
-        icon="Governance",
-        route="project_governance",
-        domain="Projects",
-        description="Project governance and controls.",
-        renderer_module="projects.governance.ui",
-        renderer_function="render_governance",
-        implemented=True,
-    ),
-]
-
-
-# ============================================================
-# ARCHITECTURE MODULES
-# ============================================================
-
-
-ARCHITECTURE_MODULES = [
-
-    ModuleDefinition(
-        label="Zoning",
-        icon="Zoning",
-        route="architecture_zoning",
-        domain="Architecture",
-        description="Planning controls, setbacks, coverage and zoning constraints.",
-        renderer_module="architecture.zoning.ui",
-        renderer_function="render_zoning",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Site Planning",
-        icon="Site Planning",
-        route="architecture_site_planning",
-        domain="Architecture",
-        description="Site organization and development planning.",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Floor Planning",
-        icon="Floor Planning",
-        route="architecture_floor_planning",
-        domain="Architecture",
-        description="Floor layouts and spatial planning.",
-        renderer_module="architecture.floor_planning.ui",
-        renderer_function="render_floor_planning",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Room Programming",
-        icon="Room Programming",
-        route="architecture_room_programming",
-        domain="Architecture",
-        description="Room requirements, areas and adjacencies.",
-        renderer_module="architecture.room_programming.ui",
-        renderer_function="render_room_programming",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Compliance",
-        icon="Compliance",
-        route="architecture_compliance",
-        domain="Architecture",
-        description="Regulatory and design compliance constraints.",
-        renderer_module="architecture.compliance.ui",
-        renderer_function="render_compliance",
-        implemented=True,
-    ),
-
-    ModuleDefinition(
-        label="Generative Design",
-        icon="Generative Design",
-        route="architecture_generative_design",
-        domain="Architecture",
-        description="Constraint-driven design generation and ranking.",
-        implemented=True,
-    ),
-]
-
-
-# ============================================================
-# STRUCTURAL MODULES
-# ============================================================
-
-
-STRUCTURAL_MODULES = [
-
-    ModuleDefinition(
-        label="Eurocode EN 1990",
-        icon="EN 1990",
-        route="structural_en1990",
-        domain="Structural",
-        description="Basis of structural design.",
-    ),
-
-    ModuleDefinition(
-        label="Eurocode EN 1991",
-        icon="EN 1991",
-        route="structural_en1991",
-        domain="Structural",
-        description="Actions on structures.",
-    ),
-
-    ModuleDefinition(
-        label="Eurocode EN 1992",
-        icon="EN 1992",
-        route="structural_en1992",
-        domain="Structural",
-        description="Design of concrete structures.",
-    ),
-
-    ModuleDefinition(
-        label="Eurocode EN 1993",
-        icon="EN 1993",
-        route="structural_en1993",
-        domain="Structural",
-        description="Design of steel structures.",
-    ),
-
-    ModuleDefinition(
-        label="Eurocode EN 1995",
-        icon="EN 1995",
-        route="structural_en1995",
-        domain="Structural",
-        description="Design of timber structures.",
-    ),
-
-    ModuleDefinition(
-        label="Eurocode EN 1997",
-        icon="EN 1997",
-        route="structural_en1997",
-        domain="Structural",
-        description="Geotechnical design.",
-    ),
-
-    ModuleDefinition(
-        label="Eurocode EN 1998",
-        icon="EN 1998",
-        route="structural_en1998",
-        domain="Structural",
-        description="Earthquake-resistant design.",
-    ),
-
-    ModuleDefinition(
-        label="Beam Design",
-        icon="Beam Design",
-        route="structural_beams",
-        domain="Structural",
-        description="Structural beam analysis and design.",
-    ),
-
-    ModuleDefinition(
-        label="Column Design",
-        icon="Column Design",
-        route="structural_columns",
-        domain="Structural",
-        description="Structural column analysis and design.",
-    ),
-
-    ModuleDefinition(
-        label="Slab Design",
-        icon="Slab Design",
-        route="structural_slabs",
-        domain="Structural",
-        description="Structural slab analysis and design.",
-    ),
-
-    ModuleDefinition(
-        label="Foundation Design",
-        icon="Foundation Design",
-        route="structural_foundations",
-        domain="Structural",
-        description="Foundation analysis and design.",
-    ),
-
-    ModuleDefinition(
-        label="Retaining Walls",
-        icon="Retaining Walls",
-        route="structural_retaining_walls",
-        domain="Structural",
-        description="Retaining wall analysis and design.",
-    ),
-
-    ModuleDefinition(
-        label="Steel Connections",
-        icon="Steel Connections",
-        route="structural_steel_connections",
-        domain="Structural",
-        description="Steel connection design.",
-    ),
-
-    ModuleDefinition(
-        label="Finite Element Analysis",
-        icon="Finite Element Analysis",
-        route="structural_fea",
-        domain="Structural",
-        description="Finite element analysis workflows.",
-    ),
-]
-
-
-# ============================================================
-# BIM MODULES
-# ============================================================
-
-
-BIM_MODULES = [
-
-    ModuleDefinition(
-        label="Buildings",
-        icon="Buildings",
-        route="bim_buildings",
-        domain="BIM",
-        description="BIM building information.",
-    ),
-
-    ModuleDefinition(
-        label="Storeys",
-        icon="Storeys",
-        route="bim_storeys",
-        domain="BIM",
-        description="Building storeys and levels.",
-    ),
-
-    ModuleDefinition(
-        label="Spaces",
-        icon="Spaces",
-        route="bim_spaces",
-        domain="BIM",
-        description="BIM spaces and spatial entities.",
-    ),
-
-    ModuleDefinition(
-        label="Elements",
-        icon="Elements",
-        route="bim_elements",
-        domain="BIM",
-        description="Building elements and components.",
-    ),
-
-    ModuleDefinition(
-        label="IFC",
-        icon="IFC",
-        route="bim_ifc",
-        domain="BIM",
-        description="Industry Foundation Classes workflows.",
-    ),
-
-    ModuleDefinition(
-        label="COBie",
-        icon="COBie",
-        route="bim_cobie",
-        domain="BIM",
-        description="Construction Operations Building information exchange.",
-    ),
-
-    ModuleDefinition(
-        label="BIM Digital Twin",
-        icon="BIM Digital Twin",
-        route="bim_digital_twin",
-        domain="BIM",
-        description="BIM-connected digital twin.",
-    ),
-]
-
-
-# ============================================================
-# MEP MODULES
-# ============================================================
-
-
-MEP_MODULES = [
-
-    ModuleDefinition(
-        label="HVAC",
-        icon="HVAC",
-        route="mep_hvac",
-        domain="MEP",
-        description="Heating, ventilation and air conditioning.",
-    ),
-
-    ModuleDefinition(
-        label="Ventilation",
-        icon="Ventilation",
-        route="mep_ventilation",
-        domain="MEP",
-        description="Ventilation analysis and design.",
-    ),
-
-    ModuleDefinition(
-        label="Chilled Water",
-        icon="Chilled Water",
-        route="mep_chilled_water",
-        domain="MEP",
-        description="Chilled water system design.",
-    ),
-
-    ModuleDefinition(
-        label="Energy Simulation",
-        icon="Energy",
-        route="mep_energy",
-        domain="MEP",
-        description="Building energy simulation.",
-    ),
-
-    ModuleDefinition(
-        label="Electrical Load Analysis",
-        icon="Load Analysis",
-        route="mep_load_analysis",
-        domain="MEP",
-        description="Electrical load calculations.",
-    ),
-
-    ModuleDefinition(
-        label="Transformers",
-        icon="Transformers",
-        route="mep_transformers",
-        domain="MEP",
-        description="Transformer sizing and analysis.",
-    ),
-
-    ModuleDefinition(
-        label="Generators",
-        icon="Generators",
-        route="mep_generators",
-        domain="MEP",
-        description="Generator systems.",
-    ),
-
-    ModuleDefinition(
-        label="Cable Sizing",
-        icon="Cable Sizing",
-        route="mep_cable_sizing",
-        domain="MEP",
-        description="Electrical cable sizing.",
-    ),
-
-    ModuleDefinition(
-        label="Solar PV",
-        icon="Solar PV",
-        route="mep_solar_pv",
-        domain="MEP",
-        description="Solar photovoltaic system design.",
-    ),
-
-    ModuleDefinition(
-        label="Water Supply",
-        icon="Water Supply",
-        route="mep_water_supply",
-        domain="MEP",
-        description="Water supply system design.",
-    ),
-
-    ModuleDefinition(
-        label="Drainage",
-        icon="Drainage",
-        route="mep_drainage",
-        domain="MEP",
-        description="Drainage system design.",
-    ),
-
-    ModuleDefinition(
-        label="Stormwater",
-        icon="Stormwater",
-        route="mep_stormwater",
-        domain="MEP",
-        description="Stormwater management.",
-    ),
-
-    ModuleDefinition(
-        label="Sewer Networks",
-        icon="Sewer",
-        route="mep_sewer",
-        domain="MEP",
-        description="Sewer network design.",
-    ),
-
-    ModuleDefinition(
-        label="Firefighting",
-        icon="Firefighting",
-        route="mep_firefighting",
-        domain="MEP",
-        description="Firefighting systems.",
-    ),
-]
-
-
-# ============================================================
-# COSTING MODULES
-# ============================================================
-
-
-COSTING_MODULES = [
-
-    ModuleDefinition(
-        label="BOQ",
-        icon="BOQ",
-        route="costing_boq",
-        domain="Costing",
-        description="Bills of quantities.",
-    ),
-
-    ModuleDefinition(
-        label="Quantity Takeoff",
-        icon="Quantity Takeoff",
-        route="costing_quantity_takeoff",
-        domain="Costing",
-        description="Automated quantity takeoff.",
-    ),
-
-    ModuleDefinition(
-        label="Procurement",
-        icon="Procurement",
-        route="costing_procurement",
-        domain="Costing",
-        description="Construction procurement costing.",
-    ),
-
-    ModuleDefinition(
-        label="Forex",
-        icon="Forex",
-        route="costing_forex",
-        domain="Costing",
-        description="Foreign exchange costing.",
-    ),
-
-    ModuleDefinition(
-        label="Inflation",
-        icon="Inflation",
-        route="costing_inflation",
-        domain="Costing",
-        description="Construction cost inflation.",
-    ),
-
-    ModuleDefinition(
-        label="Risk Analysis",
-        icon="Risk Analysis",
-        route="costing_risk",
-        domain="Costing",
-        description="Cost and project risk analysis.",
-    ),
-
-    ModuleDefinition(
-        label="Cashflow",
-        icon="Cashflow",
-        route="costing_cashflow",
-        domain="Costing",
-        description="Project cashflow forecasting.",
-    ),
-]
-
-
-# ============================================================
-# CONSTRUCTION MODULES
-# ============================================================
-
-
-CONSTRUCTION_MODULES = [
-
-    ModuleDefinition(
-        label="Planning",
-        icon="Planning",
-        route="construction_planning",
-        domain="Construction",
-    ),
-
-    ModuleDefinition(
-        label="Scheduling",
-        icon="Scheduling",
-        route="construction_scheduling",
-        domain="Construction",
-    ),
-
-    ModuleDefinition(
-        label="RFIs",
-        icon="RFIs",
-        route="construction_rfis",
-        domain="Construction",
-    ),
-
-    ModuleDefinition(
-        label="Submittals",
-        icon="Submittals",
-        route="construction_submittals",
-        domain="Construction",
-    ),
-
-    ModuleDefinition(
-        label="Variations",
-        icon="Variations",
-        route="construction_variations",
-        domain="Construction",
-    ),
-
-    ModuleDefinition(
-        label="Snagging",
-        icon="Snagging",
-        route="construction_snagging",
-        domain="Construction",
-    ),
-
-    ModuleDefinition(
-        label="Progress Tracking",
-        icon="Progress Tracking",
-        route="construction_progress",
-        domain="Construction",
-    ),
-
-    ModuleDefinition(
-        label="Site Diaries",
-        icon="Site Diaries",
-        route="construction_site_diaries",
-        domain="Construction",
-    ),
-]
-
-
-# ============================================================
-# DOCUMENT MODULES
-# ============================================================
-
-
-DOCUMENT_MODULES = [
-
-    ModuleDefinition(
-        label="Drawing Management",
-        icon="Drawing Management",
-        route="documents_drawings",
-        domain="Documents",
-    ),
-
-    ModuleDefinition(
-        label="Specifications",
-        icon="Specifications",
-        route="documents_specifications",
-        domain="Documents",
-    ),
-
-    ModuleDefinition(
-        label="Contracts",
-        icon="Contracts",
-        route="documents_contracts",
-        domain="Documents",
-    ),
-
-    ModuleDefinition(
-        label="Reports",
-        icon="Reports",
-        route="documents_reports",
-        domain="Documents",
-    ),
-
-    ModuleDefinition(
-        label="Version Control",
-        icon="Version Control",
-        route="documents_versions",
-        domain="Documents",
-    ),
-
-    ModuleDefinition(
-        label="Archives",
-        icon="Archives",
-        route="documents_archives",
-        domain="Documents",
-    ),
-]
-
-
-# ============================================================
-# AI MODULES
-# ============================================================
-
-
-AI_MODULES = [
-
-    ModuleDefinition(
-        label="IMAGINE Architect",
-        icon="IMAGINE Architect",
-        route="ai_architect",
-        domain="AI",
-    ),
-
-    ModuleDefinition(
-        label="IMAGINE Engineer",
-        icon="IMAGINE Engineer",
-        route="ai_engineer",
-        domain="AI",
-    ),
-
-    ModuleDefinition(
-        label="IMAGINE MEP",
-        icon="IMAGINE MEP",
-        route="ai_mep",
-        domain="AI",
-    ),
-
-    ModuleDefinition(
-        label="IMAGINE QS",
-        icon="IMAGINE QS",
-        route="ai_qs",
-        domain="AI",
-    ),
-
-    ModuleDefinition(
-        label="IMAGINE PM",
-        icon="IMAGINE PM",
-        route="ai_pm",
-        domain="AI",
-    ),
-
-    ModuleDefinition(
-        label="Vector Store",
-        icon="Vector Store",
-        route="ai_vector_store",
-        domain="AI",
-    ),
-
-    ModuleDefinition(
-        label="RAG",
-        icon="RAG",
-        route="ai_rag",
-        domain="AI",
-    ),
-
-    ModuleDefinition(
-        label="Prompt Library",
-        icon="Prompt Library",
-        route="ai_prompt_library",
-        domain="AI",
-    ),
-]
-
-
-# ============================================================
-# ANALYTICS MODULES
-# ============================================================
-
-
-ANALYTICS_MODULES = [
-
-    ModuleDefinition(
-        label="Dashboards",
-        icon="Dashboards",
-        route="analytics_dashboards",
-        domain="Analytics",
-    ),
-
-    ModuleDefinition(
-        label="KPIs",
-        icon="KPIs",
-        route="analytics_kpis",
-        domain="Analytics",
-    ),
-
-    ModuleDefinition(
-        label="Portfolio",
-        icon="Portfolio",
-        route="analytics_portfolio",
-        domain="Analytics",
-    ),
-
-    ModuleDefinition(
-        label="Forecasting",
-        icon="Forecasting",
-        route="analytics_forecasting",
-        domain="Analytics",
-    ),
-
-    ModuleDefinition(
-        label="Reporting",
-        icon="Reporting",
-        route="analytics_reporting",
-        domain="Analytics",
-    ),
-]
-
-
-# ============================================================
-# REGIONAL MODULES
-# ============================================================
-
-
-REGIONAL_MODULES = [
-
-    ModuleDefinition(
-        label="Uganda",
-        icon="Uganda",
-        route="regional_uganda",
-        domain="Regional",
-    ),
-
-    ModuleDefinition(
-        label="Kenya",
-        icon="Kenya",
-        route="regional_kenya",
-        domain="Regional",
-    ),
-
-    ModuleDefinition(
-        label="Tanzania",
-        icon="Tanzania",
-        route="regional_tanzania",
-        domain="Regional",
-    ),
-
-    ModuleDefinition(
-        label="Rwanda",
-        icon="Rwanda",
-        route="regional_rwanda",
-        domain="Regional",
-    ),
-
-    ModuleDefinition(
-        label="South Sudan",
-        icon="South Sudan",
-        route="regional_south_sudan",
-        domain="Regional",
-    ),
-
-    ModuleDefinition(
-        label="Codes",
-        icon="Codes",
-        route="regional_codes",
-        domain="Regional",
-    ),
-
-    ModuleDefinition(
-        label="Zoning Laws",
-        icon="Zoning Laws",
-        route="regional_zoning_laws",
-        domain="Regional",
-    ),
-]
-
-
-# ============================================================
-# INTEGRATION MODULES
-# ============================================================
-
-
-INTEGRATION_MODULES = [
-
-    ModuleDefinition(
-        label="Microsoft",
-        icon="Microsoft",
-        route="integration_microsoft",
-        domain="Integrations",
-    ),
-
-    ModuleDefinition(
-        label="AutoCAD",
-        icon="AutoCAD",
-        route="integration_autocad",
-        domain="Integrations",
-    ),
-
-    ModuleDefinition(
-        label="Revit",
-        icon="Revit",
-        route="integration_revit",
-        domain="Integrations",
-    ),
-
-    ModuleDefinition(
-        label="Archicad",
-        icon="Archicad",
-        route="integration_archicad",
-        domain="Integrations",
-    ),
-
-    ModuleDefinition(
-        label="Tekla",
-        icon="Tekla",
-        route="integration_tekla",
-        domain="Integrations",
-    ),
-
-    ModuleDefinition(
-        label="IfcOpenShell",
-        icon="IfcOpenShell",
-        route="integration_ifcopenshell",
-        domain="Integrations",
-    ),
-
-    ModuleDefinition(
-        label="ArcGIS",
-        icon="ArcGIS",
-        route="integration_arcgis",
-        domain="Integrations",
-    ),
-
-    ModuleDefinition(
-        label="Azure",
-        icon="Azure",
-        route="integration_azure",
-        domain="Integrations",
-    ),
-
-    ModuleDefinition(
-        label="Mapbox",
-        icon="Mapbox",
-        route="integration_mapbox",
-        domain="Integrations",
-    ),
-]
-
-
-# ============================================================
-# DIGITAL TWIN MODULES
-# ============================================================
-
-
-DIGITAL_TWIN_MODULES = [
-
-    ModuleDefinition(
-        label="Assets",
-        icon="Assets",
-        route="digital_twin_assets",
-        domain="Digital Twin",
-    ),
-
-    ModuleDefinition(
-        label="Sensors",
-        icon="Sensors",
-        route="digital_twin_sensors",
-        domain="Digital Twin",
-    ),
-
-    ModuleDefinition(
-        label="Telemetry",
-        icon="Telemetry",
-        route="digital_twin_telemetry",
-        domain="Digital Twin",
-    ),
-
-    ModuleDefinition(
-        label="Energy",
-        icon="Energy",
-        route="digital_twin_energy",
-        domain="Digital Twin",
-    ),
-
-    ModuleDefinition(
-        label="Maintenance",
-        icon="Maintenance",
-        route="digital_twin_maintenance",
-        domain="Digital Twin",
-    ),
-
-    ModuleDefinition(
-        label="Predictive AI",
-        icon="Predictive AI",
-        route="digital_twin_predictive_ai",
-        domain="Digital Twin",
-    ),
-]
-
-
-# ============================================================
-# ALL MODULES
-# ============================================================
-
-
-ALL_MODULES: list[ModuleDefinition] = [
-
-    *PROJECT_MODULES,
-
-    *ARCHITECTURE_MODULES,
-
-    *STRUCTURAL_MODULES,
-
-    *BIM_MODULES,
-
-    *MEP_MODULES,
-
-    *COSTING_MODULES,
-
-    *CONSTRUCTION_MODULES,
-
-    *DOCUMENT_MODULES,
-
-    *AI_MODULES,
-
-    *ANALYTICS_MODULES,
-
-    *REGIONAL_MODULES,
-
-    *INTEGRATION_MODULES,
-
-    *DIGITAL_TWIN_MODULES,
-]
-
-
-# ============================================================
-# SPECIAL RENDERERS
-# ============================================================
-
-
-SPECIAL_RENDERERS: dict[
-    str,
-    RenderFunction,
-] = {
-
-    "architecture_site_planning":
-        render_site_planning_registered,
-
-    "architecture_generative_design":
-        render_generative_design_safe,
-}
-
-
-# ============================================================
-# MODULE ROUTE REGISTRY
-# ============================================================
-
-
-MODULES_BY_ROUTE: dict[
-    str,
-    ModuleDefinition,
-] = {
-
-    "overview": ModuleDefinition(
-        label="Overview",
-        icon="Overview",
-        route="overview",
-        domain="Core",
-        description="IMAGINE engineering overview.",
-        implemented=True,
-    ),
-
-    **{
-        module.route: module
-        for module in ALL_MODULES
-    },
-
-    "system_health": ModuleDefinition(
-        label="System Health",
-        icon="System Health",
-        route="system_health",
-        domain="Core",
-        description="Application and module diagnostics.",
-        implemented=True,
-    ),
-}
-
-
-# ============================================================
-# REGISTRY VALIDATION
-# ============================================================
-
-
-def validate_module_registry() -> None:
-    """
-    Validate the IMAGINE application route registry.
-    """
-
-    routes = list(
-        MODULES_BY_ROUTE.keys()
-    )
-
-    if len(routes) != len(set(routes)):
-
-        raise RuntimeError(
-            "Duplicate module routes detected."
-        )
-
-    required_routes = (
-        "overview",
-
-        "projects",
-        "project_approvals",
-        "project_revisions",
-        "project_workflows",
-        "project_governance",
-
-        "architecture_zoning",
-        "architecture_site_planning",
-        "architecture_generative_design",
-
-        "structural_beams",
-
-        "bim_buildings",
-
-        "mep_hvac",
-
-        "costing_boq",
-
-        "construction_planning",
-
-        "documents_drawings",
-
-        "ai_architect",
-
-        "analytics_dashboards",
-
-        "regional_uganda",
-
-        "integration_revit",
-
-        "digital_twin_assets",
-
-        "system_health",
-    )
-
-    missing = [
-        route
-        for route in required_routes
-        if route not in MODULES_BY_ROUTE
-    ]
-
-    if missing:
-
-        raise RuntimeError(
-            "Required module routes are missing: "
-            + ", ".join(missing)
-        )
-
-
-validate_module_registry()
-
-
-# ============================================================
-# SYSTEM HEALTH
-# ============================================================
-
-
-def render_system_health() -> None:
-    """
-    Render application health and dependency diagnostics.
-    """
-
-    st.title(
-        "System Health"
-    )
-
-    st.caption(
-        "IMAGINE application and module diagnostics"
-    )
-
-    if not HEALTH_AVAILABLE:
-
-        st.error(
-            "The IMAGINE health subsystem could not be imported."
-        )
-
-        st.info(
-            "The application shell remains operational, "
-            "but health diagnostics are unavailable."
-        )
-
-        return
-
-    try:
-
-        results = run_startup_health_check()
-
-    except Exception as exc:
-
-        st.error(
-            "System Health could not execute the startup checks."
-        )
-
-        with st.expander(
-            "Complete health traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-        return
-
-    checked_at = datetime.now(
-        timezone.utc
-    )
-
-    st.session_state[
-        "health_last_checked_at"
-    ] = checked_at
-
-    all_modules_healthy = all(
-        result.status == "ok"
-        for result in results
-    )
-
-    if all_modules_healthy:
-
-        st.session_state[
-            "health_last_successful_at"
-        ] = checked_at
-
-    try:
-
-        summary = health_summary(
-            results
-        )
-
-    except Exception as exc:
-
-        st.error(
-            "System Health returned invalid diagnostic data."
-        )
-
-        with st.expander(
-            "Complete summary traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-        return
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.markdown(
-            "**Latest Health Check**"
-        )
-
-        last_checked = st.session_state.get(
-            "health_last_checked_at"
-        )
-
-        if last_checked:
-
-            st.code(
-                last_checked.strftime(
-                    "%Y-%m-%d %H:%M:%S UTC"
-                )
-            )
-
-        else:
-
-            st.code(
-                "No health check recorded"
-            )
-
-    with col2:
-
-        st.markdown(
-            "**Last Successful Check**"
-        )
-
-        last_successful = st.session_state.get(
-            "health_last_successful_at"
-        )
-
-        if last_successful:
-
-            st.code(
-                last_successful.strftime(
-                    "%Y-%m-%d %H:%M:%S UTC"
-                )
-            )
-
-        else:
-
-            st.code(
-                "No successful check recorded"
-            )
-
-    st.divider()
-
-    metric1, metric2, metric3 = st.columns(3)
-
-    with metric1:
-
-        st.metric(
-            "Modules Checked",
-            summary.get(
-                "total",
-                0,
-            ),
-        )
-
-    with metric2:
-
-        st.metric(
-            "Healthy",
-            summary.get(
-                "healthy",
-                0,
-            ),
-        )
-
-    with metric3:
-
-        st.metric(
-            "Failed",
-            summary.get(
-                "failed",
-                0,
-            ),
-        )
-
-    if summary.get("status") == "healthy":
-
-        st.success(
-            "All checked modules imported successfully."
-        )
-
+        st.info("Sample project seeded. Refresh page.")
     else:
+        st.dataframe(df_projects, use_container_width=True)
 
-        st.warning(
-            "IMAGINE is running in degraded mode."
-        )
-
-    st.divider()
-
-    st.subheader(
-        "Module Results"
-    )
-
-    for result in results:
-
-        if result.status == "ok":
-
-            st.success(
-                f"{result.name}"
+elif nav_option == "Generative Synthesis Lab":
+    st.title("📐 Generative Synthesis & Space Programming")
+    
+    col_a, col_b = st.columns([1, 2])
+    with col_a:
+        st.subheader("Synthesis Parameters")
+        country = st.selectbox("Region", list(st.session_state.regional_fx.keys()))
+        domain = st.selectbox("Category", list(ARCH_DOMAINS.keys()))
+        btype = st.selectbox("Typology", ARCH_DOMAINS[domain]["types"])
+        plot = st.slider("Plot Size (m²)", 200, 5000, 800, 50)
+        floors = st.slider("Storeys", 1, 12, 3)
+        baths = st.slider("Bathrooms", 1, 10, 2)
+        soil = st.selectbox("Soil Profile", list(SOIL_PROFILES.keys()))
+        material = st.selectbox("Structural Frame", ["Concrete EN1992", "Steel EN1993", "Timber EN1995"])
+        
+        if st.button("Generate Architectural Archetype", type="primary"):
+            design = generate_building_model(
+                domain, btype, floors, baths, country, material, plot, soil,
+                5.5, 2.5, "UB 254x146x31", "Moderate (PGA=0.15g)", "Moderate (28 m/s)", st.session_state["user"]["username"]
             )
+            st.session_state.active_design = design
+            execute_query(
+                "INSERT INTO projects (name, code, client, status, gross_area, estimated_cost_usd, design_data) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (f"{design['type']} Archetype", design['id'], "Internal", "Draft", design['total_gfa'], design['boq']['total_usd'], json.dumps(design))
+            )
+            st.success("Model generated successfully!")
 
-            if result.path:
-
-                st.caption(
-                    f"Loaded from: {result.path}"
-                )
-
+    with col_b:
+        if st.session_state.active_design:
+            d = st.session_state.active_design
+            st.subheader(f"Archetype Footprint: {d['id']}")
+            
+            fig = go.Figure()
+            fig.add_shape(type="rect", x0=0, y0=0, x1=35, y1=20, line=dict(color="RoyalBlue", width=3), fillcolor="LightSteelBlue", opacity=0.3)
+            fig.add_shape(type="rect", x0=12, y0=6, x1=23, y1=14, line=dict(color="Red", width=2), fillcolor="IndianRed", opacity=0.7)
+            fig.update_layout(title="Floor Boundary & MEP Core Distribution", height=400)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.json(d["zoning"])
         else:
-
-            st.error(
-                f"{result.name}"
-            )
-
-            if result.error:
-
-                st.code(
-                    result.error,
-                    language="text",
-                )
-
-            if result.traceback_text:
-
-                with st.expander(
-                    "Complete traceback",
-                    expanded=False,
-                ):
-
-                    st.code(
-                        result.traceback_text,
-                        language="text",
-                    )
-
-            if result.path:
-
-                st.caption(
-                    f"Loaded from: {result.path}"
-                )
-
-    st.divider()
-
-    if st.button(
-        "Run Health Check Again",
-        key="health_rerun",
-        use_container_width=True,
-    ):
-
-        st.rerun()
-
-
-# ============================================================
-# ROUTE RENDERING
-# ============================================================
-
-
-def render_route(
-    route: str,
-) -> None:
-    """
-    Resolve and render an application route.
-    """
-
-    if route == "overview":
-
-        render_overview()
-
-        return
-
-    if route == "system_health":
-
-        render_system_health()
-
-        return
-
-    module = MODULES_BY_ROUTE.get(
-        route
-    )
-
-    if module is None:
-
-        st.error(
-            f"Unknown IMAGINE route: {route}"
-        )
-
-        return
-
-    special_renderer = SPECIAL_RENDERERS.get(
-        route
-    )
-
-    if special_renderer is not None:
-
-        try:
-
-            special_renderer()
-
-        except Exception as exc:
-
-            st.error(
-                f"{module.label} could not be rendered."
-            )
-
-            with st.expander(
-                "Complete adapter traceback",
-                expanded=True,
-            ):
-                st.exception(exc)
-
-        return
-
-    render_registered_module(
-        module
-    )
-
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-
-if "active_route" not in st.session_state:
-
-    st.session_state.active_route = (
-        "overview"
-    )
-
-
-# ============================================================
-# NAVIGATION HELPER
-# ============================================================
-
-
-def _navigate(
-    route: str,
-) -> None:
-    """
-    Set the active application route.
-    """
-
-    st.session_state.active_route = route
-
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-
-with st.sidebar:
-
-    st.markdown(
-        """
-        # IMAGINE
-
-        **Generative Architecture & Civil Engine**
-        """
-    )
-
-    st.divider()
-
-    st.caption(
-        "NAVIGATION"
-    )
-
-    # --------------------------------------------------------
-    # OVERVIEW
-    # --------------------------------------------------------
-
-    if st.button(
-        "Overview",
-        key="nav_overview",
-        use_container_width=True,
-        type=(
-            "primary"
-            if st.session_state.active_route
-            == "overview"
-            else "secondary"
-        ),
-    ):
-
-        _navigate(
-            "overview"
-        )
-
-        st.rerun()
-
-    # ========================================================
-    # PROJECTS
-    # ========================================================
-
-    with st.expander(
-        "PROJECTS",
-        expanded=True,
-    ):
-
-        for module in PROJECT_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # ARCHITECTURE
-    # ========================================================
-
-    with st.expander(
-        "ARCHITECTURE",
-        expanded=False,
-    ):
-
-        for module in ARCHITECTURE_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # STRUCTURAL
-    # ========================================================
-
-    with st.expander(
-        "STRUCTURAL",
-        expanded=False,
-    ):
-
-        for module in STRUCTURAL_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # BIM
-    # ========================================================
-
-    with st.expander(
-        "BIM",
-        expanded=False,
-    ):
-
-        for module in BIM_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # MEP
-    # ========================================================
-
-    with st.expander(
-        "MEP",
-        expanded=False,
-    ):
-
-        for module in MEP_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # COSTING
-    # ========================================================
-
-    with st.expander(
-        "COSTING",
-        expanded=False,
-    ):
-
-        for module in COSTING_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # CONSTRUCTION
-    # ========================================================
-
-    with st.expander(
-        "CONSTRUCTION",
-        expanded=False,
-    ):
-
-        for module in CONSTRUCTION_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # DOCUMENTS
-    # ========================================================
-
-    with st.expander(
-        "DOCUMENTS",
-        expanded=False,
-    ):
-
-        for module in DOCUMENT_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # AI
-    # ========================================================
-
-    with st.expander(
-        "AI",
-        expanded=False,
-    ):
-
-        for module in AI_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # ANALYTICS
-    # ========================================================
-
-    with st.expander(
-        "ANALYTICS",
-        expanded=False,
-    ):
-
-        for module in ANALYTICS_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # REGIONAL
-    # ========================================================
-
-    with st.expander(
-        "REGIONAL",
-        expanded=False,
-    ):
-
-        for module in REGIONAL_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # INTEGRATIONS
-    # ========================================================
-
-    with st.expander(
-        "INTEGRATIONS",
-        expanded=False,
-    ):
-
-        for module in INTEGRATION_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    # ========================================================
-    # DIGITAL TWIN
-    # ========================================================
-
-    with st.expander(
-        "DIGITAL TWIN",
-        expanded=False,
-    ):
-
-        for module in DIGITAL_TWIN_MODULES:
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if st.session_state.active_route
-                    == module.route
-                    else "secondary"
-                ),
-            ):
-
-                _navigate(
-                    module.route
-                )
-
-                st.rerun()
-
-    st.divider()
-
-    # ========================================================
-    # SYSTEM HEALTH
-    # ========================================================
-
-    if st.button(
-        "System Health",
-        key="nav_system_health",
-        use_container_width=True,
-        type=(
-            "primary"
-            if st.session_state.active_route
-            == "system_health"
-            else "secondary"
-        ),
-    ):
-
-        _navigate(
-            "system_health"
-        )
-
-        st.rerun()
-
-    st.divider()
-
-    st.caption(
-        "IMAGINE | Generative Architecture"
-    )
-
-
-# ============================================================
-# ROUTE RESOLUTION
-# ============================================================
-
-
-active_route = st.session_state.get(
-    "active_route",
-    "overview",
-)
-
-if active_route not in MODULES_BY_ROUTE:
-
-    active_route = "overview"
-
-    st.session_state.active_route = (
-        active_route
-    )
-
-
-# ============================================================
-# ACTIVE MODULE HEADER
-# ============================================================
-
-
-active_module = MODULES_BY_ROUTE.get(
-    active_route
-)
-
-if active_module is not None:
-
-    if active_route not in (
-        "overview",
-        "system_health",
-    ):
-
-        st.caption(
-            f"IMAGINE | {active_module.domain}"
-        )
-
-
-# ============================================================
-# RENDER ACTIVE MODULE
-# ============================================================
-
-
-render_route(
-    active_route
-)
+            st.info("Configure variables and click generate.")
+
+elif nav_option == "Eurocode Structural Analysis":
+    st.title("⚙️ Eurocode Structural Engineering Engine")
+    
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.subheader("Simply Supported RC Beam Design (EN 1992)")
+        span = st.number_input("Span Length L (m)", 2.0, 15.0, 6.0)
+        gk = st.number_input("Permanent Load Gk (kN/m)", 1.0, 100.0, 15.0)
+        qk = st.number_input("Variable Load Qk (kN/m)", 0.0, 100.0, 10.0)
+
+        med_load = (1.35 * gk) + (1.50 * qk)
+        m_ed = (med_load * (span ** 2)) / 8.0
+        v_ed = (med_load * span) / 2.0
+
+        st.metric("Design Load ULS (q_ed)", f"{med_load:.2f} kN/m")
+        st.metric("Design Bending Moment (M_ed)", f"{m_ed:.2f} kNm")
+        st.metric("Design Shear Force (V_ed)", f"{v_ed:.2f} kN")
+
+    with col2:
+        st.subheader("3D Isometric Structural Framework")
+        fig3d = go.Figure()
+        for x in [0, span]:
+            for y in [0, 6]:
+                fig3d.add_trace(go.Scatter3d(x=[x, x], y=[y, y], z=[0, 3.5], mode='lines', line=dict(color='white', width=6)))
+        fig3d.add_trace(go.Scatter3d(x=[0, span], y=[0, 0], z=[3.5, 3.5], mode='lines', line=dict(color='blue', width=8)))
+        fig3d.add_trace(go.Scatter3d(x=[0, span], y=[6, 6], z=[3.5, 3.5], mode='lines', line=dict(color='blue', width=8)))
+        fig3d.update_layout(scene=dict(xaxis_title='Span X', yaxis_title='Bay Y', zaxis_title='Height Z'), height=400)
+        st.plotly_chart(fig3d, use_container_width=True)
+
+elif nav_option == "MEP Calculation Engine":
+    st.title("⚡ Mechanical, Electrical & Plumbing (MEP) Engine")
+    
+    mep_tab1, mep_tab2, mep_tab3 = st.tabs(["Mechanical (HVAC)", "Electrical Power", "Plumbing (WSFU)"])
+    
+    with mep_tab1:
+        st.subheader("HVAC Cooling Load Estimator")
+        floor_area_m2 = st.number_input("Served Area (m²)", 10.0, 5000.0, 350.0)
+        occupants = st.number_input("Occupant Density", 1, 500, 35)
+        heat_load = st.slider("Heat Gain Target (W/m²)", 80, 200, 120)
+        total_kw = ((floor_area_m2 * heat_load) + (occupants * 100)) / 1000.0
+        st.metric("Cooling Capacity Required", f"{total_kw:.2f} kW", f"{total_kw/3.517:.2f} TR")
+        
+    with mep_tab2:
+        st.subheader("Electrical Power Demand")
+        lighting = st.number_input("Lighting Load (kW)", 0.0, 500.0, 15.0)
+        sockets = st.number_input("Small Power (kW)", 0.0, 500.0, 45.0)
+        demand_kw = (lighting + sockets + 40.0) * 0.75
+        st.metric("Suggested Transformer Rating", f"{demand_kw / (0.85 * 0.8):.0f} kVA")
+
+    with mep_tab3:
+        st.subheader("Plumbing Fixture Unit Sizing")
+        wc = st.number_input("Water Closets", 1, 100, 12)
+        basin = st.number_input("Wash Basins", 1, 100, 15)
+        wsfu = (wc * 5) + (basin * 1.5)
+        st.metric("Peak Domestic Flow Rate", f"{np.sqrt(wsfu) * 0.25:.2f} L/s")
+
+elif nav_option == "BoQ & Forex Budgeting":
+    st.title("📊 Multi-Currency Forex & BoQ Budgeting")
+    
+    currency = st.selectbox("Select Currency", list(st.session_state.regional_fx.keys()))
+    fx_data = st.session_state.regional_fx[currency]
+    rate = fx_data["rate_to_usd"]
+
+    boq_data = pd.DataFrame([
+        {"Item": "1.0 Substructure", "Base Cost (USD)": 150000.0},
+        {"Item": "2.0 Superstructure Concrete & Steel", "Base Cost (USD)": 420000.0},
+        {"Item": "3.0 Architectural Facade & Finishes", "Base Cost (USD)": 280000.0},
+        {"Item": "4.0 MEP Systems & Services", "Base Cost (USD)": 210000.0},
+    ])
+
+    boq_data[f"Total ({fx_data['currency']})"] = boq_data["Base Cost (USD)"] * rate
+    st.table(boq_data.style.format({"Base Cost (USD)": "${:,.2f}", f"Total ({fx_data['currency']})": f"{fx_data['symbol']} {{:,.2f}}"}))
+
+elif nav_option == "IFC / BIM Export":
+    st.title("📦 Building Information Modeling (BIM) IFC Export")
+    
+    ifc_payload = {
+        "IfcProject": {
+            "Name": "Imagine Architectural Building",
+            "Units": "METRIC",
+            "Storeys": 6,
+            "Elements": [
+                {"Type": "IfcBeam", "Material": "C30/37 Concrete", "Span_m": 6.0},
+                {"Type": "IfcColumn", "Material": "C35/45 Concrete", "Height_m": 3.5}
+            ]
+        }
+    }
+    json_str = json.dumps(ifc_payload, indent=4)
+    st.code(json_str, language="json")
+    st.download_button("📥 Download IFC Metadata (JSON)", data=json_str, file_name="imagine_bim.json", mime="application/json")
+
+elif nav_option == "Project Governance & Approvals":
+    st.title("🔒 Role-Based Governance & Sign-off")
+    st.write(f"Active User Role: **`{current_role}`**")
+
+    if not can_approve:
+        st.warning("⚠️ Access Restricted: Only `Admin` or `Project Lead` roles can execute stage-gate approvals.")
+    else:
+        st.success("✅ Sign-off Authorization Verified.")
+        with st.form("approval_form"):
+            project_code = st.text_input("Project Code", "PRJ-2026-001")
+            new_status = st.selectbox("Stage Action", ["Approved", "Returned for Revision", "Rejected"])
+            remarks = st.text_area("Governance Remarks")
+            if st.form_submit_button("Submit Sign-off"):
+                execute_query("UPDATE projects SET status = ? WHERE code = ?", (new_status, project_code))
+                st.success(f"Project {project_code} updated to '{new_status}'.")
+
+elif nav_option == "User & System Control":
+    st.title("⚙️ System Control & Directory")
+    if current_role != "Admin":
+        st.error("Access Restricted")
+    else:
+        users = execute_query("SELECT id, username, role, email, created_at FROM users", fetch="all") or []
+        st.dataframe(pd.DataFrame(users, columns=["ID", "Username", "Role", "Email", "Created At"]), use_container_width=True)
