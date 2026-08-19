@@ -1,7 +1,5 @@
-pydantic>=2.7,<3
-pydantic-settings>=2.2,<3
-SQLAlchemy>=2.0,<3
-asyncpg>=0.29,<1
-aiosqlite>=0.20,<1
-alembic>=1.13,<2
-streamlit>=1.35,<2
+streamlit
+pandas
+numpy
+plotly
+psycopg2-binary
