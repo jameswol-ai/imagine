@@ -3,22 +3,21 @@ IMAGINE
 Generative Design Database Models
 
 Persistence models for constraint-driven architectural
-generative design runs and their generated candidates.
+generative design runs and generated design candidates.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from sqlalchemy import (
     Column,
+    DateTime,
     Float,
     ForeignKey,
     Integer,
-    JSON,
     String,
+    Text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import relationship
 
@@ -58,7 +57,7 @@ class GenerativeDesignRun(BaseModel):
     )
 
     constraints = Column(
-        MutableDict.as_mutable(JSON),
+        MutableDict.as_mutable(JSONB),
         nullable=False,
         default=dict,
     )
@@ -70,14 +69,12 @@ class GenerativeDesignRun(BaseModel):
     )
 
     completed_at = Column(
-        # DateTime is intentionally imported below to keep
-        # the model declaration easy to scan.
-        __import__("sqlalchemy").DateTime,
+        DateTime,
         nullable=True,
     )
 
     error_message = Column(
-        __import__("sqlalchemy").Text,
+        Text,
         nullable=True,
     )
 
@@ -93,9 +90,10 @@ class DesignCandidateRecord(BaseModel):
     """
     Represents one generated architectural design candidate.
 
-    Candidate geometry, calculated metrics, and evaluation
-    results are stored as JSON so the schema can evolve as
-    the generative engine becomes more sophisticated.
+    Candidate geometry, metrics, and evaluation results are
+    stored as PostgreSQL JSONB documents so the generative
+    design schema can evolve without requiring a new database
+    column for every calculated property.
     """
 
     __tablename__ = "generative_design_candidates"
@@ -134,19 +132,19 @@ class DesignCandidateRecord(BaseModel):
     )
 
     geometry = Column(
-        MutableDict.as_mutable(JSON),
+        MutableDict.as_mutable(JSONB),
         nullable=False,
         default=dict,
     )
 
     metrics = Column(
-        MutableDict.as_mutable(JSON),
+        MutableDict.as_mutable(JSONB),
         nullable=False,
         default=dict,
     )
 
     evaluation = Column(
-        MutableDict.as_mutable(JSON),
+        MutableDict.as_mutable(JSONB),
         nullable=False,
         default=dict,
     )
