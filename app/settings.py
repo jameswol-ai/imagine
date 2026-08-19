@@ -29,14 +29,12 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     SECRET_KEY: str = Field(
-        default="your-secret-key",
+        default="your-secret-key"
     )
 
     ALGORITHM: str = "HS256"
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = (
-        60 * 24 * 7
-    )
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
     DB_USER: str = "postgres"
 
@@ -50,7 +48,7 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        """Build the asynchronous PostgreSQL URL."""
+        """Return the asynchronous PostgreSQL connection URL."""
 
         return (
             "postgresql+asyncpg://"
