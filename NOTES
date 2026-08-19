@@ -285,3 +285,30 @@ tests/
 
 streamlit_zoning_integration.py
 README_ZONING.md
+
+
+architecture/
+├── __init__.py
+├── routes.py
+└── site_planning/
+    ├── __init__.py
+    ├── models.py
+    ├── schemas.py
+    ├── repository.py
+    ├── service.py
+    ├── routes.py
+    ├── seed.py
+    └── ui.py
+
+database/
+└── migrations/
+    └── sql/
+        └── 002_create_site_plans.sql
+
+tests/
+└── unit/
+    ├── test_site_planning_schemas.py
+    ├── test_site_planning_service.py
+    └── test_site_planning_repository.py
+
+README_SITE_PLANNING.md
