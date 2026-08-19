@@ -436,22 +436,27 @@ def render_generative_design_safe() -> None:
 # SITE PLANNING
 # ============================================================
 
-
 def render_site_planning_registered() -> None:
     """
-    Zero-argument registry adapter for Site Planning.
+    Zero-argument Streamlit adapter for Site Planning.
 
-    Registry contract:
+    Application-shell contract:
 
-        renderer()
+        render_site_planning_registered()
 
-    Domain contract:
+    Domain UI contract:
 
+        render_site_planning(service)
+
+    Dependency flow:
+
+        Streamlit
+            ↓
         Repository
-            ->
+            ↓
         Service
-            ->
-        UI
+            ↓
+        Site Planning UI
     """
 
     st.title(
@@ -459,6 +464,11 @@ def render_site_planning_registered() -> None:
     )
 
     try:
+
+        from database.connection import (
+            SessionLocal,
+        )
+
         from architecture.site_planning.repository import (
             SitePlanningRepository,
         )
@@ -472,6 +482,7 @@ def render_site_planning_registered() -> None:
         )
 
     except Exception as exc:
+
         st.error(
             "The Site Planning module could not be loaded."
         )
@@ -480,12 +491,18 @@ def render_site_planning_registered() -> None:
             "Complete import traceback",
             expanded=True,
         ):
+
             st.exception(exc)
 
         return
 
+    db = SessionLocal()
+
     try:
-        repository = SitePlanningRepository()
+
+        repository = SitePlanningRepository(
+            db
+        )
 
         service = SitePlanningService(
             repository
@@ -496,6 +513,7 @@ def render_site_planning_registered() -> None:
         )
 
     except Exception as exc:
+
         st.error(
             "Site Planning could not be rendered."
         )
@@ -504,7 +522,12 @@ def render_site_planning_registered() -> None:
             "Complete renderer traceback",
             expanded=True,
         ):
+
             st.exception(exc)
+
+    finally:
+
+        db.close()
 
 
 # ============================================================
