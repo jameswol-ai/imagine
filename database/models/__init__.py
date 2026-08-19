@@ -1,47 +1,35 @@
-# IMAGINE/database/models/__init__.py
-
 """
-Shared SQLAlchemy model registry.
+IMAGINE database model registry.
 
-All models imported here are registered against the same
-Declarative Base so that application code and Alembic can
-discover the complete model metadata.
+All models share the declarative Base defined in
+database.connection.
 """
 
-from sqlalchemy.orm import declarative_base
+from database.connection import Base
 
+from .user import User
+from .organization import Organization
+from .role import Role
+from .permission import Permission
+from .audit import AuditRecord
+from .notification import Notification
 
-# ------------------------------------------------------------------
-# Shared declarative Base
-# ------------------------------------------------------------------
-
-Base = declarative_base()
-
-
-# ------------------------------------------------------------------
-# Core models
-# ------------------------------------------------------------------
-
-from .user import User  # noqa: E402,F401
-from .organization import Organization  # noqa: E402,F401
-from .role import Role  # noqa: E402,F401
-from .permission import Permission  # noqa: E402,F401
-
-
-# ------------------------------------------------------------------
-# System models
-# ------------------------------------------------------------------
-
-from .audit import AuditRecord  # noqa: E402,F401
-from .notification import Notification  # noqa: E402,F401
-
-
-# ------------------------------------------------------------------
-# Association tables
-# ------------------------------------------------------------------
-
-from .associations import (  # noqa: E402,F401
+from .associations import (
     role_permissions_table,
     user_roles_table,
     organization_users_table,
 )
+
+
+__all__ = [
+    "Base",
+    "User",
+    "Organization",
+    "Role",
+    "Permission",
+    "AuditRecord",
+    "Notification",
+    "role_permissions_table",
+    "user_roles_table",
+    "organization_users_table",
+]
