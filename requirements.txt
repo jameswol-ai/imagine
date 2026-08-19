@@ -1,5 +1,23 @@
-streamlit
-pandas
-numpy
-plotly
-psycopg2-binary
+# Streamlit Core & UI Framework
+streamlit>=1.38.0
+
+# Core Data Science & Numerical Computation
+numpy>=1.26.0
+pandas>=2.1.0
+scipy>=1.11.0
+
+# Symbolic Mathematics & Eurocode Equations
+sympy>=1.12
+
+# Structural Charts, Bending Moment Diagrams & Visualizations
+plotly>=5.18.0
+matplotlib>=3.8.0
+
+# Spatial Geometry Engine (Architecture AI & Section Analysis)
+shapely>=2.0.0
+
+# Image & Visual Asset Rendering
+Pillow>=10.0.0
+
+# Data Validation & State Models
+pydantic>=2.5.0
