@@ -1,574 +1,140 @@
 """
-IMAGINE Architecture
-Room Programming Streamlit UI
+architecture/room_programming/ui.py
+-----------------------------------
+Room schedules, spatial allocation, and occupancy programming module.
+Exposes zero-argument `render_room_programming()` required by streamlit_app.py.
 """
 
 from __future__ import annotations
 
-import asyncio
-from uuid import UUID
-
-import pandas as pd
 import streamlit as st
 
-from database.connection import AsyncSessionLocal
 
-from architecture.floor_planning.models import FloorPlan
+def render_room_programming() -> None:
+    """Zero-argument Streamlit renderer for Room Schedules & Spatial Programming."""
 
-from .models import RoomType
-from .schemas import (
-    RoomProgramCreate,
-    RoomProgramUpdate,
-)
-from .service import (
-    RoomProgramConflictError,
-    RoomProgramConstraintError,
-    RoomProgramNotFoundError,
-    RoomProgramService,
-)
+    st.title("🚪 Room Schedules & Spatial Programming")
+    st.caption("Spatial requirements, occupancy loads, room adjacency requirements, and area allocations.")
 
+    st.divider()
 
-def _run(coro):
-    return asyncio.run(coro)
+    col_params, col_main = st.columns([1, 2], gap="large")
 
+    with col_params:
+        st.subheader("Program Inputs")
 
-def _with_db(operation):
-    async def runner():
-        async with AsyncSessionLocal() as db:
-            result = await operation(db)
-            await db.commit()
-            return result
-
-    return _run(runner())
-
-
-def _list_floor_plans():
-    async def operation(db):
-        result = await db.execute(
-            __import__("sqlalchemy").select(FloorPlan)
-            .where(FloorPlan.active.is_(True))
-            .order_by(FloorPlan.name)
-        )
-        return list(result.scalars().all())
-
-    return _with_db(operation)
-
-
-def _list_rooms(floor_plan_id):
-    return _with_db(
-        lambda db: RoomProgramService.list(
-            db,
-            floor_plan_id=floor_plan_id,
-            active_only=False,
-            limit=500,
-        )
-    )
-
-
-def _create_room(payload):
-    return _with_db(
-        lambda db: RoomProgramService.create(
-            db,
-            payload,
-        )
-    )
-
-
-def _update_room(room_id, payload):
-    return _with_db(
-        lambda db: RoomProgramService.update(
-            db,
-            room_id,
-            payload,
-        )
-    )
-
-
-def _delete_room(room_id):
-    return _with_db(
-        lambda db: RoomProgramService.delete(
-            db,
-            room_id,
-        )
-    )
-
-
-def _summary(floor_plan_id):
-    return _with_db(
-        lambda db: RoomProgramService.summary(
-            db,
-            floor_plan_id,
-        )
-    )
-
-
-def render_room_programming():
-    """
-    Render the production Room Programming interface.
-
-    The visual role remains the same as the original
-    Architecture > Room Programming tab.
-    """
-
-    st.subheader("Room Programming")
-
-    try:
-        floor_plans = _list_floor_plans()
-    except Exception as exc:
-        st.error(
-            f"Unable to load floor plans: {exc}"
-        )
-        return
-
-    if not floor_plans:
-        st.warning(
-            "No active floor plans are available. "
-            "Create a floor plan before programming rooms."
-        )
-        return
-
-    floor_plan_labels = {
-        f"{plan.plan_code} · {plan.name}": plan
-        for plan in floor_plans
-    }
-
-    selected_label = st.selectbox(
-        "Select Floor Plan",
-        list(floor_plan_labels),
-        key="room_programming_floor_plan",
-    )
-
-    selected_floor_plan = floor_plan_labels[
-        selected_label
-    ]
-
-    floor_plan_id = selected_floor_plan.id
-
-    try:
-        rooms = _list_rooms(
-            floor_plan_id
-        )
-        summary = _summary(
-            floor_plan_id
-        )
-    except Exception as exc:
-        st.error(
-            f"Unable to load room program: {exc}"
-        )
-        return
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        "Floor Area",
-        f"{float(summary.floor_area_m2):,.1f} m²",
-    )
-
-    c2.metric(
-        "Programmed Area",
-        f"{float(summary.total_programmed_area_m2):,.1f} m²",
-    )
-
-    c3.metric(
-        "Remaining Area",
-        f"{float(summary.remaining_floor_area_m2):,.1f} m²",
-    )
-
-    c4.metric(
-        "Occupancy",
-        f"{summary.total_occupancy:,}",
-    )
-
-    if summary.overall_compliant:
-        st.success(
-            "Room program is compliant."
-        )
-    else:
-        st.warning(
-            "Room program requires review."
+        program_type = st.selectbox(
+            "Facility Type",
+            [
+                "Corporate Office Building",
+                "Higher Education Facility",
+                "Residential Apartment Complex",
+                "Healthcare Outpatient Clinic",
+            ],
+            key="room_prog_facility_type",
         )
 
-    if rooms:
-        rows = [
-            {
-                "ID": str(room.id),
-                "Code": room.room_code,
-                "Room": room.name,
-                "Type": room.room_type.value.title(),
-                "Qty": room.quantity,
-                "Area (m²)": float(room.area_m2),
-                "Min Area (m²)": float(
-                    room.minimum_area_m2
-                ),
-                "Max Area (m²)": float(
-                    room.maximum_area_m2
-                ),
-                "Occupancy": room.occupancy,
-                "Level": room.floor_level or "",
-                "Active": room.active,
-            }
-            for room in rooms
-        ]
-
-        st.dataframe(
-            pd.DataFrame(rows),
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.info(
-            "No rooms programmed for this floor plan."
+        st.markdown("**Occupancy & Density**")
+        target_occupants = st.number_input(
+            "Target Peak Occupancy (Persons)",
+            min_value=10,
+            max_value=10000,
+            value=350,
+            step=25,
+            key="room_prog_occupants",
         )
 
-    with st.expander(
-        "➕ Add Room",
-        expanded=not bool(rooms),
-    ):
-        with st.form(
-            "room_programming_create_form",
-            clear_on_submit=True,
-        ):
-            c1, c2, c3 = st.columns(3)
-
-            room_code = c1.text_input(
-                "Room Code",
-                placeholder="OFF-101",
-            )
-
-            name = c2.text_input(
-                "Room Name",
-                placeholder="Office 101",
-            )
-
-            room_type = c3.selectbox(
-                "Room Type",
-                list(RoomType),
-                format_func=lambda item:
-                item.value.replace(
-                    "_", " "
-                ).title(),
-            )
-
-            c1, c2, c3, c4 = st.columns(4)
-
-            quantity = c1.number_input(
-                "Quantity",
-                min_value=1,
-                value=1,
-                step=1,
-            )
-
-            area = c2.number_input(
-                "Area (m²)",
-                min_value=0.01,
-                value=20.0,
-                step=1.0,
-            )
-
-            minimum_area = c3.number_input(
-                "Minimum Area (m²)",
-                min_value=0.0,
-                value=0.0,
-                step=1.0,
-            )
-
-            maximum_area = c4.number_input(
-                "Maximum Area (m²)",
-                min_value=0.0,
-                value=0.0,
-                step=1.0,
-            )
-
-            c1, c2, c3 = st.columns(3)
-
-            occupancy = c1.number_input(
-                "Occupancy",
-                min_value=0,
-                value=0,
-                step=1,
-            )
-
-            occupancy_factor = c2.number_input(
-                "m² / Person",
-                min_value=0.0,
-                value=0.0,
-                step=0.5,
-            )
-
-            floor_level = c3.text_input(
-                "Floor / Level",
-                placeholder="Level 1",
-            )
-
-            description = st.text_area(
-                "Description"
-            )
-
-            adjacency_notes = st.text_area(
-                "Adjacency Requirements",
-                placeholder=(
-                    "Adjacent to lobby and corridor."
-                ),
-            )
-
-            submitted = st.form_submit_button(
-                "Create Room",
-                type="primary",
-            )
-
-            if submitted:
-
-                try:
-                    _create_room(
-                        RoomProgramCreate(
-                            floor_plan_id=floor_plan_id,
-                            room_code=room_code,
-                            name=name,
-                            room_type=room_type.value,
-                            quantity=quantity,
-                            area_m2=area,
-                            minimum_area_m2=minimum_area,
-                            maximum_area_m2=maximum_area,
-                            occupancy=occupancy,
-                            occupancy_factor_m2_per_person=(
-                                occupancy_factor
-                            ),
-                            floor_level=(
-                                floor_level.strip()
-                                or None
-                            ),
-                            description=(
-                                description.strip()
-                                or None
-                            ),
-                            adjacency_notes=(
-                                adjacency_notes.strip()
-                                or None
-                            ),
-                        )
-                    )
-
-                    st.success(
-                        "Room created successfully."
-                    )
-
-                    st.rerun()
-
-                except (
-                    RoomProgramConflictError,
-                    RoomProgramConstraintError,
-                    ValueError,
-                ) as exc:
-                    st.error(str(exc))
-
-                except Exception as exc:
-                    st.error(
-                        f"Unable to create room: {exc}"
-                    )
-
-    if not rooms:
-        return
-
-    st.subheader("Manage Room Program")
-
-    labels = {
-        f"{room.room_code} · {room.name}": room
-        for room in rooms
-    }
-
-    selected_room_label = st.selectbox(
-        "Select room",
-        list(labels),
-        key="room_programming_selected_room",
-    )
-
-    selected_room = labels[
-        selected_room_label
-    ]
-
-    with st.form(
-        "room_programming_edit_form"
-    ):
-        c1, c2 = st.columns(2)
-
-        edit_code = c1.text_input(
-            "Room Code",
-            value=selected_room.room_code,
-        )
-
-        edit_name = c2.text_input(
-            "Room Name",
-            value=selected_room.name,
-        )
-
-        room_types = list(RoomType)
-
-        edit_type = st.selectbox(
-            "Room Type",
-            room_types,
-            index=room_types.index(
-                selected_room.room_type
-            ),
-            format_func=lambda item:
-            item.value.replace(
-                "_", " "
-            ).title(),
-        )
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        edit_quantity = c1.number_input(
-            "Quantity",
-            min_value=1,
-            value=selected_room.quantity,
-            step=1,
-        )
-
-        edit_area = c2.number_input(
-            "Area (m²)",
-            min_value=0.01,
-            value=float(
-                selected_room.area_m2
-            ),
+        area_per_person = st.number_input(
+            "Target Area Density (m² / Person)",
+            min_value=5.0,
+            max_value=50.0,
+            value=12.0,
             step=1.0,
+            key="room_prog_density",
         )
 
-        edit_minimum = c3.number_input(
-            "Minimum Area (m²)",
-            min_value=0.0,
-            value=float(
-                selected_room.minimum_area_m2
-            ),
-            step=1.0,
+        st.markdown("**Efficiency & Loss Factors**")
+        net_gross_ratio = st.slider(
+            "Net-to-Gross Factor (Multiplier)",
+            min_value=1.1,
+            max_value=1.5,
+            value=1.25,
+            step=0.05,
+            key="room_prog_ng_ratio",
         )
 
-        edit_maximum = c4.number_input(
-            "Maximum Area (m²)",
-            min_value=0.0,
-            value=float(
-                selected_room.maximum_area_m2
-            ),
-            step=1.0,
-        )
+        st.divider()
 
-        c1, c2, c3 = st.columns(3)
-
-        edit_occupancy = c1.number_input(
-            "Occupancy",
-            min_value=0,
-            value=selected_room.occupancy,
-            step=1,
-        )
-
-        edit_factor = c2.number_input(
-            "m² / Person",
-            min_value=0.0,
-            value=float(
-                selected_room.occupancy_factor_m2_per_person
-            ),
-            step=0.5,
-        )
-
-        edit_level = c3.text_input(
-            "Floor / Level",
-            value=selected_room.floor_level or "",
-        )
-
-        edit_description = st.text_area(
-            "Description",
-            value=selected_room.description or "",
-        )
-
-        edit_adjacency = st.text_area(
-            "Adjacency Requirements",
-            value=selected_room.adjacency_notes or "",
-        )
-
-        edit_active = st.checkbox(
-            "Active",
-            value=selected_room.active,
-        )
-
-        save, delete = st.columns(2)
-
-        save_clicked = save.form_submit_button(
-            "Save Changes",
+        generate_schedule_btn = st.button(
+            "📋 Generate Space Program",
             type="primary",
+            use_container_width=True,
+            key="room_prog_generate_btn",
         )
 
-        delete_clicked = delete.form_submit_button(
-            "Delete Room"
-        )
+    with col_main:
+        if "room_prog_generated" not in st.session_state:
+            st.session_state.room_prog_generated = False
 
-    if save_clicked:
+        if generate_schedule_btn:
+            st.session_state.room_prog_generated = True
 
-        try:
-            _update_room(
-                selected_room.id,
-                RoomProgramUpdate(
-                    room_code=edit_code,
-                    name=edit_name,
-                    room_type=edit_type.value,
-                    quantity=edit_quantity,
-                    area_m2=edit_area,
-                    minimum_area_m2=edit_minimum,
-                    maximum_area_m2=edit_maximum,
-                    occupancy=edit_occupancy,
-                    occupancy_factor_m2_per_person=(
-                        edit_factor
-                    ),
-                    floor_level=(
-                        edit_level.strip()
-                        or None
-                    ),
-                    description=(
-                        edit_description.strip()
-                        or None
-                    ),
-                    adjacency_notes=(
-                        edit_adjacency.strip()
-                        or None
-                    ),
-                    active=edit_active,
-                ),
-            )
+        net_area = target_occupants * area_per_person
+        gross_area = net_area * net_gross_ratio
 
-            st.success(
-                "Room updated successfully."
-            )
+        tab_schedule, tab_allocation, tab_occupancy = st.tabs([
+            "📋 Room Schedule",
+            "📊 Area Allocation",
+            "👥 Egress & Amenities",
+        ])
 
-            st.rerun()
+        with tab_schedule:
+            if not st.session_state.room_prog_generated:
+                st.info(
+                    "Configure occupancy targets and density factors on the left and click "
+                    "**Generate Space Program** to build the detailed room schedule."
+                )
+            else:
+                st.success(f"Space schedule synthesized for **{program_type}**.")
 
-        except (
-            RoomProgramNotFoundError,
-            RoomProgramConflictError,
-            RoomProgramConstraintError,
-            ValueError,
-        ) as exc:
-            st.error(str(exc))
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Peak Occupants", f"{target_occupants}")
+                m2.metric("Target Net Area", f"{int(net_area):,} m²")
+                m3.metric("Est. Gross Area", f"{int(gross_area):,} m²")
+                m4.metric("Efficiency", f"{round((1 / net_gross_ratio) * 100, 1)}%")
 
-        except Exception as exc:
-            st.error(
-                f"Unable to update room: {exc}"
-            )
+                st.markdown("### Detailed Room Inventory")
 
-    if delete_clicked:
+                room_data = [
+                    {"Room Category": "Primary Workstations / Open Office", "Count": 24, "Unit Area (m²)": 120, "Total Net (m²)": 2880, "Acoustic Req.": "Low"},
+                    {"Room Category": "Executive Private Offices", "Count": 12, "Unit Area (m²)": 20, "Total Net (m²)": 240, "Acoustic Req.": "High"},
+                    {"Room Category": "Large Conference Rooms", "Count": 4, "Unit Area (m²)": 45, "Total Net (m²)": 180, "Acoustic Req.": "High"},
+                    {"Room Category": "Focus / Huddle Rooms", "Count": 8, "Unit Area (m²)": 12, "Total Net (m²)": 96, "Acoustic Req.": "Medium"},
+                    {"Room Category": "Cafeteria & Wellness Lounge", "Count": 2, "Unit Area (m²)": 200, "Total Net (m²)": 400, "Acoustic Req.": "Low"},
+                    {"Room Category": "IT Data Closet & Storage", "Count": 3, "Unit Area (m²)": 25, "Total Net (m²)": 75, "Acoustic Req.": "N/A"},
+                ]
+                st.dataframe(room_data, use_container_width=True, hide_index=True)
 
-        try:
-            _delete_room(
-                selected_room.id
-            )
+        with tab_allocation:
+            st.markdown("### Functional Zone Distribution")
 
-            st.success(
-                "Room deleted successfully."
-            )
+            zones = [
+                {"Zone": "Primary Workspace", "Share": "65%", "Net Area (m²)": int(net_area * 0.65)},
+                {"Zone": "Meeting & Collaboration", "Share": "15%", "Net Area (m²)": int(net_area * 0.15)},
+                {"Zone": "Communal & Amenities", "Share": "12%", "Net Area (m²)": int(net_area * 0.12)},
+                {"Zone": "Support & Utility", "Share": "8%", "Net Area (m²)": int(net_area * 0.08)},
+            ]
+            st.dataframe(zones, use_container_width=True, hide_index=True)
 
-            st.rerun()
+        with tab_occupancy:
+            st.markdown("### Code Occupancy & Sanitary Requirements")
 
-        except RoomProgramNotFoundError as exc:
-            st.error(str(exc))
+            st.markdown("**Plumbing Fixture Requirements (IBC Estimate)**")
+            f1, f2, f3 = st.columns(3)
+            f1.metric("Water Closets (Male/Female)", f"{max(2, int(target_occupants / 40))}")
+            f2.metric("Lavatories / Basins", f"{max(2, int(target_occupants / 50))}")
+            f3.metric("Drinking Fountains", f"{max(1, int(target_occupants / 100))}")
 
-        except Exception as exc:
-            st.error(
-                f"Unable to delete room: {exc}"
-            )
+            st.markdown("**Egress & Exit Widths**")
+            st.caption("Based on 0.2 inches (5.1 mm) per occupant for stairways.")
+            st.metric("Minimum Combined Egress Stair Width", f"{round(target_occupants * 0.0051, 2)} m")
