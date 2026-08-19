@@ -1,15 +1,58 @@
 """
-IMAGINE Project Workflows Streamlit UI.
+IMAGINE
+Project Workflows Streamlit UI.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
+
+
+def _get_attr(
+    obj: Any,
+    name: str,
+    default: Any = None,
+) -> Any:
+
+    return getattr(
+        obj,
+        name,
+        default,
+    )
+
+
+def _status_value(
+    value: Any,
+) -> str:
+
+    if value is None:
+        return "unknown"
+
+    return str(
+        getattr(
+            value,
+            "value",
+            value,
+        )
+    )
+
+
+def _session():
+
+    from database.connection import (
+        SessionLocal,
+    )
+
+    return SessionLocal()
 
 
 def render_workflows() -> None:
 
-    st.title("Workflows")
+    st.title(
+        "Workflows"
+    )
 
     st.caption(
         "Project workflow steps and assignments."
@@ -24,10 +67,6 @@ def render_workflows() -> None:
         from projects.workflows.service import (
             create_workflow,
             list_workflows,
-        )
-
-        from database.connection import (
-            SessionLocal,
         )
 
     except Exception as exc:
@@ -47,21 +86,28 @@ def render_workflows() -> None:
     project_id = st.number_input(
         "Project ID",
         min_value=1,
+        value=1,
         step=1,
-        key="workflow_project_id",
+        key="workflows_project_id",
     )
 
-    with st.form("workflow_form"):
+    st.subheader(
+        "Create Workflow Step"
+    )
+
+    with st.form(
+        "workflows_create_form"
+    ):
 
         step = st.text_input(
             "Workflow Step"
         )
 
         assigned_to = st.number_input(
-            "Assigned To",
+            "Assigned To User ID",
             min_value=0,
-            step=1,
             value=0,
+            step=1,
         )
 
         submitted = st.form_submit_button(
@@ -79,19 +125,25 @@ def render_workflows() -> None:
 
         else:
 
-            db = SessionLocal()
+            db = None
 
             try:
 
-                payload = WorkflowCreate(
-                    project_id=int(project_id),
-                    step=step.strip(),
-                    assigned_to=(
-                        int(assigned_to)
-                        if assigned_to
-                        else None
-                    ),
+                assigned_value = (
+                    int(assigned_to)
+                    if int(assigned_to) > 0
+                    else None
                 )
+
+                payload = WorkflowCreate(
+                    project_id=int(
+                        project_id
+                    ),
+                    step=step.strip(),
+                    assigned_to=assigned_value,
+                )
+
+                db = _session()
 
                 create_workflow(
                     db=db,
@@ -101,17 +153,19 @@ def render_workflows() -> None:
                 )
 
                 st.success(
-                    "Workflow step created."
+                    "Workflow step created successfully."
                 )
 
                 st.rerun()
 
             except Exception as exc:
 
-                db.rollback()
+                if db is not None:
+
+                    db.rollback()
 
                 st.error(
-                    "Workflow could not be created."
+                    "Workflow step could not be created."
                 )
 
                 with st.expander(
@@ -121,30 +175,81 @@ def render_workflows() -> None:
                     st.exception(exc)
 
             finally:
-                db.close()
+
+                if db is not None:
+
+                    db.close()
 
     st.divider()
 
-    db = SessionLocal()
+    db = None
 
     try:
 
+        db = _session()
+
         workflows = list_workflows(
             db=db,
-            project_id=int(project_id),
+            project_id=int(
+                project_id
+            ),
         )
 
-        st.dataframe(
-            [
+        workflows = list(
+            workflows or []
+        )
+
+        st.subheader(
+            "Workflow Records"
+        )
+
+        if not workflows:
+
+            st.info(
+                "No workflow steps exist for this project."
+            )
+
+            return
+
+        rows = []
+
+        for workflow in workflows:
+
+            rows.append(
                 {
-                    "ID": item.id,
-                    "Project": item.project_id,
-                    "Step": item.step,
-                    "Status": item.status,
-                    "Assigned To": item.assigned_to,
+                    "ID": _get_attr(
+                        workflow,
+                        "id",
+                    ),
+                    "Project ID": _get_attr(
+                        workflow,
+                        "project_id",
+                    ),
+                    "Step": _get_attr(
+                        workflow,
+                        "step",
+                        "",
+                    ),
+                    "Status": _status_value(
+                        _get_attr(
+                            workflow,
+                            "status",
+                        )
+                    ),
+                    "Assigned To": _get_attr(
+                        workflow,
+                        "assigned_to",
+                    ),
+                    "Created": _get_attr(
+                        workflow,
+                        "created_at",
+                        "",
+                    ),
                 }
-                for item in workflows
-            ],
+            )
+
+        st.dataframe(
+            rows,
             use_container_width=True,
             hide_index=True,
         )
@@ -152,7 +257,7 @@ def render_workflows() -> None:
     except Exception as exc:
 
         st.error(
-            "Workflows could not be listed."
+            "Workflow records could not be loaded."
         )
 
         with st.expander(
@@ -162,4 +267,7 @@ def render_workflows() -> None:
             st.exception(exc)
 
     finally:
-        db.close()
+
+        if db is not None:
+
+            db.close()
