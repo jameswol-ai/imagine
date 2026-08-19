@@ -1,162 +1,160 @@
 """
 Structural Eurocode 0 (EN 1990) UI Renderer Module
-Path: structural/eurocode_0/ui.py
+Path: structural/eurocode/en1990/ui.py
+App: imagine
 """
 
 import pandas as pd
 import streamlit as st
 
 
-def render_eurocode_0() -> None:
-    """Renders the EN 1990 Basis of Structural Design & Load Combination interface."""
+def render_en1990() -> None:
+    """Renders the EN 1990 Basis of Structural Design and Load Combinations interface."""
 
     st.write(
-        "Define structural reliability classes, design working life, and generate "
-        "Ultimate (ULS) and Serviceability (SLS) limit state load combinations per EN 1990."
+        "Calculate ULS and SLS partial safety factor load combinations (Expressions 6.10, 6.10a, 6.10b) "
+        "and combination factors (ψ) per EN 1990."
     )
 
-    # --- GENERAL STRUCTURAL ASSUMPTIONS BAR ---
-    col_cc, col_dwl, col_eq = st.columns([1, 1, 1.5])
+    # --- CATEGORY & PSI FACTOR TABLE (EN 1990 Table A1.1) ---
+    psi_table = {
+        "Category A: Domestic, residential": {"psi_0": 0.7, "psi_1": 0.5, "psi_2": 0.3},
+        "Category B: Office areas": {"psi_0": 0.7, "psi_1": 0.5, "psi_2": 0.3},
+        "Category C: Congregation areas": {"psi_0": 0.7, "psi_1": 0.7, "psi_2": 0.6},
+        "Category D: Shopping areas": {"psi_0": 0.7, "psi_1": 0.7, "psi_2": 0.6},
+        "Category E: Storage areas": {"psi_0": 1.0, "psi_1": 0.9, "psi_2": 0.8},
+        "Category F: Traffic area (vehicle weight <= 30kN)": {"psi_0": 0.7, "psi_1": 0.7, "psi_2": 0.6},
+        "Category G: Traffic area (30kN < vehicle weight <= 160kN)": {"psi_0": 0.7, "psi_1": 0.5, "psi_2": 0.3},
+        "Category H: Roofs": {"psi_0": 0.7, "psi_1": 0.0, "psi_2": 0.0},
+        "Snow loads on buildings (altitude <= 1000m)": {"psi_0": 0.5, "psi_1": 0.2, "psi_2": 0.0},
+        "Wind loads on buildings": {"psi_0": 0.6, "psi_1": 0.2, "psi_2": 0.0},
+    }
+
+    # --- INPUT CONTROLS ---
+    col_cc, col_design_exp = st.columns(2)
 
     with col_cc:
-        cc_class = st.selectbox(
-            "Consequence Class",
-            ["CC1 (Low)", "CC2 (Medium / Standard)", "CC3 (High)"],
-            index=1,
-            help="Determines the $K_{FI}$ factor applied to unfavorable actions.",
-        )
-
-    with col_dwl:
-        dwl_category = st.selectbox(
-            "Design Working Life",
-            ["10 Years (Temporary)", "25 Years (Replaceable)", "50 Years (Building)", "100 Years (Monumental)"],
-            index=2,
-        )
-
-    with col_eq:
-        combination_rule = st.selectbox(
-            "ULS Combination Expression",
+        consequence_class = st.selectbox(
+            "Consequences Class (CC) / Reliability Class (RC)",
             [
-                "Eq. 6.10: γG·Gk + γQ,1·Qk,1 + Σ(γQ,i·ψ0,i·Qk,i)",
-                "Eq. 6.10a/b: Max of (6.10a, 6.10b) [Economy / Modified]",
+                "CC1 / RC1 (Low consequences for loss of human life)",
+                "CC2 / RC2 (Medium consequences for loss of human life - Standard)",
+                "CC3 / RC3 (High consequences for loss of human life)",
+            ],
+            index=1,
+            help="Determines K_FI factor applied to actions.",
+        )
+
+    with col_design_exp:
+        combination_rule = st.selectbox(
+            "ULS Combination Approach (STR/GEO)",
+            [
+                "Expression 6.10 (Standard Combination)",
+                "Expression 6.10a / 6.10b (Less conservative for permanent loads)",
             ],
             index=0,
+            help="EN 1990 cl. 6.4.3.2 - Set by National Annex selection.",
         )
+
+    # K_FI Factor determination
+    if "CC1" in consequence_class:
+        k_fi = 0.9
+    elif "CC3" in consequence_class:
+        k_fi = 1.1
+    else:
+        k_fi = 1.0
 
     st.divider()
 
-    # --- MAIN CONTROLS & LOAD COMBINATIONS ---
-    left_actions_col, right_results_col = st.columns([1, 2])
+    col_inputs, col_results = st.columns([1, 1.2])
 
-    # K_FI factor lookup
-    k_fi = 0.9 if "CC1" in cc_class else (1.1 if "CC3" in cc_class else 1.0)
-
-    with left_actions_col:
+    with col_inputs:
         st.subheader("Characteristic Actions")
 
-        with st.expander("Permanent Actions (Gk)", expanded=True):
-            g_k1 = st.number_input("Self-Weight & Dead Load Gk,1 (kN/m²)", min_value=0.0, value=5.0, step=0.5)
-            g_k2 = st.number_input("Superimposed Dead Load Gk,2 (kN/m²)", min_value=0.0, value=2.0, step=0.5)
+        g_k = st.number_input("Permanent Load G_k (kN or kN/m²)", min_value=0.0, value=100.0, step=10.0)
 
-        with st.expander("Variable Actions (Qk)", expanded=True):
-            q_k1_category = st.selectbox(
-                "Leading Variable Action Category",
-                ["Category A: Domestic / Residential", "Category B: Office Areas", "Category E: Storage", "Wind Load", "Snow Load"],
-                index=1,
-            )
-            q_k1 = st.number_input("Leading Action Qk,1 (kN/m²)", min_value=0.0, value=3.0, step=0.5)
+        st.markdown("**Leading Variable Action (Q_k,1)**")
+        q_cat1 = st.selectbox("Leading Variable Category", list(psi_table.keys()), index=0)
+        q_k1 = st.number_input("Leading Variable Load Q_k,1 (kN or kN/m²)", min_value=0.0, value=50.0, step=5.0)
 
-            st.markdown("---")
+        st.markdown("**Accompanying Variable Action (Q_k,2)**")
+        q_cat2 = st.selectbox("Accompanying Category", list(psi_table.keys()), index=9)
+        q_k2 = st.number_input("Accompanying Variable Load Q_k,2 (kN or kN/m²)", min_value=0.0, value=20.0, step=5.0)
 
-            q_k2_category = st.selectbox(
-                "Accompanying Action Category",
-                ["None", "Wind Load", "Snow Load", "Category A: Domestic"],
-                index=1,
-            )
-            q_k2 = st.number_input("Accompanying Action Qk,2 (kN/m²)", min_value=0.0, value=1.5, step=0.5)
+    # Calculate Factors & Combinations
+    psi_1 = psi_table[q_cat1]
+    psi_2 = psi_table[q_cat2]
 
-        # Eurocode partial safety factors
-        gamma_G = 1.35 * k_fi
-        gamma_Q = 1.50 * k_fi
+    gamma_g_unfav = 1.35 * k_fi
+    gamma_q_unfav = 1.50 * k_fi
+    xi = 0.85
 
-        # Psi factors lookup dictionary (Table A1.1)
-        psi_map = {
-            "Category A: Domestic / Residential": {"psi0": 0.7, "psi1": 0.5, "psi2": 0.3},
-            "Category B: Office Areas": {"psi0": 0.7, "psi1": 0.5, "psi2": 0.3},
-            "Category E: Storage": {"psi0": 1.0, "psi1": 0.9, "psi2": 0.8},
-            "Wind Load": {"psi0": 0.6, "psi1": 0.2, "psi2": 0.0},
-            "Snow Load": {"psi0": 0.5, "psi1": 0.2, "psi2": 0.0},
-            "None": {"psi0": 0.0, "psi1": 0.0, "psi2": 0.0},
-        }
+    # ULS Exp 6.10
+    e_d_610 = (gamma_g_unfav * g_k) + (gamma_q_unfav * q_k1) + (gamma_q_unfav * psi_2["psi_0"] * q_k2)
 
-        psi_q1 = psi_map.get(q_k1_category, {"psi0": 0.7})["psi0"]
-        psi_q2 = psi_map.get(q_k2_category, {"psi0": 0.6})["psi0"]
+    # ULS Exp 6.10a
+    e_d_610a = (gamma_g_unfav * g_k) + (gamma_q_unfav * psi_1["psi_0"] * q_k1) + (gamma_q_unfav * psi_2["psi_0"] * q_k2)
 
-    with right_results_col:
-        st.subheader("EN 1990 Combination Calculations")
+    # ULS Exp 6.10b
+    e_d_610b = (xi * gamma_g_unfav * g_k) + (gamma_q_unfav * q_k1) + (gamma_q_unfav * psi_2["psi_0"] * q_k2)
 
-        total_Gk = g_k1 + g_k2
+    # SLS Combinations
+    sls_characteristic = g_k + q_k1 + (psi_2["psi_0"] * q_k2)
+    sls_frequent = g_k + (psi_1["psi_1"] * q_k1) + (psi_2["psi_2"] * q_k2)
+    sls_quasi_permanent = g_k + (psi_1["psi_2"] * q_k1) + (psi_2["psi_2"] * q_k2)
 
-        # ULS Design Value Computation (Eq. 6.10)
-        uls_design_load = (gamma_G * total_Gk) + (gamma_Q * q_k1) + (gamma_Q * psi_q2 * q_k2)
+    with col_results:
+        st.subheader("Design Combinations (E_d)")
 
-        # SLS Characteristic & Quasi-Permanent
-        sls_characteristic = total_Gk + q_k1 + (psi_q2 * q_k2)
-        sls_quasi_permanent = total_Gk + (psi_map[q_k1_category]["psi2"] * q_k1) + (psi_map[q_k2_category]["psi2"] * q_k2)
+        m1, m2 = st.columns(2)
+        m1.metric("Reliability Factor K_FI", f"{k_fi:.2f}")
 
-        # Key Metrics
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("K_FI Factor", f"{k_fi:.2f}")
-        m2.metric("ULS Design Load (Ed)", f"{uls_design_load:.2f} kN/m²")
-        m3.metric("SLS Characteristic", f"{sls_characteristic:.2f} kN/m²")
-        m4.metric("SLS Quasi-Permanent", f"{sls_quasi_permanent:.2f} kN/m²")
+        if "Expression 6.10 (" in combination_rule:
+            m2.metric("Governing ULS Load E_d", f"{e_d_610:.2f} kN")
+        else:
+            gov_uls = max(e_d_610a, e_d_610b)
+            m2.metric("Governing ULS Load E_d", f"{gov_uls:.2f} kN")
 
-        st.markdown("**Design Combinations Breakdown (Table)**")
-
-        comb_df = pd.DataFrame(
+        st.markdown("**ULS Combinations Table**")
+        uls_df = pd.DataFrame(
             [
                 {
-                    "Limit State": "ULS (STR/GEO) - Eq. 6.10",
-                    "Formula Expression": f"{gamma_G:.2f}·Gk + {gamma_Q:.2f}·Qk,1 + {gamma_Q:.2f}·({psi_q2:.2f})·Qk,2",
-                    "Design Load (kN/m²)": round(uls_design_load, 2),
-                    "Governing Status": "Critical ULS",
+                    "Expression": "Exp 6.10 (Standard)",
+                    "Formula": "γG·Gk + γQ,1·Qk,1 + γQ,2·ψ0,2·Qk,2",
+                    "Design Action E_d": f"{e_d_610:.2f}",
                 },
                 {
-                    "Limit State": "SLS - Characteristic",
-                    "Formula Expression": "1.0·Gk + 1.0·Qk,1 + ψ0,2·Qk,2",
-                    "Design Load (kN/m²)": round(sls_characteristic, 2),
-                    "Governing Status": "Deflection / Cracking",
+                    "Expression": "Exp 6.10a",
+                    "Formula": "γG·Gk + γQ,1·ψ0,1·Qk,1 + γQ,2·ψ0,2·Qk,2",
+                    "Design Action E_d": f"{e_d_610a:.2f}",
                 },
                 {
-                    "Limit State": "SLS - Frequent",
-                    "Formula Expression": f"1.0·Gk + {psi_map[q_k1_category]['psi1']}·Qk,1 + {psi_map[q_k2_category]['psi2']}·Qk,2",
-                    "Design Load (kN/m²)": round(
-                        total_Gk + (psi_map[q_k1_category]["psi1"] * q_k1) + (psi_map[q_k2_category]["psi2"] * q_k2),
-                        2,
-                    ),
-                    "Governing Status": "Reversible Effects",
-                },
-                {
-                    "Limit State": "SLS - Quasi-Permanent",
-                    "Formula Expression": f"1.0·Gk + {psi_map[q_k1_category]['psi2']}·Qk,1 + {psi_map[q_k2_category]['psi2']}·Qk,2",
-                    "Design Load (kN/m²)": round(sls_quasi_permanent, 2),
-                    "Governing Status": "Long-Term Creep",
+                    "Expression": "Exp 6.10b",
+                    "Formula": "ξ·γG·Gk + γQ,1·Qk,1 + γQ,2·ψ0,2·Qk,2",
+                    "Design Action E_d": f"{e_d_610b:.2f}",
                 },
             ]
         )
+        st.dataframe(uls_df, use_container_width=True, hide_index=True)
 
-        st.dataframe(comb_df, use_container_width=True, hide_index=True)
-
-        st.markdown("**Load Distribution Composition**")
-        chart_data = pd.DataFrame(
-            {
-                "Load Type": ["Permanent (Gk)", "Leading Variable (Qk,1)", "Accompanying (Qk,2)"],
-                "Factored Design Load (kN/m²)": [
-                    gamma_G * total_Gk,
-                    gamma_Q * q_k1,
-                    gamma_Q * psi_q2 * q_k2,
-                ],
-            }
-        ).set_index("Load Type")
-
-        st.bar_chart(chart_data)
+        st.markdown("**SLS Serviceability Combinations**")
+        sls_df = pd.DataFrame(
+            [
+                {
+                    "Limit State": "Characteristic (Irreversible)",
+                    "Combination": "Gk + Qk,1 + ψ0,2·Qk,2",
+                    "E_d": f"{sls_characteristic:.2f}",
+                },
+                {
+                    "Limit State": "Frequent (Reversible)",
+                    "Combination": "Gk + ψ1,1·Qk,1 + ψ2,2·Qk,2",
+                    "E_d": f"{sls_frequent:.2f}",
+                },
+                {
+                    "Limit State": "Quasi-Permanent (Long term)",
+                    "Combination": "Gk + ψ2,1·Qk,1 + ψ2,2·Qk,2",
+                    "E_d": f"{sls_quasi_permanent:.2f}",
+                },
+            ]
+        )
+        st.dataframe(sls_df, use_container_width=True, hide_index=True)
