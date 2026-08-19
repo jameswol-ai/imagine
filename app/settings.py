@@ -1,97 +1,84 @@
 """
-IMAGINE
-Application Settings
+IMAGINE application settings.
+
+Central configuration for the IMAGINE application.
 """
 
 from __future__ import annotations
 
-import os
+from functools import lru_cache
+from typing import List
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings:
-    """Application configuration.
+class Settings(BaseSettings):
+    """
+    Application configuration.
 
-    Environment variables override the defaults.
-    This implementation intentionally avoids making the
-    database layer depend on pydantic-settings just to import.
+    Values are loaded from environment variables and,
+    when present, a local .env file.
     """
 
-    APP_NAME: str = os.getenv(
-        "APP_NAME",
-        "IMAGINE",
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
     )
 
-    DEBUG: bool = os.getenv(
-        "DEBUG",
-        "false",
-    ).lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    # --------------------------------------------------------
+    # Application
+    # --------------------------------------------------------
 
-    API_V1_PREFIX: str = os.getenv(
-        "API_V1_PREFIX",
-        "/api/v1",
+    app_name: str = "IMAGINE"
+
+    app_version: str = "1.0.0"
+
+    environment: str = "development"
+
+    debug: bool = False
+
+    # --------------------------------------------------------
+    # Database
+    # --------------------------------------------------------
+
+    database_url: str = Field(
+        default="sqlite:///./imagine.db",
     )
 
-    SECRET_KEY: str = os.getenv(
-        "SECRET_KEY",
-        "your-secret-key",
+    # --------------------------------------------------------
+    # Authentication
+    # --------------------------------------------------------
+
+    secret_key: str = Field(
+        default="imagine-development-secret",
     )
 
-    ALGORITHM: str = os.getenv(
-        "ALGORITHM",
-        "HS256",
+    algorithm: str = "HS256"
+
+    access_token_expire_minutes: int = 60
+
+    # --------------------------------------------------------
+    # CORS
+    # --------------------------------------------------------
+
+    cors_origins: List[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://localhost:8000",
+        ]
     )
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
-        os.getenv(
-            "ACCESS_TOKEN_EXPIRE_MINUTES",
-            "10080",
-        )
-    )
 
-    DB_USER: str = os.getenv(
-        "DB_USER",
-        "postgres",
-    )
+@lru_cache
+def get_settings() -> Settings:
+    """
+    Return the cached application settings instance.
+    """
 
-    DB_PASSWORD: str = os.getenv(
-        "DB_PASSWORD",
-        "postgres",
-    )
-
-    DB_HOST: str = os.getenv(
-        "DB_HOST",
-        "localhost",
-    )
-
-    DB_PORT: int = int(
-        os.getenv(
-            "DB_PORT",
-            "5432",
-        )
-    )
-
-    DB_NAME: str = os.getenv(
-        "DB_NAME",
-        "imagine",
-    )
-
-    @property
-    def DATABASE_URL(self) -> str:
-        """Return the asynchronous PostgreSQL URL."""
-
-        return (
-            "postgresql+asyncpg://"
-            f"{self.DB_USER}:"
-            f"{self.DB_PASSWORD}@"
-            f"{self.DB_HOST}:"
-            f"{self.DB_PORT}/"
-            f"{self.DB_NAME}"
-        )
+    return Settings()
 
 
-settings = Settings()
+settings = get_settings()
