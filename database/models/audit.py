@@ -42,13 +42,11 @@ class AuditRecord(Base):
         nullable=True,
     )
 
-    # IMPORTANT:
+    # SQLAlchemy reserves the Declarative attribute name
+    # "metadata".
     #
-    # SQLAlchemy reserves the Python attribute name "metadata"
-    # for Declarative models.
-    #
-    # We therefore expose the column to Python as metadata_json
-    # while keeping the actual database column name as "metadata".
+    # Keep the database column name as "metadata", but expose
+    # it in Python as "metadata_json".
     metadata_json = Column(
         "metadata",
         JSON,
