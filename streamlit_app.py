@@ -6,13 +6,15 @@ Main Streamlit application entry point.
 
 Application shell responsibilities:
     - Navigation
-    - Module registry
+    - Centralized module registry
     - Safe renderer loading
+    - Error isolation
     - Module status
     - Domain routing
     - System health
 
 Domain logic belongs inside:
+
     architecture/
     structural/
     bim/
@@ -28,33 +30,6 @@ Domain logic belongs inside:
 """
 
 from __future__ import annotations
-
-from pathlib import Path
-import sys
-
-from datetime import datetime, timezone
-from importlib import import_module
-from typing import Any, Callable
-
-import streamlit as st
-
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-
-if str(PROJECT_ROOT) in sys.path:
-    sys.path.remove(str(PROJECT_ROOT))
-
-sys.path.insert(0, str(PROJECT_ROOT))
-
-# Ensure the IMAGINE repository root is first on sys.path.
-# This prevents an unrelated module named "app" from shadowing
-# the repository's app/ package.
-PROJECT_ROOT = Path(__file__).resolve().parent
-
-if str(PROJECT_ROOT) in sys.path:
-    sys.path.remove(str(PROJECT_ROOT))
-
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -75,7 +50,6 @@ from architecture.health import (
 
 st.set_page_config(
     page_title="IMAGINE",
-    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -97,6 +71,11 @@ RenderFunction = Callable[[], Any]
 class ModuleDefinition:
     """
     Definition of a navigable IMAGINE module.
+
+    renderer_module and renderer_function identify a standard
+    zero-argument UI renderer.
+
+    Special modules can be handled through SPECIAL_RENDERERS.
     """
 
     label: str
@@ -117,13 +96,16 @@ class ModuleDefinition:
 
 
 def _safe_import(
-    module_name: str | None,
-    function_name: str | None,
+    module_name: str,
+    function_name: str,
 ) -> RenderFunction | None:
     """
-    Safely import a zero-argument renderer.
+    Safely import a renderer.
 
-    Import failures are isolated from the application shell.
+    Any import failure returns None.
+
+    The application shell must never fail simply because one
+    optional domain module has an import problem.
     """
 
     if not module_name:
@@ -151,7 +133,44 @@ def _safe_import(
 
 
 # ============================================================
-# PLACEHOLDER
+# SAFE RENDERER EXECUTION
+# ============================================================
+
+
+def _render_with_error_isolation(
+    module: ModuleDefinition,
+    renderer: RenderFunction,
+) -> None:
+    """
+    Execute a renderer without allowing its exception to
+    terminate the application shell.
+    """
+
+    try:
+
+        renderer()
+
+    except Exception as exc:
+
+        st.error(
+            f"{module.label} could not be rendered."
+        )
+
+        st.warning(
+            "The application shell is still running. "
+            "Use System Health to inspect module failures."
+        )
+
+        with st.expander(
+            "Complete renderer traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+
+# ============================================================
+# PLACEHOLDER RENDERER
 # ============================================================
 
 
@@ -159,14 +178,19 @@ def render_module_placeholder(
     module: ModuleDefinition,
 ) -> None:
     """
-    Render a safe placeholder for a module whose UI has not
-    yet been implemented.
+    Render a safe placeholder for a registered module that
+    does not yet expose a UI renderer.
     """
 
-    st.title(module.label)
+    st.title(
+        module.label
+    )
 
     if module.description:
-        st.caption(module.description)
+
+        st.caption(
+            module.description
+        )
 
     st.info(
         f"{module.label} is registered in IMAGINE, "
@@ -175,47 +199,36 @@ def render_module_placeholder(
 
     st.divider()
 
+    st.subheader(
+        "Module Status"
+    )
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
+
         st.metric(
             "Domain",
             module.domain,
         )
 
     with col2:
+
         st.metric(
             "UI",
             "Not implemented",
         )
 
     with col3:
+
         st.metric(
-            "Status",
+            "Registry",
             "Registered",
         )
 
-    st.divider()
-
-    st.subheader("Module Architecture")
-
-    st.markdown(
-        f"""
-        This module belongs to the **{module.domain}** domain.
-
-        The application shell is already connected to this
-        route. Its domain logic should remain inside the
-        corresponding repository folder.
-
-        When the module receives a Streamlit renderer, register
-        its `ui.py` module and renderer function in the module
-        definition.
-        """
-    )
-
 
 # ============================================================
-# REGISTERED MODULE RENDERER
+# STANDARD MODULE RENDERER
 # ============================================================
 
 
@@ -223,40 +236,81 @@ def render_registered_module(
     module: ModuleDefinition,
 ) -> None:
     """
-    Resolve and render a registered module.
+    Resolve and render a standard registered module.
 
-    Modules with a valid renderer are loaded lazily.
-
-    Modules without a renderer receive a safe placeholder.
+    Import failures and renderer failures are isolated.
     """
 
-    if (
-        module.renderer_module
-        and module.renderer_function
-    ):
-        renderer = _safe_import(
-            module.renderer_module,
-            module.renderer_function,
+    if not module.renderer_module:
+
+        render_module_placeholder(
+            module
         )
 
-        if renderer is not None:
-            try:
-                renderer()
+        return
 
-            except Exception as exc:
-                st.error(
-                    f"{module.label} could not be rendered."
-                )
+    if not module.renderer_function:
 
-                with st.expander(
-                    "Complete renderer traceback",
-                    expanded=True,
-                ):
-                    st.exception(exc)
+        render_module_placeholder(
+            module
+        )
 
-            return
+        return
 
-    render_module_placeholder(module)
+    try:
+
+        renderer = import_module(
+            module.renderer_module
+        )
+
+    except Exception as exc:
+
+        st.title(
+            module.label
+        )
+
+        if module.description:
+
+            st.caption(
+                module.description
+            )
+
+        st.error(
+            f"The {module.label} module could not be loaded."
+        )
+
+        with st.expander(
+            "Complete import traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    function = getattr(
+        renderer,
+        module.renderer_function,
+        None,
+    )
+
+    if not callable(function):
+
+        st.title(
+            module.label
+        )
+
+        st.error(
+            f"{module.renderer_module} does not expose "
+            f"{module.renderer_function}()."
+        )
+
+        return
+
+    _render_with_error_isolation(
+        module,
+        function,
+    )
 
 
 # ============================================================
@@ -265,9 +319,13 @@ def render_registered_module(
 
 
 def render_overview() -> None:
-    """Render the IMAGINE application overview."""
+    """
+    Render the IMAGINE application overview.
+    """
 
-    st.title("IMAGINE")
+    st.title(
+        "IMAGINE"
+    )
 
     st.caption(
         "Generative Architecture & Civil Engine"
@@ -287,24 +345,30 @@ def render_overview() -> None:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
+
         st.metric(
             "Projects",
             "0",
         )
 
     with col2:
+
         st.metric(
             "Design Runs",
             "0",
         )
 
     with col3:
+
         st.metric(
             "Engineering Modules",
-            str(len(ALL_MODULES)),
+            str(
+                len(ALL_MODULES)
+            ),
         )
 
     with col4:
+
         st.metric(
             "BIM Assets",
             "0",
@@ -335,7 +399,9 @@ def render_overview() -> None:
         columns,
         pipeline,
     ):
+
         with column:
+
             st.markdown(
                 f"""
                 <div style="
@@ -343,7 +409,7 @@ def render_overview() -> None:
                     border-radius:12px;
                     padding:14px;
                     text-align:center;
-                    min-height:80px;
+                    min-height:70px;
                 ">
                     <strong>{step}</strong>
                 </div>
@@ -356,8 +422,6 @@ def render_overview() -> None:
     st.subheader(
         "Engineering Domains"
     )
-
-    domain_columns = st.columns(4)
 
     domains = [
         (
@@ -376,13 +440,34 @@ def render_overview() -> None:
             "MEP",
             "Mechanical, electrical and plumbing systems.",
         ),
+        (
+            "Costing",
+            "BOQ, quantities, procurement and cost analysis.",
+        ),
+        (
+            "Construction",
+            "Planning, scheduling and site execution.",
+        ),
+        (
+            "Documents",
+            "Drawings, specifications and contracts.",
+        ),
+        (
+            "AI",
+            "AI engineering and knowledge systems.",
+        ),
     ]
 
-    for column, domain in zip(
-        domain_columns,
-        domains,
-    ):
+    domain_columns = st.columns(4)
+
+    for index, domain in enumerate(domains):
+
+        column = domain_columns[
+            index % 4
+        ]
+
         with column:
+
             title, description = domain
 
             st.markdown(
@@ -402,36 +487,49 @@ def render_overview() -> None:
     status_col1, status_col2 = st.columns(2)
 
     with status_col1:
+
         st.success(
-            "IMAGINE application is running."
+            "IMAGINE application shell is running."
         )
 
     with status_col2:
+
         st.info(
-            "Domain modules are independently connected."
+            "Domain modules are independently isolated."
         )
 
 
 # ============================================================
-# GENERATIVE DESIGN
+# GENERATIVE DESIGN ADAPTER
 # ============================================================
 
 
 def render_generative_design_safe() -> None:
     """
-    Safe adapter for Generative Design.
+    Zero-argument adapter for Generative Design.
     """
 
-    st.title(
-        "Generative Design"
+    module = ModuleDefinition(
+        label="Generative Design",
+        route="architecture_generative_design",
+        domain="Architecture",
+        description=(
+            "Constraint-driven design generation and ranking."
+        ),
     )
 
     try:
-        from architecture.generative_design.ui import (
-            render_generative_design,
+
+        imported_module = import_module(
+            "architecture.generative_design.ui"
         )
 
     except Exception as exc:
+
+        st.title(
+            module.label
+        )
+
         st.error(
             "The Generative Design module could not be loaded."
         )
@@ -440,72 +538,93 @@ def render_generative_design_safe() -> None:
             "Complete import traceback",
             expanded=True,
         ):
+
             st.exception(exc)
 
         return
 
-    try:
-        render_generative_design()
+    renderer = getattr(
+        imported_module,
+        "render_generative_design",
+        None,
+    )
 
-    except Exception as exc:
-        st.error(
-            "Generative Design encountered an error."
+    if not callable(renderer):
+
+        st.title(
+            module.label
         )
 
-        with st.expander(
-            "Complete renderer traceback",
-            expanded=True,
-        ):
-            st.exception(exc)
+        st.error(
+            "architecture.generative_design.ui does not "
+            "expose render_generative_design()."
+        )
+
+        return
+
+    _render_with_error_isolation(
+        module,
+        renderer,
+    )
 
 
 # ============================================================
-# SITE PLANNING
+# SITE PLANNING ADAPTER
 # ============================================================
+
 
 def render_site_planning_registered() -> None:
     """
     Zero-argument Streamlit adapter for Site Planning.
 
-    Application-shell contract:
+    Streamlit registry contract:
 
-        render_site_planning_registered()
+        renderer()
 
-    Domain UI contract:
+    Site Planning domain contract:
 
-        render_site_planning(service)
+        repository
+            |
+            v
+        service
+            |
+            v
+        UI
 
-    Dependency flow:
-
-        Streamlit
-            ↓
-        Repository
-            ↓
-        Service
-            ↓
-        Site Planning UI
+    The service itself exposes synchronous adapter methods
+    while preserving its existing asynchronous API methods.
     """
 
-    st.title(
-        "Site Planning"
+    module = ModuleDefinition(
+        label="Site Planning",
+        route="architecture_site_planning",
+        domain="Architecture",
+        description=(
+            "Site organization and development planning."
+        ),
     )
+
+    st.title(
+        module.label
+    )
+
+    st.caption(
+        module.description
+    )
+
+    # --------------------------------------------------------
+    # Import repository
+    # --------------------------------------------------------
 
     try:
 
-        from database.connection import (
-            SessionLocal,
+        repository_module = import_module(
+            "architecture.site_planning.repository"
         )
 
-        from architecture.site_planning.repository import (
-            SitePlanningRepository,
-        )
-
-        from architecture.site_planning.service import (
-            SitePlanningService,
-        )
-
-        from architecture.site_planning.ui import (
-            render_site_planning,
+        SitePlanningRepository = getattr(
+            repository_module,
+            "SitePlanningRepository",
         )
 
     except Exception as exc:
@@ -523,17 +642,155 @@ def render_site_planning_registered() -> None:
 
         return
 
-    db = SessionLocal()
+    # --------------------------------------------------------
+    # Import service
+    # --------------------------------------------------------
 
     try:
 
-        repository = SitePlanningRepository(
-            db
+        service_module = import_module(
+            "architecture.site_planning.service"
         )
+
+        SitePlanningService = getattr(
+            service_module,
+            "SitePlanningService",
+        )
+
+    except Exception as exc:
+
+        st.error(
+            "The Site Planning service could not be loaded."
+        )
+
+        with st.expander(
+            "Complete service import traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    # --------------------------------------------------------
+    # Import UI
+    # --------------------------------------------------------
+
+    try:
+
+        ui_module = import_module(
+            "architecture.site_planning.ui"
+        )
+
+        render_site_planning = getattr(
+            ui_module,
+            "render_site_planning",
+        )
+
+    except Exception as exc:
+
+        st.error(
+            "The Site Planning UI could not be loaded."
+        )
+
+        with st.expander(
+            "Complete UI import traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    # --------------------------------------------------------
+    # Validate imported symbols
+    # --------------------------------------------------------
+
+    if not callable(
+        SitePlanningRepository
+    ):
+
+        st.error(
+            "SitePlanningRepository is not callable."
+        )
+
+        return
+
+    if not callable(
+        SitePlanningService
+    ):
+
+        st.error(
+            "SitePlanningService is not callable."
+        )
+
+        return
+
+    if not callable(
+        render_site_planning
+    ):
+
+        st.error(
+            "render_site_planning is not callable."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Construct repository
+    # --------------------------------------------------------
+
+    try:
+
+        repository = (
+            SitePlanningRepository()
+        )
+
+    except Exception as exc:
+
+        st.error(
+            "Site Planning repository could not be created."
+        )
+
+        with st.expander(
+            "Complete repository traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    # --------------------------------------------------------
+    # Construct service
+    # --------------------------------------------------------
+
+    try:
 
         service = SitePlanningService(
             repository
         )
+
+    except Exception as exc:
+
+        st.error(
+            "Site Planning service could not be created."
+        )
+
+        with st.expander(
+            "Complete service traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    # --------------------------------------------------------
+    # Render UI
+    # --------------------------------------------------------
+
+    try:
 
         render_site_planning(
             service
@@ -546,15 +803,11 @@ def render_site_planning_registered() -> None:
         )
 
         with st.expander(
-            "Complete renderer traceback",
+            "Complete Site Planning renderer traceback",
             expanded=True,
         ):
 
             st.exception(exc)
-
-    finally:
-
-        db.close()
 
 
 # ============================================================
@@ -563,33 +816,35 @@ def render_site_planning_registered() -> None:
 
 
 PROJECT_MODULES = [
+
     ModuleDefinition(
         label="Projects",
         route="projects",
         domain="Projects",
         description="Project lifecycle and project records.",
-        renderer_module="projects.projects.ui",
-        renderer_function="render_projects",
-        implemented=False,
     ),
+
     ModuleDefinition(
         label="Approvals",
         route="project_approvals",
         domain="Projects",
         description="Project approvals and authorization workflows.",
     ),
+
     ModuleDefinition(
         label="Revisions",
         route="project_revisions",
         domain="Projects",
         description="Project revisions and design history.",
     ),
+
     ModuleDefinition(
         label="Workflows",
         route="project_workflows",
         domain="Projects",
         description="Project workflow orchestration.",
     ),
+
     ModuleDefinition(
         label="Governance",
         route="project_governance",
@@ -605,6 +860,7 @@ PROJECT_MODULES = [
 
 
 ARCHITECTURE_MODULES = [
+
     ModuleDefinition(
         label="Zoning",
         route="architecture_zoning",
@@ -616,6 +872,7 @@ ARCHITECTURE_MODULES = [
         renderer_function="render_zoning",
         implemented=True,
     ),
+
     ModuleDefinition(
         label="Site Planning",
         route="architecture_site_planning",
@@ -625,6 +882,7 @@ ARCHITECTURE_MODULES = [
         ),
         implemented=True,
     ),
+
     ModuleDefinition(
         label="Floor Planning",
         route="architecture_floor_planning",
@@ -634,6 +892,7 @@ ARCHITECTURE_MODULES = [
         renderer_function="render_floor_planning",
         implemented=True,
     ),
+
     ModuleDefinition(
         label="Room Programming",
         route="architecture_room_programming",
@@ -645,6 +904,7 @@ ARCHITECTURE_MODULES = [
         renderer_function="render_room_programming",
         implemented=True,
     ),
+
     ModuleDefinition(
         label="Compliance",
         route="architecture_compliance",
@@ -656,6 +916,7 @@ ARCHITECTURE_MODULES = [
         renderer_function="render_compliance",
         implemented=True,
     ),
+
     ModuleDefinition(
         label="Generative Design",
         route="architecture_generative_design",
@@ -674,103 +935,103 @@ ARCHITECTURE_MODULES = [
 
 
 STRUCTURAL_MODULES = [
+
     ModuleDefinition(
         label="Eurocode EN 1990",
         route="structural_en1990",
         domain="Structural",
         description="Basis of structural design.",
     ),
+
     ModuleDefinition(
         label="Eurocode EN 1991",
         route="structural_en1991",
         domain="Structural",
         description="Actions on structures.",
     ),
+
     ModuleDefinition(
         label="Eurocode EN 1992",
         route="structural_en1992",
         domain="Structural",
         description="Design of concrete structures.",
     ),
+
     ModuleDefinition(
         label="Eurocode EN 1993",
         route="structural_en1993",
         domain="Structural",
         description="Design of steel structures.",
     ),
+
     ModuleDefinition(
         label="Eurocode EN 1995",
         route="structural_en1995",
         domain="Structural",
         description="Design of timber structures.",
     ),
+
     ModuleDefinition(
         label="Eurocode EN 1997",
         route="structural_en1997",
         domain="Structural",
         description="Geotechnical design.",
     ),
+
     ModuleDefinition(
         label="Eurocode EN 1998",
         route="structural_en1998",
         domain="Structural",
         description="Earthquake-resistant design.",
     ),
+
     ModuleDefinition(
         label="Beam Design",
         route="structural_beams",
         domain="Structural",
         description="Structural beam analysis and design.",
-        renderer_module="structural.beam_design.ui",
-        renderer_function="render_beam_design",
     ),
+
     ModuleDefinition(
         label="Column Design",
         route="structural_columns",
         domain="Structural",
         description="Structural column analysis and design.",
-        renderer_module="structural.column_design.ui",
-        renderer_function="render_column_design",
     ),
+
     ModuleDefinition(
         label="Slab Design",
         route="structural_slabs",
         domain="Structural",
         description="Structural slab analysis and design.",
-        renderer_module="structural.slab_design.ui",
-        renderer_function="render_slab_design",
     ),
+
     ModuleDefinition(
         label="Foundation Design",
         route="structural_foundations",
         domain="Structural",
         description="Foundation analysis and design.",
-        renderer_module="structural.foundation_design.ui",
-        renderer_function="render_foundation_design",
     ),
+
     ModuleDefinition(
         label="Retaining Walls",
         route="structural_retaining_walls",
         domain="Structural",
         description="Retaining wall analysis and design.",
-        renderer_module="structural.retaining_walls.ui",
-        renderer_function="render_retaining_walls",
     ),
+
     ModuleDefinition(
         label="Steel Connections",
         route="structural_steel_connections",
         domain="Structural",
         description="Steel connection design.",
-        renderer_module="structural.steel_connections.ui",
-        renderer_function="render_steel_connections",
     ),
+
     ModuleDefinition(
         label="Finite Element Analysis",
         route="structural_fea",
         domain="Structural",
         description="Finite element analysis workflows.",
-        renderer_module="structural.finite_element_analysis.ui",
-        renderer_function="render_finite_element_analysis",
     ),
 ]
 
@@ -781,61 +1042,56 @@ STRUCTURAL_MODULES = [
 
 
 BIM_MODULES = [
+
     ModuleDefinition(
         label="Buildings",
         route="bim_buildings",
         domain="BIM",
         description="BIM building information.",
-        renderer_module="bim.buildings.ui",
-        renderer_function="render_buildings",
     ),
+
     ModuleDefinition(
         label="Storeys",
         route="bim_storeys",
         domain="BIM",
         description="Building storeys and levels.",
-        renderer_module="bim.storeys.ui",
-        renderer_function="render_storeys",
     ),
+
     ModuleDefinition(
         label="Spaces",
         route="bim_spaces",
         domain="BIM",
         description="BIM spaces and spatial entities.",
-        renderer_module="bim.spaces.ui",
-        renderer_function="render_spaces",
     ),
+
     ModuleDefinition(
         label="Elements",
         route="bim_elements",
         domain="BIM",
         description="Building elements and components.",
-        renderer_module="bim.elements.ui",
-        renderer_function="render_elements",
     ),
+
     ModuleDefinition(
         label="IFC",
         route="bim_ifc",
         domain="BIM",
         description="Industry Foundation Classes workflows.",
-        renderer_module="bim.ifc.ui",
-        renderer_function="render_ifc",
     ),
+
     ModuleDefinition(
         label="COBie",
         route="bim_cobie",
         domain="BIM",
-        description="Construction Operations Building information exchange.",
-        renderer_module="bim.cobie.ui",
-        renderer_function="render_cobie",
+        description=(
+            "Construction Operations Building information exchange."
+        ),
     ),
+
     ModuleDefinition(
         label="BIM Digital Twin",
         route="bim_digital_twin",
         domain="BIM",
         description="BIM-connected digital twin.",
-        renderer_module="bim.digital_twin.ui",
-        renderer_function="render_digital_twin",
     ),
 ]
 
@@ -846,117 +1102,105 @@ BIM_MODULES = [
 
 
 MEP_MODULES = [
+
     ModuleDefinition(
         label="HVAC",
         route="mep_hvac",
         domain="MEP",
-        description="Heating, ventilation and air conditioning.",
-        renderer_module="mep.mechanical.hvac.ui",
-        renderer_function="render_hvac",
+        description=(
+            "Heating, ventilation and air conditioning."
+        ),
     ),
+
     ModuleDefinition(
         label="Ventilation",
         route="mep_ventilation",
         domain="MEP",
         description="Ventilation analysis and design.",
-        renderer_module="mep.mechanical.ventilation.ui",
-        renderer_function="render_ventilation",
     ),
+
     ModuleDefinition(
         label="Chilled Water",
         route="mep_chilled_water",
         domain="MEP",
         description="Chilled water system design.",
-        renderer_module="mep.mechanical.chilled_water.ui",
-        renderer_function="render_chilled_water",
     ),
+
     ModuleDefinition(
         label="Energy Simulation",
         route="mep_energy",
         domain="MEP",
         description="Building energy simulation.",
-        renderer_module="mep.mechanical.energy_simulation.ui",
-        renderer_function="render_energy_simulation",
     ),
+
     ModuleDefinition(
         label="Electrical Load Analysis",
         route="mep_load_analysis",
         domain="MEP",
         description="Electrical load calculations.",
-        renderer_module="mep.electrical.load_analysis.ui",
-        renderer_function="render_load_analysis",
     ),
+
     ModuleDefinition(
         label="Transformers",
         route="mep_transformers",
         domain="MEP",
         description="Transformer sizing and analysis.",
-        renderer_module="mep.electrical.transformers.ui",
-        renderer_function="render_transformers",
     ),
+
     ModuleDefinition(
         label="Generators",
         route="mep_generators",
         domain="MEP",
         description="Generator systems.",
-        renderer_module="mep.electrical.generators.ui",
-        renderer_function="render_generators",
     ),
+
     ModuleDefinition(
         label="Cable Sizing",
         route="mep_cable_sizing",
         domain="MEP",
         description="Electrical cable sizing.",
-        renderer_module="mep.electrical.cable_sizing.ui",
-        renderer_function="render_cable_sizing",
     ),
+
     ModuleDefinition(
         label="Solar PV",
         route="mep_solar_pv",
         domain="MEP",
         description="Solar photovoltaic system design.",
-        renderer_module="mep.electrical.solar_pv.ui",
-        renderer_function="render_solar_pv",
     ),
+
     ModuleDefinition(
         label="Water Supply",
         route="mep_water_supply",
         domain="MEP",
         description="Water supply system design.",
-        renderer_module="mep.plumbing.water_supply.ui",
-        renderer_function="render_water_supply",
     ),
+
     ModuleDefinition(
         label="Drainage",
         route="mep_drainage",
         domain="MEP",
         description="Drainage system design.",
-        renderer_module="mep.plumbing.drainage.ui",
-        renderer_function="render_drainage",
     ),
+
     ModuleDefinition(
         label="Stormwater",
         route="mep_stormwater",
         domain="MEP",
         description="Stormwater management.",
-        renderer_module="mep.plumbing.stormwater.ui",
-        renderer_function="render_stormwater",
     ),
+
     ModuleDefinition(
         label="Sewer Networks",
         route="mep_sewer",
         domain="MEP",
         description="Sewer network design.",
-        renderer_module="mep.plumbing.sewer_networks.ui",
-        renderer_function="render_sewer_networks",
     ),
+
     ModuleDefinition(
         label="Firefighting",
         route="mep_firefighting",
         domain="MEP",
         description="Firefighting systems.",
-        renderer_module="mep.plumbing.firefighting.ui",
-        renderer_function="render_firefighting",
     ),
 ]
 
@@ -967,61 +1211,54 @@ MEP_MODULES = [
 
 
 COSTING_MODULES = [
+
     ModuleDefinition(
         label="BOQ",
         route="costing_boq",
         domain="Costing",
         description="Bills of quantities.",
-        renderer_module="costing.boq.ui",
-        renderer_function="render_boq",
     ),
+
     ModuleDefinition(
         label="Quantity Takeoff",
         route="costing_quantity_takeoff",
         domain="Costing",
         description="Automated quantity takeoff.",
-        renderer_module="costing.quantity_takeoff.ui",
-        renderer_function="render_quantity_takeoff",
     ),
+
     ModuleDefinition(
         label="Procurement",
         route="costing_procurement",
         domain="Costing",
         description="Construction procurement costing.",
-        renderer_module="costing.procurement.ui",
-        renderer_function="render_procurement",
     ),
+
     ModuleDefinition(
         label="Forex",
         route="costing_forex",
         domain="Costing",
         description="Foreign exchange costing.",
-        renderer_module="costing.forex.ui",
-        renderer_function="render_forex",
     ),
+
     ModuleDefinition(
         label="Inflation",
         route="costing_inflation",
         domain="Costing",
         description="Construction cost inflation.",
-        renderer_module="costing.inflation.ui",
-        renderer_function="render_inflation",
     ),
+
     ModuleDefinition(
         label="Risk Analysis",
         route="costing_risk",
         domain="Costing",
         description="Cost and project risk analysis.",
-        renderer_module="costing.risk_analysis.ui",
-        renderer_function="render_risk_analysis",
     ),
+
     ModuleDefinition(
         label="Cashflow",
         route="costing_cashflow",
         domain="Costing",
         description="Project cashflow forecasting.",
-        renderer_module="costing.cashflow.ui",
-        renderer_function="render_cashflow",
     ),
 ]
 
@@ -1032,61 +1269,61 @@ COSTING_MODULES = [
 
 
 CONSTRUCTION_MODULES = [
+
     ModuleDefinition(
         label="Planning",
         route="construction_planning",
         domain="Construction",
-        renderer_module="construction.planning.ui",
-        renderer_function="render_planning",
+        description="Construction planning.",
     ),
+
     ModuleDefinition(
         label="Scheduling",
         route="construction_scheduling",
         domain="Construction",
-        renderer_module="construction.scheduling.ui",
-        renderer_function="render_scheduling",
+        description="Construction scheduling.",
     ),
+
     ModuleDefinition(
         label="RFIs",
         route="construction_rfis",
         domain="Construction",
-        renderer_module="construction.rfis.ui",
-        renderer_function="render_rfis",
+        description="Requests for information.",
     ),
+
     ModuleDefinition(
         label="Submittals",
         route="construction_submittals",
         domain="Construction",
-        renderer_module="construction.submittals.ui",
-        renderer_function="render_submittals",
+        description="Construction submittals.",
     ),
+
     ModuleDefinition(
         label="Variations",
         route="construction_variations",
         domain="Construction",
-        renderer_module="construction.variations.ui",
-        renderer_function="render_variations",
+        description="Contract and construction variations.",
     ),
+
     ModuleDefinition(
         label="Snagging",
         route="construction_snagging",
         domain="Construction",
-        renderer_module="construction.snagging.ui",
-        renderer_function="render_snagging",
+        description="Snagging and defect tracking.",
     ),
+
     ModuleDefinition(
         label="Progress Tracking",
         route="construction_progress",
         domain="Construction",
-        renderer_module="construction.progress_tracking.ui",
-        renderer_function="render_progress_tracking",
+        description="Construction progress tracking.",
     ),
+
     ModuleDefinition(
         label="Site Diaries",
         route="construction_site_diaries",
         domain="Construction",
-        renderer_module="construction.site_diaries.ui",
-        renderer_function="render_site_diaries",
+        description="Construction site diaries.",
     ),
 ]
 
@@ -1097,47 +1334,47 @@ CONSTRUCTION_MODULES = [
 
 
 DOCUMENT_MODULES = [
+
     ModuleDefinition(
         label="Drawing Management",
         route="documents_drawings",
         domain="Documents",
-        renderer_module="documents.drawing_management.ui",
-        renderer_function="render_drawing_management",
+        description="Drawing management.",
     ),
+
     ModuleDefinition(
         label="Specifications",
         route="documents_specifications",
         domain="Documents",
-        renderer_module="documents.specifications.ui",
-        renderer_function="render_specifications",
+        description="Technical specifications.",
     ),
+
     ModuleDefinition(
         label="Contracts",
         route="documents_contracts",
         domain="Documents",
-        renderer_module="documents.contracts.ui",
-        renderer_function="render_contracts",
+        description="Project contracts.",
     ),
+
     ModuleDefinition(
         label="Reports",
         route="documents_reports",
         domain="Documents",
-        renderer_module="documents.reports.ui",
-        renderer_function="render_reports",
+        description="Project reports.",
     ),
+
     ModuleDefinition(
         label="Version Control",
         route="documents_versions",
         domain="Documents",
-        renderer_module="documents.version_control.ui",
-        renderer_function="render_version_control",
+        description="Document version control.",
     ),
+
     ModuleDefinition(
         label="Archives",
         route="documents_archives",
         domain="Documents",
-        renderer_module="documents.archives.ui",
-        renderer_function="render_archives",
+        description="Project document archives.",
     ),
 ]
 
@@ -1148,61 +1385,61 @@ DOCUMENT_MODULES = [
 
 
 AI_MODULES = [
+
     ModuleDefinition(
         label="IMAGINE Architect",
         route="ai_architect",
         domain="AI",
-        renderer_module="ai.imagine_architect.ui",
-        renderer_function="render_imagine_architect",
+        description="AI-assisted architectural design.",
     ),
+
     ModuleDefinition(
         label="IMAGINE Engineer",
         route="ai_engineer",
         domain="AI",
-        renderer_module="ai.imagine_engineer.ui",
-        renderer_function="render_imagine_engineer",
+        description="AI-assisted engineering.",
     ),
+
     ModuleDefinition(
         label="IMAGINE MEP",
         route="ai_mep",
         domain="AI",
-        renderer_module="ai.imagine_mep.ui",
-        renderer_function="render_imagine_mep",
+        description="AI-assisted MEP engineering.",
     ),
+
     ModuleDefinition(
         label="IMAGINE QS",
         route="ai_qs",
         domain="AI",
-        renderer_module="ai.imagine_qs.ui",
-        renderer_function="render_imagine_qs",
+        description="AI-assisted quantity surveying.",
     ),
+
     ModuleDefinition(
         label="IMAGINE PM",
         route="ai_pm",
         domain="AI",
-        renderer_module="ai.imagine_pm.ui",
-        renderer_function="render_imagine_pm",
+        description="AI-assisted project management.",
     ),
+
     ModuleDefinition(
         label="Vector Store",
         route="ai_vector_store",
         domain="AI",
-        renderer_module="ai.vector_store.ui",
-        renderer_function="render_vector_store",
+        description="AI vector storage.",
     ),
+
     ModuleDefinition(
         label="RAG",
         route="ai_rag",
         domain="AI",
-        renderer_module="ai.rag.ui",
-        renderer_function="render_rag",
+        description="Retrieval augmented generation.",
     ),
+
     ModuleDefinition(
         label="Prompt Library",
         route="ai_prompt_library",
         domain="AI",
-        renderer_module="ai.prompt_library.ui",
-        renderer_function="render_prompt_library",
+        description="Reusable engineering prompts.",
     ),
 ]
 
@@ -1213,40 +1450,40 @@ AI_MODULES = [
 
 
 ANALYTICS_MODULES = [
+
     ModuleDefinition(
         label="Dashboards",
         route="analytics_dashboards",
         domain="Analytics",
-        renderer_module="analytics.dashboards.ui",
-        renderer_function="render_dashboards",
+        description="Analytics dashboards.",
     ),
+
     ModuleDefinition(
         label="KPIs",
         route="analytics_kpis",
         domain="Analytics",
-        renderer_module="analytics.kpis.ui",
-        renderer_function="render_kpis",
+        description="Engineering KPIs.",
     ),
+
     ModuleDefinition(
         label="Portfolio",
         route="analytics_portfolio",
         domain="Analytics",
-        renderer_module="analytics.portfolio.ui",
-        renderer_function="render_portfolio",
+        description="Project portfolio analytics.",
     ),
+
     ModuleDefinition(
         label="Forecasting",
         route="analytics_forecasting",
         domain="Analytics",
-        renderer_module="analytics.forecasting.ui",
-        renderer_function="render_forecasting",
+        description="Engineering and project forecasting.",
     ),
+
     ModuleDefinition(
         label="Reporting",
         route="analytics_reporting",
         domain="Analytics",
-        renderer_module="analytics.reporting.ui",
-        renderer_function="render_reporting",
+        description="Analytics reporting.",
     ),
 ]
 
@@ -1257,54 +1494,54 @@ ANALYTICS_MODULES = [
 
 
 REGIONAL_MODULES = [
+
     ModuleDefinition(
         label="Uganda",
         route="regional_uganda",
         domain="Regional",
-        renderer_module="regional.uganda.ui",
-        renderer_function="render_uganda",
+        description="Uganda engineering and regulatory context.",
     ),
+
     ModuleDefinition(
         label="Kenya",
         route="regional_kenya",
         domain="Regional",
-        renderer_module="regional.kenya.ui",
-        renderer_function="render_kenya",
+        description="Kenya engineering and regulatory context.",
     ),
+
     ModuleDefinition(
         label="Tanzania",
         route="regional_tanzania",
         domain="Regional",
-        renderer_module="regional.tanzania.ui",
-        renderer_function="render_tanzania",
+        description="Tanzania engineering and regulatory context.",
     ),
+
     ModuleDefinition(
         label="Rwanda",
         route="regional_rwanda",
         domain="Regional",
-        renderer_module="regional.rwanda.ui",
-        renderer_function="render_rwanda",
+        description="Rwanda engineering and regulatory context.",
     ),
+
     ModuleDefinition(
         label="South Sudan",
         route="regional_south_sudan",
         domain="Regional",
-        renderer_module="regional.south_sudan.ui",
-        renderer_function="render_south_sudan",
+        description="South Sudan engineering and regulatory context.",
     ),
+
     ModuleDefinition(
         label="Codes",
         route="regional_codes",
         domain="Regional",
-        renderer_module="regional.codes.ui",
-        renderer_function="render_codes",
+        description="Regional engineering codes.",
     ),
+
     ModuleDefinition(
         label="Zoning Laws",
         route="regional_zoning_laws",
         domain="Regional",
-        renderer_module="regional.zoning_laws.ui",
-        renderer_function="render_zoning_laws",
+        description="Regional zoning legislation.",
     ),
 ]
 
@@ -1315,68 +1552,68 @@ REGIONAL_MODULES = [
 
 
 INTEGRATION_MODULES = [
+
     ModuleDefinition(
         label="Microsoft",
         route="integration_microsoft",
         domain="Integrations",
-        renderer_module="integrations.microsoft.ui",
-        renderer_function="render_microsoft",
+        description="Microsoft integrations.",
     ),
+
     ModuleDefinition(
         label="AutoCAD",
         route="integration_autocad",
         domain="Integrations",
-        renderer_module="integrations.autocad.ui",
-        renderer_function="render_autocad",
+        description="AutoCAD integration.",
     ),
+
     ModuleDefinition(
         label="Revit",
         route="integration_revit",
         domain="Integrations",
-        renderer_module="integrations.revit.ui",
-        renderer_function="render_revit",
+        description="Autodesk Revit integration.",
     ),
+
     ModuleDefinition(
         label="Archicad",
         route="integration_archicad",
         domain="Integrations",
-        renderer_module="integrations.archicad.ui",
-        renderer_function="render_archicad",
+        description="Graphisoft Archicad integration.",
     ),
+
     ModuleDefinition(
         label="Tekla",
         route="integration_tekla",
         domain="Integrations",
-        renderer_module="integrations.tekla.ui",
-        renderer_function="render_tekla",
+        description="Tekla integration.",
     ),
+
     ModuleDefinition(
         label="IfcOpenShell",
         route="integration_ifcopenshell",
         domain="Integrations",
-        renderer_module="integrations.ifcopenshell.ui",
-        renderer_function="render_ifcopenshell",
+        description="IFC processing integration.",
     ),
+
     ModuleDefinition(
         label="ArcGIS",
         route="integration_arcgis",
         domain="Integrations",
-        renderer_module="integrations.arcgis.ui",
-        renderer_function="render_arcgis",
+        description="GIS integration.",
     ),
+
     ModuleDefinition(
         label="Azure",
         route="integration_azure",
         domain="Integrations",
-        renderer_module="integrations.azure.ui",
-        renderer_function="render_azure",
+        description="Microsoft Azure integration.",
     ),
+
     ModuleDefinition(
         label="Mapbox",
         route="integration_mapbox",
         domain="Integrations",
-        renderer_module="integrations.mapbox.ui",
-        renderer_function="render_mapbox",
+        description="Mapbox mapping integration.",
     ),
 ]
 
@@ -1387,47 +1624,47 @@ INTEGRATION_MODULES = [
 
 
 DIGITAL_TWIN_MODULES = [
+
     ModuleDefinition(
         label="Assets",
         route="digital_twin_assets",
         domain="Digital Twin",
-        renderer_module="digital_twin.assets.ui",
-        renderer_function="render_assets",
+        description="Digital twin assets.",
     ),
+
     ModuleDefinition(
         label="Sensors",
         route="digital_twin_sensors",
         domain="Digital Twin",
-        renderer_module="digital_twin.sensors.ui",
-        renderer_function="render_sensors",
+        description="Digital twin sensors.",
     ),
+
     ModuleDefinition(
         label="Telemetry",
         route="digital_twin_telemetry",
         domain="Digital Twin",
-        renderer_module="digital_twin.telemetry.ui",
-        renderer_function="render_telemetry",
+        description="Digital twin telemetry.",
     ),
+
     ModuleDefinition(
         label="Energy",
         route="digital_twin_energy",
         domain="Digital Twin",
-        renderer_module="digital_twin.energy.ui",
-        renderer_function="render_energy",
+        description="Digital twin energy monitoring.",
     ),
+
     ModuleDefinition(
         label="Maintenance",
         route="digital_twin_maintenance",
         domain="Digital Twin",
-        renderer_module="digital_twin.maintenance.ui",
-        renderer_function="render_maintenance",
+        description="Digital twin maintenance.",
     ),
+
     ModuleDefinition(
         label="Predictive AI",
         route="digital_twin_predictive_ai",
         domain="Digital Twin",
-        renderer_module="digital_twin.predictive_ai.ui",
-        renderer_function="render_predictive_ai",
+        description="Predictive digital twin analytics.",
     ),
 ]
 
@@ -1437,7 +1674,10 @@ DIGITAL_TWIN_MODULES = [
 # ============================================================
 
 
-ALL_MODULES: list[ModuleDefinition] = [
+ALL_MODULES: list[
+    ModuleDefinition
+] = [
+
     *PROJECT_MODULES,
     *ARCHITECTURE_MODULES,
     *STRUCTURAL_MODULES,
@@ -1463,6 +1703,7 @@ SPECIAL_RENDERERS: dict[
     str,
     RenderFunction,
 ] = {
+
     "architecture_site_planning":
         render_site_planning_registered,
 
@@ -1472,7 +1713,7 @@ SPECIAL_RENDERERS: dict[
 
 
 # ============================================================
-# MODULE ROUTE REGISTRY
+# CENTRAL ROUTE REGISTRY
 # ============================================================
 
 
@@ -1480,6 +1721,7 @@ MODULES_BY_ROUTE: dict[
     str,
     ModuleDefinition,
 ] = {
+
     "overview": ModuleDefinition(
         label="Overview",
         route="overview",
@@ -1510,7 +1752,7 @@ MODULES_BY_ROUTE: dict[
 
 def validate_module_registry() -> None:
     """
-    Validate the application route registry.
+    Validate the centralized application registry.
     """
 
     routes = list(
@@ -1518,6 +1760,7 @@ def validate_module_registry() -> None:
     )
 
     if len(routes) != len(set(routes)):
+
         raise RuntimeError(
             "Duplicate module routes detected."
         )
@@ -1526,8 +1769,12 @@ def validate_module_registry() -> None:
         "overview",
         "architecture_zoning",
         "architecture_site_planning",
+        "architecture_floor_planning",
+        "architecture_room_programming",
+        "architecture_compliance",
         "architecture_generative_design",
         "structural_beams",
+        "structural_columns",
         "bim_buildings",
         "mep_hvac",
         "costing_boq",
@@ -1548,6 +1795,7 @@ def validate_module_registry() -> None:
     ]
 
     if missing:
+
         raise RuntimeError(
             "Required module routes are missing: "
             + ", ".join(missing)
@@ -1564,7 +1812,7 @@ validate_module_registry()
 
 def render_system_health() -> None:
     """
-    Render application health and dependency diagnostics.
+    Render application and dependency health diagnostics.
     """
 
     st.title(
@@ -1575,18 +1823,25 @@ def render_system_health() -> None:
         "IMAGINE application and module diagnostics"
     )
 
+    # --------------------------------------------------------
+    # Startup health check
+    # --------------------------------------------------------
+
     try:
+
         results = run_startup_health_check()
 
     except Exception as exc:
+
         st.error(
-            "The system health check could not be executed."
+            "The system health check itself failed."
         )
 
         with st.expander(
             "Complete health-check traceback",
             expanded=True,
         ):
+
             st.exception(exc)
 
         return
@@ -1599,23 +1854,49 @@ def render_system_health() -> None:
         "health_last_checked_at"
     ] = checked_at
 
-    all_modules_healthy = all(
-        result.status == "ok"
-        for result in results
+    all_modules_healthy = (
+        bool(results)
+        and all(
+            result.status == "ok"
+            for result in results
+        )
     )
 
     if all_modules_healthy:
+
         st.session_state[
             "health_last_successful_at"
         ] = checked_at
 
-    summary = health_summary(
-        results
-    )
+    try:
+
+        summary = health_summary(
+            results
+        )
+
+    except Exception as exc:
+
+        st.error(
+            "The health summary could not be generated."
+        )
+
+        with st.expander(
+            "Complete summary traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    # --------------------------------------------------------
+    # Timestamps
+    # --------------------------------------------------------
 
     col1, col2 = st.columns(2)
 
     with col1:
+
         st.markdown(
             "**Latest Health Check**"
         )
@@ -1625,17 +1906,21 @@ def render_system_health() -> None:
         )
 
         if last_checked:
+
             st.code(
                 last_checked.strftime(
                     "%Y-%m-%d %H:%M:%S UTC"
                 )
             )
+
         else:
+
             st.code(
                 "No health check recorded"
             )
 
     with col2:
+
         st.markdown(
             "**Last Successful Check**"
         )
@@ -1645,48 +1930,65 @@ def render_system_health() -> None:
         )
 
         if last_successful:
+
             st.code(
                 last_successful.strftime(
                     "%Y-%m-%d %H:%M:%S UTC"
                 )
             )
+
         else:
+
             st.code(
                 "No successful check recorded"
             )
 
     st.divider()
 
+    # --------------------------------------------------------
+    # Metrics
+    # --------------------------------------------------------
+
     metric1, metric2, metric3 = st.columns(3)
 
     with metric1:
+
         st.metric(
             "Modules Checked",
             summary["total"],
         )
 
     with metric2:
+
         st.metric(
             "Healthy",
             summary["healthy"],
         )
 
     with metric3:
+
         st.metric(
             "Failed",
             summary["failed"],
         )
 
     if summary["status"] == "healthy":
+
         st.success(
             "All checked modules imported successfully."
         )
+
     else:
+
         st.warning(
             "IMAGINE is running in degraded mode."
         )
 
     st.divider()
+
+    # --------------------------------------------------------
+    # Module results
+    # --------------------------------------------------------
 
     st.subheader(
         "Module Results"
@@ -1695,47 +1997,59 @@ def render_system_health() -> None:
     for result in results:
 
         if result.status == "ok":
+
             st.success(
                 f"{result.name}"
             )
 
             if result.path:
+
                 st.caption(
                     f"Loaded from: {result.path}"
                 )
 
         else:
+
             st.error(
                 f"{result.name}"
             )
 
             if result.error:
+
                 st.code(
                     result.error,
                     language="text",
                 )
 
             if result.traceback_text:
+
                 with st.expander(
                     "Complete traceback",
-                    expanded=True,
+                    expanded=False,
                 ):
+
                     st.code(
                         result.traceback_text,
                         language="text",
                     )
 
             if result.path:
+
                 st.caption(
                     f"Loaded from: {result.path}"
                 )
 
     st.divider()
 
+    # --------------------------------------------------------
+    # Manual refresh
+    # --------------------------------------------------------
+
     if st.button(
         "Run Health Check Again",
         use_container_width=True,
     ):
+
         st.rerun()
 
 
@@ -1748,15 +2062,22 @@ def render_route(
     route: str,
 ) -> None:
     """
-    Resolve and render an application route.
+    Resolve and render an IMAGINE route.
+
+    No domain renderer is allowed to terminate the application
+    shell.
     """
 
     if route == "overview":
+
         render_overview()
+
         return
 
     if route == "system_health":
+
         render_system_health()
+
         return
 
     module = MODULES_BY_ROUTE.get(
@@ -1764,9 +2085,11 @@ def render_route(
     )
 
     if module is None:
+
         st.error(
             f"Unknown IMAGINE route: {route}"
         )
+
         return
 
     special_renderer = SPECIAL_RENDERERS.get(
@@ -1774,7 +2097,24 @@ def render_route(
     )
 
     if special_renderer is not None:
-        special_renderer()
+
+        try:
+
+            special_renderer()
+
+        except Exception as exc:
+
+            st.error(
+                f"{module.label} could not be rendered."
+            )
+
+            with st.expander(
+                "Complete renderer traceback",
+                expanded=True,
+            ):
+
+                st.exception(exc)
+
         return
 
     render_registered_module(
@@ -1783,74 +2123,50 @@ def render_route(
 
 
 # ============================================================
-# NAVIGATION HELPER
-# ============================================================
-
-
-def navigate_to(
-    route: str,
-) -> None:
-    """
-    Store the active route.
-    """
-
-    if route not in MODULES_BY_ROUTE:
-        return
-
-    st.session_state.active_route = route
-
-
-# ============================================================
-# SIDEBAR DOMAIN NAVIGATION
-# ============================================================
-
-
-def render_navigation_group(
-    title: str,
-    modules: list[ModuleDefinition],
-    expanded: bool = False,
-) -> None:
-    """
-    Render one interactive navigation group.
-    """
-
-    with st.expander(
-        title,
-        expanded=expanded,
-    ):
-        for module in modules:
-
-            is_active = (
-                st.session_state.active_route
-                == module.route
-            )
-
-            if st.button(
-                module.label,
-                key=f"nav_{module.route}",
-                use_container_width=True,
-                type=(
-                    "primary"
-                    if is_active
-                    else "secondary"
-                ),
-            ):
-                navigate_to(
-                    module.route
-                )
-
-                st.rerun()
-
-
-# ============================================================
 # SESSION STATE
 # ============================================================
 
 
 if "active_route" not in st.session_state:
+
     st.session_state.active_route = (
         "overview"
     )
+
+
+# ============================================================
+# NAVIGATION BUTTON
+# ============================================================
+
+
+def navigation_button(
+    module: ModuleDefinition,
+) -> None:
+    """
+    Render one interactive navigation button.
+    """
+
+    is_active = (
+        st.session_state.active_route
+        == module.route
+    )
+
+    if st.button(
+        module.label,
+        key=f"nav_{module.route}",
+        use_container_width=True,
+        type=(
+            "primary"
+            if is_active
+            else "secondary"
+        ),
+    ):
+
+        st.session_state.active_route = (
+            module.route
+        )
+
+        st.rerun()
 
 
 # ============================================================
@@ -1874,127 +2190,214 @@ with st.sidebar:
         "NAVIGATION"
     )
 
-    overview_active = (
-        st.session_state.active_route
-        == "overview"
+    # --------------------------------------------------------
+    # Overview
+    # --------------------------------------------------------
+
+    navigation_button(
+        MODULES_BY_ROUTE["overview"]
     )
 
-    if st.button(
-        "Overview",
-        key="nav_overview",
-        use_container_width=True,
-        type=(
-            "primary"
-            if overview_active
-            else "secondary"
-        ),
-    ):
-        navigate_to(
-            "overview"
-        )
+    # --------------------------------------------------------
+    # Projects
+    # --------------------------------------------------------
 
-        st.rerun()
-
-    render_navigation_group(
+    with st.expander(
         "PROJECTS",
-        PROJECT_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in PROJECT_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Architecture
+    # --------------------------------------------------------
+
+    with st.expander(
         "ARCHITECTURE",
-        ARCHITECTURE_MODULES,
         expanded=True,
-    )
+    ):
 
-    render_navigation_group(
+        for module in ARCHITECTURE_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Structural
+    # --------------------------------------------------------
+
+    with st.expander(
         "STRUCTURAL",
-        STRUCTURAL_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in STRUCTURAL_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # BIM
+    # --------------------------------------------------------
+
+    with st.expander(
         "BIM",
-        BIM_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in BIM_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # MEP
+    # --------------------------------------------------------
+
+    with st.expander(
         "MEP",
-        MEP_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in MEP_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Costing
+    # --------------------------------------------------------
+
+    with st.expander(
         "COSTING",
-        COSTING_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in COSTING_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Construction
+    # --------------------------------------------------------
+
+    with st.expander(
         "CONSTRUCTION",
-        CONSTRUCTION_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in CONSTRUCTION_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Documents
+    # --------------------------------------------------------
+
+    with st.expander(
         "DOCUMENTS",
-        DOCUMENT_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in DOCUMENT_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # AI
+    # --------------------------------------------------------
+
+    with st.expander(
         "AI",
-        AI_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in AI_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Analytics
+    # --------------------------------------------------------
+
+    with st.expander(
         "ANALYTICS",
-        ANALYTICS_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in ANALYTICS_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Regional
+    # --------------------------------------------------------
+
+    with st.expander(
         "REGIONAL",
-        REGIONAL_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in REGIONAL_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Integrations
+    # --------------------------------------------------------
+
+    with st.expander(
         "INTEGRATIONS",
-        INTEGRATION_MODULES,
         expanded=False,
-    )
+    ):
 
-    render_navigation_group(
+        for module in INTEGRATION_MODULES:
+
+            navigation_button(
+                module
+            )
+
+    # --------------------------------------------------------
+    # Digital Twin
+    # --------------------------------------------------------
+
+    with st.expander(
         "DIGITAL TWIN",
-        DIGITAL_TWIN_MODULES,
         expanded=False,
-    )
+    ):
+
+        for module in DIGITAL_TWIN_MODULES:
+
+            navigation_button(
+                module
+            )
 
     st.divider()
 
-    system_health_active = (
-        st.session_state.active_route
-        == "system_health"
+    navigation_button(
+        MODULES_BY_ROUTE["system_health"]
     )
-
-    if st.button(
-        "System Health",
-        key="nav_system_health",
-        use_container_width=True,
-        type=(
-            "primary"
-            if system_health_active
-            else "secondary"
-        ),
-    ):
-        navigate_to(
-            "system_health"
-        )
-
-        st.rerun()
 
     st.divider()
 
@@ -2014,6 +2417,7 @@ active_route = st.session_state.get(
 )
 
 if active_route not in MODULES_BY_ROUTE:
+
     active_route = "overview"
 
     st.session_state.active_route = (
@@ -2022,7 +2426,7 @@ if active_route not in MODULES_BY_ROUTE:
 
 
 # ============================================================
-# ACTIVE MODULE HEADER
+# ACTIVE MODULE INFORMATION
 # ============================================================
 
 
@@ -2036,13 +2440,14 @@ if active_module is not None:
         "overview",
         "system_health",
     ):
+
         st.caption(
             f"IMAGINE | {active_module.domain}"
         )
 
 
 # ============================================================
-# RENDER ACTIVE MODULE
+# RENDER ACTIVE ROUTE
 # ============================================================
 
 
