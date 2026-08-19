@@ -1,12 +1,19 @@
 # IMAGINE/database/models/__init__.py
-#
-# Shared SQLAlchemy Base and model imports.
-#
-# This module is also used by Alembic so that all models are
-# registered with the declarative metadata collection.
 
-from sqlalchemy.ext.declarative import declarative_base
+"""
+Shared SQLAlchemy model registry.
 
+All models imported here are registered against the same
+Declarative Base so that application code and Alembic can
+discover the complete model metadata.
+"""
+
+from sqlalchemy.orm import declarative_base
+
+
+# ------------------------------------------------------------------
+# Shared declarative Base
+# ------------------------------------------------------------------
 
 Base = declarative_base()
 
