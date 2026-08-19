@@ -344,3 +344,16 @@ IMAGINE/
             ├── __init__.py
             ├── test_schemas.py
             └── test_service.py
+
+
+architecture/room_programming/
+├── __init__.py
+├── models.py
+├── schemas.py
+├── repository.py
+├── service.py
+├── routes.py
+├── seed.py
+├── ui.py
+└── tests/
+    └── test_room_adjacencies.py
