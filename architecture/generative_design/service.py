@@ -5,21 +5,15 @@ Generative Design Service
 Application service for constraint-driven architectural
 generative design.
 
-Responsibilities:
-- normalize and validate constraints
-- stop invalid generation deterministically
-- invoke the generator with normalized constraints
-- score generated candidates
-- persist the run and candidates within one transaction
-- update candidate_count
-- mark successful runs completed
-- mark failed runs failed
-- preserve rollback semantics
+The service owns the application transaction boundary.
+
+Constraint validation happens before generation and before
+any database write.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -29,7 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .constraints import (
     normalize_and_validate_constraints,
 )
-from .generator import generate_candidates
+from .generator import (
+    DesignCandidate,
+    generate_candidates,
+)
 from .repository import (
     GenerativeDesignRepository,
 )
@@ -45,9 +42,6 @@ from .schemas import (
 class GenerativeDesignValidationError(ValueError):
     """
     Raised when generative-design constraints are invalid.
-
-    The error message is deterministic because it is produced by
-    normalize_and_validate_constraints().
     """
 
     def __init__(
@@ -69,27 +63,27 @@ class GenerativeDesignGenerationError(
     RuntimeError
 ):
     """
-    Raised when candidate generation fails.
+    Raised when candidate generation or scoring fails.
     """
 
 
 class GenerativeDesignService:
     """
     Application service for generative architectural design.
+
+    Generation and scoring occur before database persistence.
+
+    Once persistence begins, this service owns the single transaction
+    and performs exactly one commit on success.
     """
 
     def __init__(
         self,
         session: AsyncSession,
         repository: GenerativeDesignRepository | None = None,
-        generator: Callable[
-            [DesignConstraints],
-            Sequence[Any],
-        ]
-        | None = None,
         scorer: Callable[
-            [Any, DesignConstraints],
-            Any,
+            [DesignCandidate, DesignConstraints],
+            DesignCandidate,
         ]
         | None = None,
     ) -> None:
@@ -100,11 +94,6 @@ class GenerativeDesignService:
             or GenerativeDesignRepository(
                 session
             )
-        )
-
-        self.generator = (
-            generator
-            or generate_candidates
         )
 
         self.scorer = scorer
@@ -118,30 +107,30 @@ class GenerativeDesignService:
         request: GenerativeDesignRunCreate,
     ) -> GenerativeDesignRunResponse:
         """
-        Generate, score, and persist a complete design run.
+        Generate and persist a complete generative-design run.
 
         Processing order:
 
-            1. Normalize constraints.
-            2. Validate constraints.
-            3. Stop immediately if invalid.
-            4. Generate candidates.
-            5. Score candidates.
-            6. Begin one persistence transaction.
-            7. Create run.
-            8. Persist all candidates.
-            9. Update candidate_count.
-            10. Mark run completed.
-            11. Commit once.
+        1. Normalize constraints.
+        2. Validate constraints.
+        3. Stop immediately if invalid.
+        4. Resolve project UUID consistency.
+        5. Generate candidates using the actual generator contract.
+        6. Score candidates if a scorer has been supplied.
+        7. Persist the run.
+        8. Persist all candidates.
+        9. Update candidate_count.
+        10. Mark the run completed.
+        11. Commit exactly once.
 
-        Any persistence/generation/scoring failure rolls the database
-        transaction back.
+        Any persistence failure causes a rollback.
 
-        Invalid constraints never create a database run.
+        Generation/scoring failures occur before persistence, so no
+        database rollback is required for those failures.
         """
 
         # -------------------------------------------------------------
-        # 1. Normalize and validate BEFORE database transaction
+        # 1. Normalize and validate constraints.
         # -------------------------------------------------------------
 
         normalized, validation = (
@@ -156,8 +145,7 @@ class GenerativeDesignService:
             )
 
         # -------------------------------------------------------------
-        # 2. Keep request.project_id and constraint.project_id
-        #    consistent.
+        # 2. Resolve project ID.
         # -------------------------------------------------------------
 
         normalized = self._normalize_project_id(
@@ -166,57 +154,50 @@ class GenerativeDesignService:
         )
 
         # -------------------------------------------------------------
-        # 3. Generate candidates from normalized constraints.
+        # 3. Generate candidates.
+        #
+        # IMPORTANT:
+        # generator.py expects:
+        #
+        # generate_candidates(
+        #     constraints,
+        #     count,
+        # )
+        #
+        # It returns list[DesignCandidate].
         # -------------------------------------------------------------
 
         try:
-            generated_candidates = self.generator(
-                normalized
+            candidates = generate_candidates(
+                normalized,
+                count=request.candidate_count,
             )
         except Exception as exc:
             raise GenerativeDesignGenerationError(
                 f"Generative design generation failed: {exc}"
             ) from exc
 
-        candidates = list(
-            generated_candidates
-        )
-
         # -------------------------------------------------------------
-        # 4. Respect requested candidate count.
-        # -------------------------------------------------------------
-
-        candidates = candidates[
-            : request.candidate_count
-        ]
-
-        # -------------------------------------------------------------
-        # 5. Score candidates before persistence.
-        # -------------------------------------------------------------
-
-        scored_candidates = []
-
-        for candidate in candidates:
-
-            try:
-                scored = self._score_candidate(
-                    candidate,
-                    normalized,
-                )
-
-            except Exception as exc:
-                raise GenerativeDesignGenerationError(
-                    f"Generative design scoring failed: {exc}"
-                ) from exc
-
-            scored_candidates.append(
-                scored
-            )
-
-        # -------------------------------------------------------------
-        # 6. Single persistence transaction.
+        # 4. Score candidates.
         #
-        # Do not commit inside repository methods.
+        # generator.py currently initializes score=0.0 and rank=None.
+        # The optional scorer can enrich those fields.
+        # -------------------------------------------------------------
+
+        try:
+            candidates = self._score_candidates(
+                candidates,
+                normalized,
+            )
+        except Exception as exc:
+            raise GenerativeDesignGenerationError(
+                f"Generative design scoring failed: {exc}"
+            ) from exc
+
+        # -------------------------------------------------------------
+        # 5. Persistence transaction.
+        #
+        # Repository methods remain transaction-neutral.
         # -------------------------------------------------------------
 
         try:
@@ -231,11 +212,11 @@ class GenerativeDesignService:
             )
 
             # ---------------------------------------------------------
-            # 7. Persist every candidate.
+            # 6. Persist every candidate.
             # ---------------------------------------------------------
 
             for index, candidate in enumerate(
-                scored_candidates,
+                candidates,
                 start=1,
             ):
                 candidate_data = (
@@ -244,6 +225,8 @@ class GenerativeDesignService:
                     )
                 )
 
+                # The generator deliberately leaves rank unset.
+                # The service establishes deterministic initial ranking.
                 if candidate_data.get(
                     "rank"
                 ) is None:
@@ -255,18 +238,18 @@ class GenerativeDesignService:
                 )
 
             # ---------------------------------------------------------
-            # 8. Update candidate count.
+            # 7. Update candidate count.
             # ---------------------------------------------------------
 
             run = await self.repository.update_run(
                 run.id,
                 candidate_count=len(
-                    scored_candidates
+                    candidates
                 ),
             )
 
             # ---------------------------------------------------------
-            # 9. Mark completed.
+            # 8. Mark run completed.
             # ---------------------------------------------------------
 
             run = await self.repository.update_run(
@@ -279,22 +262,17 @@ class GenerativeDesignService:
             )
 
             # ---------------------------------------------------------
-            # 10. ONE COMMIT.
+            # 9. SINGLE COMMIT.
             # ---------------------------------------------------------
 
             await self.session.commit()
 
         except Exception:
-            # ---------------------------------------------------------
-            # Any database failure rolls back the complete operation.
-            # ---------------------------------------------------------
-
             await self.session.rollback()
-
             raise
 
         # -------------------------------------------------------------
-        # 11. Return persisted run.
+        # 10. Reload committed run.
         # -------------------------------------------------------------
 
         return await self._build_response(
@@ -302,7 +280,7 @@ class GenerativeDesignService:
         )
 
     # =================================================================
-    # PROJECT ID NORMALIZATION
+    # PROJECT ID
     # =================================================================
 
     @staticmethod
@@ -311,18 +289,15 @@ class GenerativeDesignService:
         constraints: DesignConstraints,
     ) -> DesignConstraints:
         """
-        Ensure project_id is represented consistently.
-
-        If the request contains a project ID and the constraints do
-        not, the request ID is copied into the normalized constraints.
-
-        If both exist but differ, generation is rejected.
+        Ensure the request and normalized constraints contain the same
+        project UUID.
         """
 
         constraint_project_id = (
             constraints.project_id
         )
 
+        # Both supplied and different.
         if (
             request_project_id is not None
             and constraint_project_id is not None
@@ -340,6 +315,8 @@ class GenerativeDesignService:
                 )
             )
 
+        # Request supplies the project ID but the nested constraints
+        # do not. Copy it into the normalized constraints.
         if (
             request_project_id is not None
             and constraint_project_id is None
@@ -356,101 +333,59 @@ class GenerativeDesignService:
     # SCORING
     # =================================================================
 
-    def _score_candidate(
+    def _score_candidates(
         self,
-        candidate: Any,
+        candidates: list[DesignCandidate],
         constraints: DesignConstraints,
-    ) -> Any:
+    ) -> list[DesignCandidate]:
         """
-        Score one generated candidate.
+        Score generated candidates.
 
-        If no external scorer is supplied, the candidate is returned
-        unchanged. This keeps the service compatible with the current
-        generator while allowing scoring.py to be injected cleanly.
+        The current generator does not perform scoring, so the scorer
+        is optional.
+
+        If no scorer is supplied, generated candidates pass through
+        unchanged.
         """
 
         if self.scorer is None:
-            return candidate
+            return candidates
 
-        return self.scorer(
-            candidate,
-            constraints,
-        )
+        scored: list[DesignCandidate] = []
+
+        for candidate in candidates:
+            result = self.scorer(
+                candidate,
+                constraints,
+            )
+
+            scored.append(
+                result
+            )
+
+        return scored
 
     # =================================================================
-    # CANDIDATE NORMALIZATION
+    # CANDIDATE SERIALIZATION
     # =================================================================
 
     @staticmethod
     def _candidate_to_dict(
-        candidate: Any,
+        candidate: DesignCandidate,
     ) -> dict[str, Any]:
         """
-        Convert a generated/scored candidate into repository fields.
+        Convert the actual generator DesignCandidate dataclass into
+        fields accepted by DesignCandidateRecord.
         """
 
-        if isinstance(
-            candidate,
-            DesignCandidateSchema,
-        ):
-            data = candidate.model_dump(
-                mode="json"
-            )
-
-        elif hasattr(
-            candidate,
-            "model_dump",
-        ):
-            data = candidate.model_dump(
-                mode="json"
-            )
-
-        elif isinstance(
-            candidate,
-            dict,
-        ):
-            data = dict(candidate)
-
-        else:
-            data = {
-                key: getattr(
-                    candidate,
-                    key,
-                )
-                for key in (
-                    "name",
-                    "status",
-                    "rank",
-                    "score",
-                    "geometry",
-                    "metrics",
-                    "evaluation",
-                )
-                if hasattr(
-                    candidate,
-                    key,
-                )
-            }
-
-        # -------------------------------------------------------------
-        # Repository.create_candidate() should receive only fields
-        # belonging to DesignCandidateRecord.
-        # -------------------------------------------------------------
-
-        allowed_fields = {
-            "name",
-            "status",
-            "rank",
-            "score",
-            "geometry",
-            "metrics",
-            "evaluation",
-        }
-
         return {
-            key: value
-            for key, value in data.items()
-            if key in allowed_fields
+            "name": candidate.name,
+            "status": candidate.status,
+            "rank": candidate.rank,
+            "score": candidate.score,
+            "geometry": candidate.geometry,
+            "metrics": candidate.metrics,
+            "evaluation": candidate.evaluation,
         }
 
     # =================================================================
@@ -462,7 +397,7 @@ class GenerativeDesignService:
         run_id: UUID,
     ) -> GenerativeDesignRunResponse:
         """
-        Load the completed run and construct its response schema.
+        Reload a persisted run and convert it to the response schema.
         """
 
         run = await self.repository.get_run(
