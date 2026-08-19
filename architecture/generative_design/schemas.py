@@ -24,17 +24,14 @@ class SiteConstraints(BaseModel):
         default=0.0,
         ge=0,
     )
-
     setback_rear: float = Field(
         default=0.0,
         ge=0,
     )
-
     setback_left: float = Field(
         default=0.0,
         ge=0,
     )
-
     setback_right: float = Field(
         default=0.0,
         ge=0,
@@ -118,7 +115,9 @@ class DesignConstraints(BaseModel):
     project_id: UUID | None = None
 
     site: SiteConstraints
+
     zoning: ZoningConstraints
+
     program: ProgramConstraints
 
     compliance: ComplianceConstraints = Field(
