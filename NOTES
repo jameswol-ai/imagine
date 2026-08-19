@@ -383,3 +383,26 @@ architecture/compliance/
     ├── test_repository.py
     ├── test_service.py
     └── test_ui.py
+
+
+architecture/generative_design/
+├── __init__.py
+├── models.py
+├── schemas.py
+├── repository.py
+├── constraints.py
+├── generator.py
+├── scoring.py
+├── service.py
+├── routes.py
+├── seed.py
+├── ui.py
+└── tests/
+    ├── __init__.py
+    ├── test_models.py
+    ├── test_constraints.py
+    ├── test_generator.py
+    ├── test_scoring.py
+    ├── test_repository.py
+    ├── test_service.py
+    └── test_ui.py
