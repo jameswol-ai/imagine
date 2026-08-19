@@ -1,52 +1,50 @@
 """
-IMAGINE shared database model base classes.
+Shared database model base.
 """
 
 from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import Column, DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
 
 from database.connection import Base
 
 
 class BaseModel(Base):
     """
-    Shared model fields.
+    Shared base for application models.
 
-    Models requiring common audit timestamps and creator
-    information can inherit from this class.
+    Models that need UUID identifiers and audit metadata can
+    inherit from this class.
     """
 
     __abstract__ = True
 
-    id: Mapped[uuid.UUID] = mapped_column(
+    id = Column(
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
-    created_at: Mapped[object] = mapped_column(
+    created_at = Column(
         DateTime,
         server_default=func.now(),
         nullable=False,
     )
 
-    updated_at: Mapped[object | None] = mapped_column(
+    updated_at = Column(
         DateTime,
         onupdate=func.now(),
-        nullable=True,
     )
 
-    created_by: Mapped[str | None] = mapped_column(
+    created_by = Column(
         String,
         nullable=True,
     )
 
-    updated_by: Mapped[str | None] = mapped_column(
+    updated_by = Column(
         String,
         nullable=True,
     )
