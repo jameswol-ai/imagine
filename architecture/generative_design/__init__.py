@@ -1,4 +1,6 @@
 """
 IMAGINE
-Generative Design Module
+Generative Design Package
 """
+
+__all__: list[str] = []
