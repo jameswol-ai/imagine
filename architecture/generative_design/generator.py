@@ -27,7 +27,7 @@ class DesignCandidate:
     metrics: dict[str, Any]
 
     evaluation: dict[str, Any] = field(
-        default_factory=dict
+        default_factory=dict,
     )
 
     score: float = 0.0
@@ -41,6 +41,7 @@ def _generate_layout(
     constraints: DesignConstraints,
     storeys: int,
 ) -> DesignCandidate:
+    """Generate a simple rectangular massing option."""
 
     buildable = calculate_buildable_site(
         constraints
@@ -76,7 +77,7 @@ def _generate_layout(
     depth = (
         footprint / width
         if width
-        else 0
+        else 0.0
     )
 
     height_per_storey = (
@@ -150,20 +151,14 @@ def generate_candidates(
     constraints: DesignConstraints,
     count: int = 5,
 ) -> list[DesignCandidate]:
-    """
-    Generate a deterministic collection of candidates.
-
-    Candidates vary primarily by storey configuration.
-    """
+    """Generate deterministic architectural candidates."""
 
     if count < 1:
         raise ValueError(
             "Candidate count must be at least 1."
         )
 
-    buildable = calculate_buildable_site(
-        constraints
-    )
+    candidates: list[DesignCandidate] = []
 
     minimum_required_area = (
         calculate_required_gross_area(
@@ -171,21 +166,18 @@ def generate_candidates(
         )
     )
 
-    maximum_footprint = (
-        buildable.area
-        * constraints.zoning.max_site_coverage
+    buildable = calculate_buildable_site(
+        constraints
     )
-
-    if maximum_footprint <= 0:
-        raise ValueError(
-            "Maximum building footprint must be greater than zero."
-        )
 
     minimum_storeys = max(
         1,
         ceil(
             minimum_required_area
-            / maximum_footprint
+            / (
+                buildable.area
+                * constraints.zoning.max_site_coverage
+            )
         ),
     )
 
@@ -193,20 +185,15 @@ def generate_candidates(
         constraints.zoning.max_storeys
     )
 
-    if minimum_storeys > maximum_storeys:
-        raise ValueError(
-            "Required program cannot be accommodated within "
-            "the configured maximum number of storeys."
-        )
-
-    candidates: list[DesignCandidate] = []
-
     for index in range(count):
 
-        storeys = min(
-            minimum_storeys + index,
-            maximum_storeys,
+        storeys = (
+            minimum_storeys
+            + index
         )
+
+        if storeys > maximum_storeys:
+            storeys = maximum_storeys
 
         candidate = _generate_layout(
             constraints,
@@ -217,9 +204,7 @@ def generate_candidates(
             f"Generated Option {index + 1}"
         )
 
-        candidate.rank = (
-            index + 1
-        )
+        candidate.rank = index + 1
 
         candidates.append(
             candidate
