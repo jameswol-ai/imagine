@@ -21,13 +21,19 @@ class DesignCandidate:
     """In-memory generated design candidate."""
 
     name: str
+
     geometry: dict[str, Any]
+
     metrics: dict[str, Any]
+
     evaluation: dict[str, Any] = field(
         default_factory=dict
     )
+
     score: float = 0.0
+
     rank: int | None = None
+
     status: str = "generated"
 
 
@@ -87,46 +93,45 @@ def _generate_layout(
         for room in constraints.program.rooms
     )
 
-    geometry = {
-        "type": "rectangular_massing",
-        "footprint": {
-            "width": round(width, 3),
-            "depth": round(depth, 3),
-        },
-        "storeys": storeys,
-        "height": round(total_height, 3),
-        "orientation": (
-            "north_access"
-            if constraints.site.north_access
-            else "neutral"
-        ),
-    }
-
-    metrics = {
-        "site_area": round(
-            buildable.area,
-            3,
-        ),
-        "footprint_area": round(
-            footprint,
-            3,
-        ),
-        "gross_floor_area": round(
-            footprint * storeys,
-            3,
-        ),
-        "site_coverage": round(
-            footprint / buildable.area,
-            4,
-        ),
-        "room_count": room_count,
-        "storeys": storeys,
-    }
-
     return DesignCandidate(
-        name=f"Generated Option {storeys} Storey",
-        geometry=geometry,
-        metrics=metrics,
+        name="Generated Option",
+        geometry={
+            "type": "rectangular_massing",
+            "footprint": {
+                "width": round(width, 3),
+                "depth": round(depth, 3),
+            },
+            "storeys": storeys,
+            "height": round(
+                total_height,
+                3,
+            ),
+            "orientation": (
+                "north_access"
+                if constraints.site.north_access
+                else "neutral"
+            ),
+        },
+        metrics={
+            "site_area": round(
+                buildable.area,
+                3,
+            ),
+            "footprint_area": round(
+                footprint,
+                3,
+            ),
+            "gross_floor_area": round(
+                footprint * storeys,
+                3,
+            ),
+            "site_coverage": round(
+                footprint / buildable.area,
+                4,
+            ),
+            "room_count": room_count,
+            "storeys": storeys,
+        },
     )
 
 
@@ -134,20 +139,18 @@ def generate_candidates(
     constraints: DesignConstraints,
     count: int = 5,
 ) -> list[DesignCandidate]:
-    """Generate deterministic architectural candidates."""
+    """Generate deterministic design candidates."""
 
     if count < 1:
         raise ValueError(
             "Candidate count must be at least 1."
         )
 
-    minimum_required_area = (
-        calculate_required_gross_area(
-            constraints
-        )
+    buildable = calculate_buildable_site(
+        constraints
     )
 
-    buildable = calculate_buildable_site(
+    required_area = calculate_required_gross_area(
         constraints
     )
 
@@ -164,7 +167,7 @@ def generate_candidates(
     minimum_storeys = max(
         1,
         ceil(
-            minimum_required_area
+            required_area
             / maximum_footprint
         ),
     )
