@@ -312,3 +312,14 @@ tests/
     └── test_site_planning_repository.py
 
 README_SITE_PLANNING.md
+
+
+architecture/floor_planning/
+├── __init__.py
+├── models.py
+├── schemas.py
+├── repository.py
+├── service.py
+├── routes.py
+├── seed.py
+└── ui.py
