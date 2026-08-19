@@ -170,3 +170,4 @@ def render_generative_design() -> None:
                 {"Generation": "Gen 25 (Final)", "Avg Fitness": "0.86", "Best Fitness": "0.94", "Diversity Index": "0.32"},
             ]
             st.dataframe(convergence_history, use_container_width=True, hide_index=True)
+
