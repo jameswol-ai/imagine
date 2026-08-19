@@ -1,7 +1,7 @@
 """
-IMAGINE database model registry.
+IMAGINE database models.
 
-All models share the declarative Base defined in
+All models share the canonical SQLAlchemy Base from
 database.connection.
 """
 
@@ -13,13 +13,11 @@ from .role import Role
 from .permission import Permission
 from .audit import AuditRecord
 from .notification import Notification
-
 from .associations import (
     role_permissions_table,
     user_roles_table,
     organization_users_table,
 )
-
 
 __all__ = [
     "Base",
@@ -29,6 +27,7 @@ __all__ = [
     "Permission",
     "AuditRecord",
     "Notification",
+    "AuditRecord",
     "role_permissions_table",
     "user_roles_table",
     "organization_users_table",
