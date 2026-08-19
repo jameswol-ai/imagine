@@ -12,7 +12,8 @@ from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
-from uuid import UUID
+
+from pydantic import ValidationError
 
 from .schemas import (
     ComplianceConstraints,
