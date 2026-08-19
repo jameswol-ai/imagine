@@ -4,16 +4,22 @@ Generative Architecture & Engineering Platform
 
 Main Streamlit application controller.
 
+Navigation is driven by the shared module registry.
+
 The application shell is responsible for:
-    - Global Streamlit configuration
-    - Navigation
+    - Streamlit configuration
+    - Sidebar navigation
     - Module routing
     - Application-level session state
 
-Business logic belongs inside the individual modules.
+Business logic belongs inside individual modules.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Final
 
 import streamlit as st
 
@@ -23,15 +29,490 @@ from architecture.generative_design.ui import (
 
 
 # =====================================================================
-# PAGE CONFIGURATION
+# TYPES
 # =====================================================================
 
-st.set_page_config(
-    page_title="IMAGINE",
-    page_icon="🏗️",
-    layout="wide",
-    initial_sidebar_state="expanded",
+Renderer = Callable[[], None]
+
+
+@dataclass(frozen=True)
+class ModuleDefinition:
+    """
+    Definition of one IMAGINE application module.
+    """
+
+    route: str
+    label: str
+    icon: str
+    section: str
+    renderer: Renderer
+
+
+# =====================================================================
+# CONSTANTS
+# =====================================================================
+
+DEFAULT_ROUTE: Final[str] = "Overview"
+
+
+# =====================================================================
+# GENERIC PLACEHOLDER RENDERER
+# =====================================================================
+
+def render_placeholder(
+    title: str,
+    description: str,
+) -> Renderer:
+    """
+    Create a renderer for a module that has not yet been implemented.
+
+    The returned function matches the Renderer protocol used by the
+    module registry.
+    """
+
+    def renderer() -> None:
+        st.title(title)
+        st.info(description)
+
+    return renderer
+
+
+# =====================================================================
+# MODULE REGISTRY
+# =====================================================================
+
+MODULE_REGISTRY: tuple[ModuleDefinition, ...] = (
+    # -----------------------------------------------------------------
+    # PLATFORM
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Overview",
+        label="Overview",
+        icon="🏠",
+        section="PLATFORM",
+        renderer=render_placeholder(
+            "🏠 IMAGINE",
+            "Platform overview is being integrated.",
+        ),
+    ),
+
+    # -----------------------------------------------------------------
+    # PROJECTS
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Projects",
+        label="Projects",
+        icon="📁",
+        section="PROJECTS",
+        renderer=render_placeholder(
+            "📁 Projects",
+            "Project management module is being integrated.",
+        ),
+    ),
+
+    # -----------------------------------------------------------------
+    # ARCHITECTURE
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Zoning",
+        label="Zoning",
+        icon="📐",
+        section="ARCHITECTURE",
+        renderer=render_placeholder(
+            "📐 Zoning",
+            "Zoning module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Site Planning",
+        label="Site Planning",
+        icon="🗺️",
+        section="ARCHITECTURE",
+        renderer=render_placeholder(
+            "🗺️ Site Planning",
+            "Site Planning module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Floor Planning",
+        label="Floor Planning",
+        icon="🏢",
+        section="ARCHITECTURE",
+        renderer=render_placeholder(
+            "🏢 Floor Planning",
+            "Floor Planning module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Room Programming",
+        label="Room Programming",
+        icon="🚪",
+        section="ARCHITECTURE",
+        renderer=render_placeholder(
+            "🚪 Room Programming",
+            "Room Programming module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Compliance",
+        label="Compliance",
+        icon="✅",
+        section="ARCHITECTURE",
+        renderer=render_placeholder(
+            "✅ Compliance",
+            "Compliance module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Generative Design",
+        label="Generative Design",
+        icon="✨",
+        section="ARCHITECTURE",
+        renderer=render_generative_design,
+    ),
+
+    # -----------------------------------------------------------------
+    # ENGINEERING
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Structural",
+        label="Structural",
+        icon="🏗️",
+        section="ENGINEERING",
+        renderer=render_placeholder(
+            "🏗️ Structural Engineering",
+            "Structural engineering module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="MEP",
+        label="MEP",
+        icon="⚡",
+        section="ENGINEERING",
+        renderer=render_placeholder(
+            "⚡ MEP Engineering",
+            "MEP engineering module is being integrated.",
+        ),
+    ),
+
+    # -----------------------------------------------------------------
+    # COST MANAGEMENT
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Costing",
+        label="Costing",
+        icon="💰",
+        section="COST MANAGEMENT",
+        renderer=render_placeholder(
+            "💰 Cost Management",
+            "Costing module is being integrated.",
+        ),
+    ),
+
+    # -----------------------------------------------------------------
+    # CONSTRUCTION
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Construction Planning",
+        label="Planning",
+        icon="📅",
+        section="CONSTRUCTION",
+        renderer=render_placeholder(
+            "📅 Construction Planning",
+            "Construction planning module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="RFIs",
+        label="RFIs",
+        icon="📋",
+        section="CONSTRUCTION",
+        renderer=render_placeholder(
+            "📋 Requests for Information",
+            "RFI module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Submittals",
+        label="Submittals",
+        icon="📄",
+        section="CONSTRUCTION",
+        renderer=render_placeholder(
+            "📄 Submittals",
+            "Submittals module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Variations",
+        label="Variations",
+        icon="🔧",
+        section="CONSTRUCTION",
+        renderer=render_placeholder(
+            "🔧 Variations",
+            "Variation management module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Snagging",
+        label="Snagging",
+        icon="🐛",
+        section="CONSTRUCTION",
+        renderer=render_placeholder(
+            "🐛 Snagging",
+            "Snagging module is being integrated.",
+        ),
+    ),
+
+    # -----------------------------------------------------------------
+    # DOCUMENTS
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Drawings",
+        label="Drawings",
+        icon="📐",
+        section="DOCUMENTS",
+        renderer=render_placeholder(
+            "📐 Drawing Management",
+            "Drawing management module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Specifications",
+        label="Specifications",
+        icon="📑",
+        section="DOCUMENTS",
+        renderer=render_placeholder(
+            "📑 Specifications",
+            "Specifications module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Contracts",
+        label="Contracts",
+        icon="📝",
+        section="DOCUMENTS",
+        renderer=render_placeholder(
+            "📝 Contracts",
+            "Contracts module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Reports",
+        label="Reports",
+        icon="📚",
+        section="DOCUMENTS",
+        renderer=render_placeholder(
+            "📚 Reports",
+            "Reports module is being integrated.",
+        ),
+    ),
+
+    # -----------------------------------------------------------------
+    # AI
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="AI Architect",
+        label="IMAGINE Architect",
+        icon="🤖",
+        section="AI",
+        renderer=render_placeholder(
+            "🤖 IMAGINE Architect",
+            "AI Architect module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="AI Engineer",
+        label="IMAGINE Engineer",
+        icon="🏗️",
+        section="AI",
+        renderer=render_placeholder(
+            "🏗️ IMAGINE Engineer",
+            "AI Engineer module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="AI MEP",
+        label="IMAGINE MEP",
+        icon="⚡",
+        section="AI",
+        renderer=render_placeholder(
+            "⚡ IMAGINE MEP",
+            "AI MEP module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="AI QS",
+        label="IMAGINE QS",
+        icon="💰",
+        section="AI",
+        renderer=render_placeholder(
+            "💰 IMAGINE QS",
+            "AI Quantity Surveyor module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="AI PM",
+        label="IMAGINE PM",
+        icon="📋",
+        section="AI",
+        renderer=render_placeholder(
+            "📋 IMAGINE PM",
+            "AI Project Manager module is being integrated.",
+        ),
+    ),
+
+    # -----------------------------------------------------------------
+    # ANALYTICS
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Dashboards",
+        label="Dashboards",
+        icon="📊",
+        section="ANALYTICS",
+        renderer=render_placeholder(
+            "📊 Dashboards",
+            "Analytics dashboards are being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="KPIs",
+        label="KPIs",
+        icon="📈",
+        section="ANALYTICS",
+        renderer=render_placeholder(
+            "📈 KPIs",
+            "KPI module is being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Portfolio",
+        label="Portfolio",
+        icon="🏢",
+        section="ANALYTICS",
+        renderer=render_placeholder(
+            "🏢 Portfolio",
+            "Portfolio analytics are being integrated.",
+        ),
+    ),
+
+    ModuleDefinition(
+        route="Forecasting",
+        label="Forecasting",
+        icon="🔮",
+        section="ANALYTICS",
+        renderer=render_placeholder(
+            "🔮 Forecasting",
+            "Forecasting module is being integrated.",
+        ),
+    ),
+
+    # -----------------------------------------------------------------
+    # ADMINISTRATION
+    # -----------------------------------------------------------------
+
+    ModuleDefinition(
+        route="Administration",
+        label="Administration",
+        icon="⚙️",
+        section="ADMINISTRATION",
+        renderer=render_placeholder(
+            "⚙️ Administration",
+            "Administration module is being integrated.",
+        ),
+    ),
 )
+
+
+# =====================================================================
+# REGISTRY INDEXES
+# =====================================================================
+
+MODULES_BY_ROUTE: dict[str, ModuleDefinition] = {
+    module.route: module
+    for module in MODULE_REGISTRY
+}
+
+
+# =====================================================================
+# VALIDATE REGISTRY
+# =====================================================================
+
+def _validate_module_registry() -> None:
+    """
+    Validate registry integrity during application startup.
+    """
+
+    routes = [
+        module.route
+        for module in MODULE_REGISTRY
+    ]
+
+    if len(routes) != len(set(routes)):
+        duplicates = sorted(
+            {
+                route
+                for route in routes
+                if routes.count(route) > 1
+            }
+        )
+
+        raise RuntimeError(
+            "Duplicate module routes detected: "
+            f"{duplicates}"
+        )
+
+    if DEFAULT_ROUTE not in MODULES_BY_ROUTE:
+        raise RuntimeError(
+            f"Default route '{DEFAULT_ROUTE}' "
+            "is missing from MODULE_REGISTRY."
+        )
+
+    generative_design = MODULES_BY_ROUTE.get(
+        "Generative Design"
+    )
+
+    if generative_design is None:
+        raise RuntimeError(
+            "Generative Design route is missing "
+            "from MODULE_REGISTRY."
+        )
+
+    if generative_design.renderer is not render_generative_design:
+        raise RuntimeError(
+            "Generative Design must use "
+            "render_generative_design."
+        )
+
+
+_validate_module_registry()
 
 
 # =====================================================================
@@ -39,19 +520,22 @@ st.set_page_config(
 # =====================================================================
 
 if "active_module" not in st.session_state:
-    st.session_state.active_module = "Overview"
+    st.session_state.active_module = DEFAULT_ROUTE
 
 
 # =====================================================================
-# NAVIGATION HELPER
+# NAVIGATION
 # =====================================================================
 
-def navigate_to(module: str) -> None:
+def navigate_to(route: str) -> None:
     """
-    Change the active application module.
+    Navigate to a registered application route.
     """
 
-    st.session_state.active_module = module
+    if route not in MODULES_BY_ROUTE:
+        route = DEFAULT_ROUTE
+
+    st.session_state.active_module = route
 
 
 # =====================================================================
@@ -60,9 +544,9 @@ def navigate_to(module: str) -> None:
 
 with st.sidebar:
 
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
     # Brand
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
 
     st.markdown(
         """
@@ -74,644 +558,72 @@ with st.sidebar:
 
     st.divider()
 
-    # ---------------------------------------------------------------
-    # Overview
-    # ---------------------------------------------------------------
+    # -----------------------------------------------------------------
+    # Render modules grouped by section
+    # -----------------------------------------------------------------
 
-    st.markdown("### PLATFORM")
+    sections: list[str] = []
 
-    if st.button(
-        "🏠 Overview",
-        use_container_width=True,
-        key="nav_overview",
-    ):
-        navigate_to("Overview")
+    for module in MODULE_REGISTRY:
 
-    # ---------------------------------------------------------------
-    # Projects
-    # ---------------------------------------------------------------
+        if module.section not in sections:
+            sections.append(
+                module.section
+            )
 
-    st.markdown("### PROJECTS")
+    for section in sections:
 
-    if st.button(
-        "📁 Projects",
-        use_container_width=True,
-        key="nav_projects",
-    ):
-        navigate_to("Projects")
-
-    # ---------------------------------------------------------------
-    # Architecture
-    # ---------------------------------------------------------------
-
-    st.markdown("### ARCHITECTURE")
-
-    if st.button(
-        "📐 Zoning",
-        use_container_width=True,
-        key="nav_zoning",
-    ):
-        navigate_to("Zoning")
-
-    if st.button(
-        "🗺️ Site Planning",
-        use_container_width=True,
-        key="nav_site_planning",
-    ):
-        navigate_to("Site Planning")
-
-    if st.button(
-        "🏢 Floor Planning",
-        use_container_width=True,
-        key="nav_floor_planning",
-    ):
-        navigate_to("Floor Planning")
-
-    if st.button(
-        "🚪 Room Programming",
-        use_container_width=True,
-        key="nav_room_programming",
-    ):
-        navigate_to("Room Programming")
-
-    if st.button(
-        "✅ Compliance",
-        use_container_width=True,
-        key="nav_compliance",
-    ):
-        navigate_to("Compliance")
-
-    if st.button(
-        "✨ Generative Design",
-        use_container_width=True,
-        key="nav_generative_design",
-    ):
-        navigate_to("Generative Design")
-
-    # ---------------------------------------------------------------
-    # Engineering
-    # ---------------------------------------------------------------
-
-    st.markdown("### ENGINEERING")
-
-    if st.button(
-        "🏗️ Structural",
-        use_container_width=True,
-        key="nav_structural",
-    ):
-        navigate_to("Structural")
-
-    if st.button(
-        "⚡ MEP",
-        use_container_width=True,
-        key="nav_mep",
-    ):
-        navigate_to("MEP")
-
-    # ---------------------------------------------------------------
-    # Costing
-    # ---------------------------------------------------------------
-
-    st.markdown("### COST MANAGEMENT")
-
-    if st.button(
-        "💰 Costing",
-        use_container_width=True,
-        key="nav_costing",
-    ):
-        navigate_to("Costing")
-
-    # ---------------------------------------------------------------
-    # Construction
-    # ---------------------------------------------------------------
-
-    st.markdown("### CONSTRUCTION")
-
-    if st.button(
-        "📅 Planning",
-        use_container_width=True,
-        key="nav_construction_planning",
-    ):
-        navigate_to("Construction Planning")
-
-    if st.button(
-        "📋 RFIs",
-        use_container_width=True,
-        key="nav_rfis",
-    ):
-        navigate_to("RFIs")
-
-    if st.button(
-        "📄 Submittals",
-        use_container_width=True,
-        key="nav_submittals",
-    ):
-        navigate_to("Submittals")
-
-    if st.button(
-        "🔧 Variations",
-        use_container_width=True,
-        key="nav_variations",
-    ):
-        navigate_to("Variations")
-
-    if st.button(
-        "🐛 Snagging",
-        use_container_width=True,
-        key="nav_snagging",
-    ):
-        navigate_to("Snagging")
-
-    # ---------------------------------------------------------------
-    # Documents
-    # ---------------------------------------------------------------
-
-    st.markdown("### DOCUMENTS")
-
-    if st.button(
-        "📐 Drawings",
-        use_container_width=True,
-        key="nav_drawings",
-    ):
-        navigate_to("Drawings")
-
-    if st.button(
-        "📑 Specifications",
-        use_container_width=True,
-        key="nav_specifications",
-    ):
-        navigate_to("Specifications")
-
-    if st.button(
-        "📝 Contracts",
-        use_container_width=True,
-        key="nav_contracts",
-    ):
-        navigate_to("Contracts")
-
-    if st.button(
-        "📚 Reports",
-        use_container_width=True,
-        key="nav_reports",
-    ):
-        navigate_to("Reports")
-
-    # ---------------------------------------------------------------
-    # AI
-    # ---------------------------------------------------------------
-
-    st.markdown("### AI")
-
-    if st.button(
-        "🤖 IMAGINE Architect",
-        use_container_width=True,
-        key="nav_ai_architect",
-    ):
-        navigate_to("AI Architect")
-
-    if st.button(
-        "🏗️ IMAGINE Engineer",
-        use_container_width=True,
-        key="nav_ai_engineer",
-    ):
-        navigate_to("AI Engineer")
-
-    if st.button(
-        "⚡ IMAGINE MEP",
-        use_container_width=True,
-        key="nav_ai_mep",
-    ):
-        navigate_to("AI MEP")
-
-    if st.button(
-        "💰 IMAGINE QS",
-        use_container_width=True,
-        key="nav_ai_qs",
-    ):
-        navigate_to("AI QS")
-
-    if st.button(
-        "📋 IMAGINE PM",
-        use_container_width=True,
-        key="nav_ai_pm",
-    ):
-        navigate_to("AI PM")
-
-    # ---------------------------------------------------------------
-    # Analytics
-    # ---------------------------------------------------------------
-
-    st.markdown("### ANALYTICS")
-
-    if st.button(
-        "📊 Dashboards",
-        use_container_width=True,
-        key="nav_dashboards",
-    ):
-        navigate_to("Dashboards")
-
-    if st.button(
-        "📈 KPIs",
-        use_container_width=True,
-        key="nav_kpis",
-    ):
-        navigate_to("KPIs")
-
-    if st.button(
-        "🏢 Portfolio",
-        use_container_width=True,
-        key="nav_portfolio",
-    ):
-        navigate_to("Portfolio")
-
-    if st.button(
-        "🔮 Forecasting",
-        use_container_width=True,
-        key="nav_forecasting",
-    ):
-        navigate_to("Forecasting")
-
-    # ---------------------------------------------------------------
-    # Administration
-    # ---------------------------------------------------------------
-
-    st.markdown("### ADMINISTRATION")
-
-    if st.button(
-        "⚙️ Administration",
-        use_container_width=True,
-        key="nav_administration",
-    ):
-        navigate_to("Administration")
-
-
-# =====================================================================
-# MAIN APPLICATION ROUTER
-# =====================================================================
-
-active_module = st.session_state.active_module
-
-
-# =====================================================================
-# OVERVIEW
-# =====================================================================
-
-if active_module == "Overview":
-
-    st.title("🏗️ IMAGINE")
-
-    st.subheader(
-        "Generative Architecture & Engineering Platform"
-    )
-
-    st.markdown(
-        """
-        Welcome to **IMAGINE**.
-
-        A constraint-driven platform for architectural design,
-        structural engineering, MEP, costing, construction and
-        project intelligence.
-        """
-    )
-
-    st.divider()
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric(
-            "Projects",
-            "—",
+        st.markdown(
+            f"### {section}"
         )
 
-    with col2:
-        st.metric(
-            "Design Runs",
-            "—",
-        )
+        for module in MODULE_REGISTRY:
 
-    with col3:
-        st.metric(
-            "Active Projects",
-            "—",
-        )
+            if module.section != section:
+                continue
 
-    with col4:
-        st.metric(
-            "Design Candidates",
-            "—",
-        )
-
-    st.divider()
-
-    st.info(
-        "Select a module from the navigation panel to begin."
-    )
+            if st.button(
+                f"{module.icon} {module.label}",
+                use_container_width=True,
+                key=f"nav_{module.route}",
+            ):
+                navigate_to(
+                    module.route
+                )
 
 
 # =====================================================================
-# PROJECTS
+# MAIN ROUTER
 # =====================================================================
 
-elif active_module == "Projects":
+active_route = st.session_state.get(
+    "active_module",
+    DEFAULT_ROUTE,
+)
 
-    st.title("📁 Projects")
 
-    st.info(
-        "Project management module is being integrated."
-    )
+# ---------------------------------------------------------------------
+# Fallback behavior
+# ---------------------------------------------------------------------
 
+if active_route not in MODULES_BY_ROUTE:
 
-# =====================================================================
-# ARCHITECTURE
-# =====================================================================
-
-elif active_module == "Zoning":
-
-    st.title("📐 Zoning")
-
-    st.info(
-        "Zoning module is being integrated."
-    )
-
-
-elif active_module == "Site Planning":
-
-    st.title("🗺️ Site Planning")
-
-    st.info(
-        "Site Planning module is being integrated."
-    )
-
-
-elif active_module == "Floor Planning":
-
-    st.title("🏢 Floor Planning")
-
-    st.info(
-        "Floor Planning module is being integrated."
-    )
-
-
-elif active_module == "Room Programming":
-
-    st.title("🚪 Room Programming")
-
-    st.info(
-        "Room Programming module is being integrated."
-    )
-
-
-elif active_module == "Compliance":
-
-    st.title("✅ Compliance")
-
-    st.info(
-        "Compliance module is being integrated."
-    )
-
-
-# =====================================================================
-# GENERATIVE DESIGN
-# =====================================================================
-
-elif active_module == "Generative Design":
-
-    render_generative_design()
-
-
-# =====================================================================
-# ENGINEERING
-# =====================================================================
-
-elif active_module == "Structural":
-
-    st.title("🏗️ Structural Engineering")
-
-    st.info(
-        "Structural engineering module is being integrated."
-    )
-
-
-elif active_module == "MEP":
-
-    st.title("⚡ MEP Engineering")
-
-    st.info(
-        "MEP engineering module is being integrated."
-    )
-
-
-# =====================================================================
-# COST MANAGEMENT
-# =====================================================================
-
-elif active_module == "Costing":
-
-    st.title("💰 Cost Management")
-
-    st.info(
-        "Costing module is being integrated."
-    )
-
-
-# =====================================================================
-# CONSTRUCTION
-# =====================================================================
-
-elif active_module == "Construction Planning":
-
-    st.title("📅 Construction Planning")
-
-    st.info(
-        "Construction planning module is being integrated."
-    )
-
-
-elif active_module == "RFIs":
-
-    st.title("📋 Requests for Information")
-
-    st.info(
-        "RFI module is being integrated."
-    )
-
-
-elif active_module == "Submittals":
-
-    st.title("📄 Submittals")
-
-    st.info(
-        "Submittals module is being integrated."
-    )
-
-
-elif active_module == "Variations":
-
-    st.title("🔧 Variations")
-
-    st.info(
-        "Variation management module is being integrated."
-    )
-
-
-elif active_module == "Snagging":
-
-    st.title("🐛 Snagging")
-
-    st.info(
-        "Snagging module is being integrated."
-    )
-
-
-# =====================================================================
-# DOCUMENTS
-# =====================================================================
-
-elif active_module == "Drawings":
-
-    st.title("📐 Drawing Management")
-
-    st.info(
-        "Drawing management module is being integrated."
-    )
-
-
-elif active_module == "Specifications":
-
-    st.title("📑 Specifications")
-
-    st.info(
-        "Specifications module is being integrated."
-    )
-
-
-elif active_module == "Contracts":
-
-    st.title("📝 Contracts")
-
-    st.info(
-        "Contracts module is being integrated."
-    )
-
-
-elif active_module == "Reports":
-
-    st.title("📚 Reports")
-
-    st.info(
-        "Reports module is being integrated."
-    )
-
-
-# =====================================================================
-# AI
-# =====================================================================
-
-elif active_module == "AI Architect":
-
-    st.title("🤖 IMAGINE Architect")
-
-    st.info(
-        "AI Architect module is being integrated."
-    )
-
-
-elif active_module == "AI Engineer":
-
-    st.title("🏗️ IMAGINE Engineer")
-
-    st.info(
-        "AI Engineer module is being integrated."
-    )
-
-
-elif active_module == "AI MEP":
-
-    st.title("⚡ IMAGINE MEP")
-
-    st.info(
-        "AI MEP module is being integrated."
-    )
-
-
-elif active_module == "AI QS":
-
-    st.title("💰 IMAGINE QS")
-
-    st.info(
-        "AI Quantity Surveyor module is being integrated."
-    )
-
-
-elif active_module == "AI PM":
-
-    st.title("📋 IMAGINE PM")
-
-    st.info(
-        "AI Project Manager module is being integrated."
-    )
-
-
-# =====================================================================
-# ANALYTICS
-# =====================================================================
-
-elif active_module == "Dashboards":
-
-    st.title("📊 Dashboards")
-
-    st.info(
-        "Analytics dashboards are being integrated."
-    )
-
-
-elif active_module == "KPIs":
-
-    st.title("📈 KPIs")
-
-    st.info(
-        "KPI module is being integrated."
-    )
-
-
-elif active_module == "Portfolio":
-
-    st.title("🏢 Portfolio")
-
-    st.info(
-        "Portfolio analytics are being integrated."
-    )
-
-
-elif active_module == "Forecasting":
-
-    st.title("🔮 Forecasting")
-
-    st.info(
-        "Forecasting module is being integrated."
-    )
-
-
-# =====================================================================
-# ADMINISTRATION
-# =====================================================================
-
-elif active_module == "Administration":
-
-    st.title("⚙️ Administration")
-
-    st.info(
-        "Administration module is being integrated."
-    )
-
-
-# =====================================================================
-# FALLBACK
-# =====================================================================
-
-else:
-
-    st.session_state.active_module = "Overview"
+    st.session_state.active_module = DEFAULT_ROUTE
 
     st.rerun()
+
+
+# ---------------------------------------------------------------------
+# Resolve registered module
+# ---------------------------------------------------------------------
+
+module = MODULES_BY_ROUTE[
+    active_route
+]
+
+
+# ---------------------------------------------------------------------
+# Render
+# ---------------------------------------------------------------------
+
+module.renderer()
