@@ -1,91 +1,59 @@
 """
-IMAGINE database connection and SQLAlchemy configuration.
+IMAGINE database connection.
+
+Central SQLAlchemy database configuration.
 """
 
 from __future__ import annotations
 
-from collections.abc import Generator
+import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.settings import settings
 
 
-# ============================================================
-# DATABASE URL
-# ============================================================
+DATABASE_URL = (
+    os.getenv("DATABASE_URL")
+    or os.getenv("SQLALCHEMY_DATABASE_URL")
+)
 
-DATABASE_URL = settings.database_url
+if not DATABASE_URL:
+    DATABASE_URL = "sqlite:///./imagine.db"
 
 
-# ============================================================
-# ENGINE OPTIONS
-# ============================================================
-
-connect_args: dict[str, object] = {}
+connect_args = {}
 
 if DATABASE_URL.startswith("sqlite"):
-    connect_args["check_same_thread"] = False
+    connect_args = {
+        "check_same_thread": False,
+    }
 
-
-# ============================================================
-# ENGINE
-# ============================================================
 
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,
-    pool_pre_ping=True,
+    future=True,
 )
-
-
-# ============================================================
-# SESSION FACTORY
-# ============================================================
 
 SessionLocal = sessionmaker(
     bind=engine,
     autoflush=False,
     autocommit=False,
-    expire_on_commit=False,
+    future=True,
 )
 
-
-# ============================================================
-# DECLARATIVE BASE
-# ============================================================
+Base = declarative_base()
 
 
-class Base(DeclarativeBase):
-    """
-    Shared SQLAlchemy declarative base.
-
-    All database models should inherit from this Base,
-    directly or through BaseModel.
-    """
-
-    pass
-
-
-# ============================================================
-# SESSION DEPENDENCY
-# ============================================================
-
-
-def get_db() -> Generator[Session, None, None]:
-    """
-    Provide a database session.
-
-    The session is always closed after use.
-    """
+def get_db():
+    """Yield a database session."""
 
     db = SessionLocal()
 
     try:
-
         yield db
 
     finally:
-
         db.close()
