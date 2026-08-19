@@ -24,10 +24,6 @@ from .schemas import (
 )
 
 
-# =====================================================================
-# CONSTANTS
-# =====================================================================
-
 MIN_SITE_DIMENSION = 1.0
 MIN_ROOM_AREA = 0.1
 
@@ -39,10 +35,6 @@ SETBACK_FIELDS = (
 )
 
 
-# =====================================================================
-# GEOMETRY VALUE OBJECT
-# =====================================================================
-
 @dataclass(frozen=True)
 class BuildableSite:
     """Calculated rectangular buildable site."""
@@ -52,28 +44,18 @@ class BuildableSite:
     area: float
 
 
-# =====================================================================
-# NORMALIZATION
-# =====================================================================
-
 def normalize_constraints(
     constraints: DesignConstraints | Mapping[str, Any],
 ) -> DesignConstraints:
-    """
-    Normalize incoming constraint data into DesignConstraints.
-
-    This function performs structural Pydantic validation but does not
-    perform engineering/planning validation.
-    """
+    """Normalize incoming data into DesignConstraints."""
 
     if isinstance(
         constraints,
         DesignConstraints,
     ):
-        # Re-validation gives us a clean, detached model instance.
         return DesignConstraints.model_validate(
             constraints.model_dump(
-                mode="python"
+                mode="python",
             )
         )
 
@@ -95,21 +77,10 @@ def normalize_constraints(
             payload
         )
     except Exception as exc:
-        # Avoid importing ValidationError directly. This keeps this
-        # module compatible with the Pydantic validation exception
-        # exposed by the installed schemas implementation.
-        message = _format_validation_exception(
-            exc
-        )
-
         raise ValueError(
-            message
+            _format_validation_exception(exc)
         ) from exc
 
-
-# =====================================================================
-# NORMALIZE + VALIDATE
-# =====================================================================
 
 def normalize_and_validate_constraints(
     constraints: DesignConstraints | Mapping[str, Any],
@@ -117,19 +88,7 @@ def normalize_and_validate_constraints(
     DesignConstraints | None,
     ConstraintValidationResult,
 ]:
-    """
-    Normalize and validate generative-design constraints.
-
-    Returns:
-
-        (
-            normalized_constraints,
-            validation_result,
-        )
-
-    Structural or semantic validation failures return None as the
-    normalized constraint object.
-    """
+    """Normalize and perform domain validation."""
 
     try:
         normalized = normalize_constraints(
@@ -140,39 +99,22 @@ def normalize_and_validate_constraints(
             None,
             ConstraintValidationResult(
                 valid=False,
-                errors=[
-                    str(exc)
-                ],
+                errors=[str(exc)],
                 warnings=[],
             ),
         )
 
-    validation = validate_constraints(
+    result = validate_constraints(
         normalized
     )
 
-    if not validation.valid:
-        return (
-            normalized,
-            validation,
-        )
+    return normalized, result
 
-    return (
-        normalized,
-        validation,
-    )
-
-
-# =====================================================================
-# VALIDATION
-# =====================================================================
 
 def validate_constraints(
     constraints: DesignConstraints | Mapping[str, Any],
 ) -> ConstraintValidationResult:
-    """
-    Perform deterministic domain validation.
-    """
+    """Perform deterministic domain validation."""
 
     try:
         normalized = normalize_constraints(
@@ -181,9 +123,7 @@ def validate_constraints(
     except ValueError as exc:
         return ConstraintValidationResult(
             valid=False,
-            errors=[
-                str(exc)
-            ],
+            errors=[str(exc)],
             warnings=[],
         )
 
@@ -222,18 +162,10 @@ def validate_constraints(
 
     return ConstraintValidationResult(
         valid=not errors,
-        errors=_sort_messages(
-            errors
-        ),
-        warnings=_sort_messages(
-            warnings
-        ),
+        errors=_sort_messages(errors),
+        warnings=_sort_messages(warnings),
     )
 
-
-# =====================================================================
-# SITE VALIDATION
-# =====================================================================
 
 def _validate_site(
     site: SiteConstraints,
@@ -252,7 +184,6 @@ def _validate_site(
         )
 
     for field_name in SETBACK_FIELDS:
-
         value = getattr(
             site,
             field_name,
@@ -315,10 +246,6 @@ def _validate_site(
         )
 
 
-# =====================================================================
-# ZONING VALIDATION
-# =====================================================================
-
 def _validate_zoning(
     zoning: ZoningConstraints,
     errors: list[str],
@@ -373,10 +300,6 @@ def _validate_zoning(
         )
 
 
-# =====================================================================
-# PROGRAM VALIDATION
-# =====================================================================
-
 def _validate_program(
     program: ProgramConstraints,
     errors: list[str],
@@ -402,7 +325,6 @@ def _validate_program(
         program.rooms,
         start=1,
     ):
-
         normalized_name = (
             room.name.strip().lower()
         )
@@ -439,10 +361,6 @@ def _validate_program(
         )
 
 
-# =====================================================================
-# COMPLIANCE VALIDATION
-# =====================================================================
-
 def _validate_compliance(
     compliance: ComplianceConstraints,
     errors: list[str],
@@ -476,10 +394,6 @@ def _validate_compliance(
             "must not be treated as fire-code compliant."
         )
 
-
-# =====================================================================
-# CROSS-CONSTRAINT VALIDATION
-# =====================================================================
 
 def _validate_cross_constraints(
     constraints: DesignConstraints,
@@ -520,7 +434,6 @@ def _validate_cross_constraints(
         errors.append(
             "no positive building footprint is available."
         )
-
         return
 
     required_storeys = (
@@ -528,10 +441,7 @@ def _validate_cross_constraints(
         / maximum_footprint
     )
 
-    if (
-        required_storeys
-        > constraints.zoning.max_storeys
-    ):
+    if required_storeys > constraints.zoning.max_storeys:
         errors.append(
             "the requested program requires more storeys "
             "than zoning.max_storeys permits."
@@ -547,16 +457,10 @@ def _validate_cross_constraints(
         )
 
 
-# =====================================================================
-# GENERATOR CALCULATIONS
-# =====================================================================
-
 def calculate_buildable_site(
     constraints: DesignConstraints,
 ) -> BuildableSite:
-    """
-    Calculate the rectangular buildable site after setbacks.
-    """
+    """Calculate the rectangular buildable site."""
 
     width = (
         constraints.site.width
@@ -590,32 +494,23 @@ def calculate_buildable_site(
 def calculate_required_gross_area(
     constraints: DesignConstraints,
 ) -> float:
-    """
-    Calculate required gross floor area from the room program.
-    """
+    """Calculate required gross floor area."""
 
     room_area = sum(
         room.area * room.quantity
         for room in constraints.program.rooms
     )
 
-    return (
-        room_area
-        * (
-            1.0
-            + constraints.program.circulation_ratio
-        )
+    return room_area * (
+        1.0
+        + constraints.program.circulation_ratio
     )
 
-
-# =====================================================================
-# SUMMARY
-# =====================================================================
 
 def constraint_summary(
     constraints: DesignConstraints | Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Return deterministic constraint summary data."""
+    """Return a normalized constraint summary."""
 
     normalized = normalize_constraints(
         constraints
@@ -685,14 +580,10 @@ def constraint_summary(
     }
 
 
-# =====================================================================
-# UUID
-# =====================================================================
-
 def validate_project_id(
     project_id: UUID | str | None,
 ) -> UUID | None:
-    """Normalize a project identifier to UUID."""
+    """Validate and normalize a project UUID."""
 
     if project_id is None:
         return None
@@ -716,18 +607,10 @@ def validate_project_id(
         ) from exc
 
 
-# =====================================================================
-# ERROR FORMATTING
-# =====================================================================
-
 def _format_validation_exception(
     exc: Exception,
 ) -> str:
-    """
-    Convert Pydantic validation errors into deterministic text.
-
-    We intentionally avoid importing ValidationError directly.
-    """
+    """Format Pydantic validation errors deterministically."""
 
     errors_method = getattr(
         exc,
@@ -791,14 +674,10 @@ def _format_validation_exception(
     return str(exc)
 
 
-# =====================================================================
-# DETERMINISTIC MESSAGE ORDER
-# =====================================================================
-
 def _sort_messages(
     messages: list[str],
 ) -> list[str]:
-    """Deduplicate and sort validation messages."""
+    """Deduplicate and deterministically sort messages."""
 
     return sorted(
         set(messages),
