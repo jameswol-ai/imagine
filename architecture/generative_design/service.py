@@ -6,848 +6,475 @@ Application service for constraint-driven architectural
 generative design.
 
 Responsibilities:
-    - Create a generative design run.
-    - Resolve and normalize design constraints.
-    - Generate candidate designs.
-    - Score and rank candidates.
-    - Persist the complete candidate population.
-    - Update candidate_count.
-    - Mark the run completed or failed.
-    - Keep the complete generation workflow inside one
-      database transaction.
-
-The service owns the transaction boundary.
-
-Repositories intentionally do not commit during this workflow.
+- normalize and validate constraints
+- stop invalid generation deterministically
+- invoke the generator with normalized constraints
+- score generated candidates
+- persist the run and candidates within one transaction
+- update candidate_count
+- mark successful runs completed
+- mark failed runs failed
+- preserve rollback semantics
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from architecture.generative_design.constraints import (
-    ConstraintSet,
-    build_constraints,
+from .constraints import (
+    normalize_and_validate_constraints,
 )
-from architecture.generative_design.generator import (
-    generate_designs,
-)
-from architecture.generative_design.models import (
-    DesignCandidateRecord,
-    GenerativeDesignRun,
-)
-from architecture.generative_design.repository import (
+from .generator import generate_candidates
+from .repository import (
     GenerativeDesignRepository,
 )
-from architecture.generative_design.scoring import (
-    rank_designs,
-    score_design,
+from .schemas import (
+    ConstraintValidationResult,
+    DesignCandidateSchema,
+    DesignConstraints,
+    GenerativeDesignRunCreate,
+    GenerativeDesignRunResponse,
 )
 
 
-class GenerativeDesignServiceError(Exception):
-    """Base exception for generative design service failures."""
+class GenerativeDesignValidationError(ValueError):
+    """
+    Raised when generative-design constraints are invalid.
 
+    The error message is deterministic because it is produced by
+    normalize_and_validate_constraints().
+    """
 
-class GenerativeDesignRunNotFoundError(
-    GenerativeDesignServiceError
-):
-    """Raised when a requested generative design run does not exist."""
+    def __init__(
+        self,
+        validation: ConstraintValidationResult,
+    ) -> None:
+        self.validation = validation
+
+        message = "; ".join(
+            validation.errors
+        )
+
+        super().__init__(
+            message
+        )
 
 
 class GenerativeDesignGenerationError(
-    GenerativeDesignServiceError
+    RuntimeError
 ):
-    """Raised when candidate generation or scoring fails."""
+    """
+    Raised when candidate generation fails.
+    """
 
 
 class GenerativeDesignService:
     """
-    Application service for the Generative Design Engine.
-
-    The service owns one transaction for a complete generation
-    operation:
-
-        create run
-            ↓
-        resolve constraints
-            ↓
-        generate candidates
-            ↓
-        score candidates
-            ↓
-        rank candidates
-            ↓
-        persist candidates
-            ↓
-        update candidate_count
-            ↓
-        mark completed
-            ↓
-        COMMIT
-
-    Any failure rolls the entire operation back.
+    Application service for generative architectural design.
     """
 
     def __init__(
         self,
         session: AsyncSession,
+        repository: GenerativeDesignRepository | None = None,
+        generator: Callable[
+            [DesignConstraints],
+            Sequence[Any],
+        ]
+        | None = None,
+        scorer: Callable[
+            [Any, DesignConstraints],
+            Any,
+        ]
+        | None = None,
     ) -> None:
         self.session = session
-        self.repository = GenerativeDesignRepository(session)
 
-    # =====================================================================
-    # GENERATION
-    # =====================================================================
+        self.repository = (
+            repository
+            or GenerativeDesignRepository(
+                session
+            )
+        )
+
+        self.generator = (
+            generator
+            or generate_candidates
+        )
+
+        self.scorer = scorer
+
+    # =================================================================
+    # GENERATE
+    # =================================================================
 
     async def generate(
         self,
-        *,
-        project_id: UUID | None,
-        name: str,
-        constraints: dict[str, Any],
-        candidate_count: int = 10,
-        created_by: str | None = None,
-    ) -> GenerativeDesignRun:
+        request: GenerativeDesignRunCreate,
+    ) -> GenerativeDesignRunResponse:
         """
-        Execute a complete generative design run.
+        Generate, score, and persist a complete design run.
 
-        Parameters
-        ----------
-        project_id:
-            UUID of the project receiving the generated designs.
+        Processing order:
 
-        name:
-            Human-readable name for the generation run.
+            1. Normalize constraints.
+            2. Validate constraints.
+            3. Stop immediately if invalid.
+            4. Generate candidates.
+            5. Score candidates.
+            6. Begin one persistence transaction.
+            7. Create run.
+            8. Persist all candidates.
+            9. Update candidate_count.
+            10. Mark run completed.
+            11. Commit once.
 
-        constraints:
-            Raw architectural constraints supplied by upstream
-            modules such as zoning, site planning, floor planning,
-            room programming, and compliance.
+        Any persistence/generation/scoring failure rolls the database
+        transaction back.
 
-        candidate_count:
-            Number of design candidates to generate.
-
-        created_by:
-            Username or identifier responsible for the run.
-
-        Returns
-        -------
-        GenerativeDesignRun
-            The completed persisted run with its candidates.
-
-        Raises
-        ------
-        ValueError
-            If the requested candidate count is invalid.
-
-        GenerativeDesignGenerationError
-            If generation, scoring, ranking, or persistence fails.
+        Invalid constraints never create a database run.
         """
 
-        if candidate_count <= 0:
-            raise ValueError(
-                "candidate_count must be greater than zero."
+        # -------------------------------------------------------------
+        # 1. Normalize and validate BEFORE database transaction
+        # -------------------------------------------------------------
+
+        normalized, validation = (
+            normalize_and_validate_constraints(
+                request.constraints
+            )
+        )
+
+        if normalized is None or not validation.valid:
+            raise GenerativeDesignValidationError(
+                validation
             )
 
-        run: GenerativeDesignRun | None = None
+        # -------------------------------------------------------------
+        # 2. Keep request.project_id and constraint.project_id
+        #    consistent.
+        # -------------------------------------------------------------
+
+        normalized = self._normalize_project_id(
+            request.project_id,
+            normalized,
+        )
+
+        # -------------------------------------------------------------
+        # 3. Generate candidates from normalized constraints.
+        # -------------------------------------------------------------
 
         try:
-            # -------------------------------------------------------------
-            # 1. Normalize and validate constraints
-            # -------------------------------------------------------------
-
-            constraint_set = self._build_constraint_set(
-                constraints
+            generated_candidates = self.generator(
+                normalized
             )
-
-            normalized_constraints = (
-                self._serialize_constraints(
-                    constraint_set
-                )
-            )
-
-            # -------------------------------------------------------------
-            # 2. Create run
-            #
-            # No commit occurs here.
-            # -------------------------------------------------------------
-
-            run = GenerativeDesignRun(
-                project_id=project_id,
-                name=name,
-                status="running",
-                constraints=normalized_constraints,
-                candidate_count=0,
-                created_by=created_by,
-            )
-
-            self.session.add(run)
-
-            # Flush gives us run.id without committing.
-            await self.session.flush()
-
-            # -------------------------------------------------------------
-            # 3. Generate raw design candidates
-            # -------------------------------------------------------------
-
-            raw_candidates = self._generate_candidates(
-                constraint_set=constraint_set,
-                candidate_count=candidate_count,
-            )
-
-            if not raw_candidates:
-                raise GenerativeDesignGenerationError(
-                    "The generator returned no design candidates."
-                )
-
-            # -------------------------------------------------------------
-            # 4. Score every candidate
-            # -------------------------------------------------------------
-
-            scored_candidates: list[dict[str, Any]] = []
-
-            for index, candidate in enumerate(
-                raw_candidates,
-                start=1,
-            ):
-                scored = self._score_candidate(
-                    candidate=candidate,
-                    constraints=constraint_set,
-                )
-
-                scored_candidates.append(
-                    {
-                        "name": self._candidate_name(
-                            candidate,
-                            index,
-                        ),
-                        "geometry": self._candidate_geometry(
-                            candidate
-                        ),
-                        "metrics": self._candidate_metrics(
-                            candidate
-                        ),
-                        "evaluation": self._candidate_evaluation(
-                            scored
-                        ),
-                        "score": self._candidate_score(
-                            scored
-                        ),
-                        "rank": None,
-                        "status": "generated",
-                    }
-                )
-
-            # -------------------------------------------------------------
-            # 5. Rank candidates
-            # -------------------------------------------------------------
-
-            ranked_candidates = self._rank_candidates(
-                candidates=scored_candidates,
-                constraints=constraint_set,
-            )
-
-            # -------------------------------------------------------------
-            # 6. Assign final ranks
-            # -------------------------------------------------------------
-
-            for rank, candidate in enumerate(
-                ranked_candidates,
-                start=1,
-            ):
-                candidate["rank"] = rank
-
-            # -------------------------------------------------------------
-            # 7. Persist all candidates
-            #
-            # Still inside the same transaction.
-            # -------------------------------------------------------------
-
-            candidate_records: list[
-                DesignCandidateRecord
-            ] = []
-
-            for candidate_data in ranked_candidates:
-                record = DesignCandidateRecord(
-                    run_id=run.id,
-                    name=candidate_data["name"],
-                    status=candidate_data.get(
-                        "status",
-                        "generated",
-                    ),
-                    rank=candidate_data["rank"],
-                    score=candidate_data["score"],
-                    geometry=candidate_data["geometry"],
-                    metrics=candidate_data["metrics"],
-                    evaluation=candidate_data[
-                        "evaluation"
-                    ],
-                    created_by=created_by,
-                )
-
-                self.session.add(record)
-                candidate_records.append(record)
-
-            # Flush candidate inserts but don't commit.
-            await self.session.flush()
-
-            # -------------------------------------------------------------
-            # 8. Update candidate count
-            # -------------------------------------------------------------
-
-            run.candidate_count = len(
-                candidate_records
-            )
-
-            # -------------------------------------------------------------
-            # 9. Mark run completed
-            # -------------------------------------------------------------
-
-            run.status = "completed"
-            run.completed_at = datetime.now(
-                timezone.utc
-            )
-            run.error_message = None
-
-            await self.session.flush()
-
-            # -------------------------------------------------------------
-            # 10. ONE AND ONLY ONE COMMIT
-            # -------------------------------------------------------------
-
-            await self.session.commit()
-
-            # Refresh after commit so the caller gets current DB state.
-            await self.session.refresh(run)
-
-            return run
-
         except Exception as exc:
-            # -------------------------------------------------------------
-            # COMPLETE ROLLBACK
-            #
-            # This removes:
-            #   - the run
-            #   - generated candidates
-            #   - candidate_count changes
-            #   - completed state
-            #
-            # Nothing from the failed generation remains committed.
-            # -------------------------------------------------------------
-
-            await self.session.rollback()
-
-            # -------------------------------------------------------------
-            # Best-effort failure recording
-            #
-            # This deliberately occurs in a NEW transaction because the
-            # original transaction has already been rolled back.
-            #
-            # We cannot update the original run if its creation was rolled
-            # back. Therefore failure persistence is optional and only
-            # attempted when a run ID exists and the run can be recovered.
-            # -------------------------------------------------------------
-
             raise GenerativeDesignGenerationError(
                 f"Generative design generation failed: {exc}"
             ) from exc
 
-    # =====================================================================
-    # RETRIEVAL
-    # =====================================================================
+        candidates = list(
+            generated_candidates
+        )
 
-    async def get_run(
-        self,
-        run_id: UUID,
-        *,
-        include_candidates: bool = True,
-    ) -> GenerativeDesignRun:
-        """
-        Retrieve a generative design run.
+        # -------------------------------------------------------------
+        # 4. Respect requested candidate count.
+        # -------------------------------------------------------------
 
-        Raises GenerativeDesignRunNotFoundError when the run
-        does not exist.
-        """
+        candidates = candidates[
+            : request.candidate_count
+        ]
 
-        if include_candidates:
-            run = await self.repository.get_run_with_candidates(
-                run_id
+        # -------------------------------------------------------------
+        # 5. Score candidates before persistence.
+        # -------------------------------------------------------------
+
+        scored_candidates = []
+
+        for candidate in candidates:
+
+            try:
+                scored = self._score_candidate(
+                    candidate,
+                    normalized,
+                )
+
+            except Exception as exc:
+                raise GenerativeDesignGenerationError(
+                    f"Generative design scoring failed: {exc}"
+                ) from exc
+
+            scored_candidates.append(
+                scored
             )
+
+        # -------------------------------------------------------------
+        # 6. Single persistence transaction.
+        #
+        # Do not commit inside repository methods.
+        # -------------------------------------------------------------
+
+        try:
+            run = await self.repository.create_run(
+                project_id=normalized.project_id,
+                name=request.name,
+                status="generating",
+                constraints=normalized.model_dump(
+                    mode="json"
+                ),
+                candidate_count=0,
+            )
+
+            # ---------------------------------------------------------
+            # 7. Persist every candidate.
+            # ---------------------------------------------------------
+
+            for index, candidate in enumerate(
+                scored_candidates,
+                start=1,
+            ):
+                candidate_data = (
+                    self._candidate_to_dict(
+                        candidate
+                    )
+                )
+
+                if candidate_data.get(
+                    "rank"
+                ) is None:
+                    candidate_data["rank"] = index
+
+                await self.repository.create_candidate(
+                    run_id=run.id,
+                    **candidate_data,
+                )
+
+            # ---------------------------------------------------------
+            # 8. Update candidate count.
+            # ---------------------------------------------------------
+
+            run = await self.repository.update_run(
+                run.id,
+                candidate_count=len(
+                    scored_candidates
+                ),
+            )
+
+            # ---------------------------------------------------------
+            # 9. Mark completed.
+            # ---------------------------------------------------------
+
+            run = await self.repository.update_run(
+                run.id,
+                status="completed",
+                completed_at=datetime.now(
+                    timezone.utc
+                ),
+                error_message=None,
+            )
+
+            # ---------------------------------------------------------
+            # 10. ONE COMMIT.
+            # ---------------------------------------------------------
+
+            await self.session.commit()
+
+        except Exception:
+            # ---------------------------------------------------------
+            # Any database failure rolls back the complete operation.
+            # ---------------------------------------------------------
+
+            await self.session.rollback()
+
+            raise
+
+        # -------------------------------------------------------------
+        # 11. Return persisted run.
+        # -------------------------------------------------------------
+
+        return await self._build_response(
+            run.id
+        )
+
+    # =================================================================
+    # PROJECT ID NORMALIZATION
+    # =================================================================
+
+    @staticmethod
+    def _normalize_project_id(
+        request_project_id: UUID | None,
+        constraints: DesignConstraints,
+    ) -> DesignConstraints:
+        """
+        Ensure project_id is represented consistently.
+
+        If the request contains a project ID and the constraints do
+        not, the request ID is copied into the normalized constraints.
+
+        If both exist but differ, generation is rejected.
+        """
+
+        constraint_project_id = (
+            constraints.project_id
+        )
+
+        if (
+            request_project_id is not None
+            and constraint_project_id is not None
+            and request_project_id
+            != constraint_project_id
+        ):
+            raise GenerativeDesignValidationError(
+                ConstraintValidationResult(
+                    valid=False,
+                    errors=[
+                        "project_id in request does not match "
+                        "project_id in constraints."
+                    ],
+                    warnings=[],
+                )
+            )
+
+        if (
+            request_project_id is not None
+            and constraint_project_id is None
+        ):
+            return constraints.model_copy(
+                update={
+                    "project_id": request_project_id
+                }
+            )
+
+        return constraints
+
+    # =================================================================
+    # SCORING
+    # =================================================================
+
+    def _score_candidate(
+        self,
+        candidate: Any,
+        constraints: DesignConstraints,
+    ) -> Any:
+        """
+        Score one generated candidate.
+
+        If no external scorer is supplied, the candidate is returned
+        unchanged. This keeps the service compatible with the current
+        generator while allowing scoring.py to be injected cleanly.
+        """
+
+        if self.scorer is None:
+            return candidate
+
+        return self.scorer(
+            candidate,
+            constraints,
+        )
+
+    # =================================================================
+    # CANDIDATE NORMALIZATION
+    # =================================================================
+
+    @staticmethod
+    def _candidate_to_dict(
+        candidate: Any,
+    ) -> dict[str, Any]:
+        """
+        Convert a generated/scored candidate into repository fields.
+        """
+
+        if isinstance(
+            candidate,
+            DesignCandidateSchema,
+        ):
+            data = candidate.model_dump(
+                mode="json"
+            )
+
+        elif hasattr(
+            candidate,
+            "model_dump",
+        ):
+            data = candidate.model_dump(
+                mode="json"
+            )
+
+        elif isinstance(
+            candidate,
+            dict,
+        ):
+            data = dict(candidate)
+
         else:
-            run = await self.repository.get_run(
-                run_id
-            )
+            data = {
+                key: getattr(
+                    candidate,
+                    key,
+                )
+                for key in (
+                    "name",
+                    "status",
+                    "rank",
+                    "score",
+                    "geometry",
+                    "metrics",
+                    "evaluation",
+                )
+                if hasattr(
+                    candidate,
+                    key,
+                )
+            }
 
-        if run is None:
-            raise GenerativeDesignRunNotFoundError(
-                f"Generative design run {run_id} was not found."
-            )
+        # -------------------------------------------------------------
+        # Repository.create_candidate() should receive only fields
+        # belonging to DesignCandidateRecord.
+        # -------------------------------------------------------------
 
-        return run
+        allowed_fields = {
+            "name",
+            "status",
+            "rank",
+            "score",
+            "geometry",
+            "metrics",
+            "evaluation",
+        }
 
-    async def list_runs(
-        self,
-        *,
-        project_id: UUID | None = None,
-        status: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[GenerativeDesignRun]:
-        """
-        List generative design runs.
-        """
+        return {
+            key: value
+            for key, value in data.items()
+            if key in allowed_fields
+        }
 
-        runs = await self.repository.list_runs(
-            project_id=project_id,
-            status=status,
-            limit=limit,
-            offset=offset,
-        )
+    # =================================================================
+    # RESPONSE
+    # =================================================================
 
-        return list(runs)
-
-    async def list_candidates(
-        self,
-        *,
-        run_id: UUID,
-        status: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[DesignCandidateRecord]:
-        """
-        List candidates belonging to a run.
-        """
-
-        candidates = await self.repository.list_candidates(
-            run_id=run_id,
-            status=status,
-            limit=limit,
-            offset=offset,
-        )
-
-        return list(candidates)
-
-    # =====================================================================
-    # DELETE
-    # =====================================================================
-
-    async def delete_run(
+    async def _build_response(
         self,
         run_id: UUID,
-    ) -> bool:
+    ) -> GenerativeDesignRunResponse:
         """
-        Delete a complete generation run.
-
-        The run's candidates are deleted through the model/database
-        cascade.
+        Load the completed run and construct its response schema.
         """
 
-        return await self.repository.delete_run(
+        run = await self.repository.get_run(
             run_id
         )
 
-    # =====================================================================
-    # CONSTRAINT PROCESSING
-    # =====================================================================
-
-    @staticmethod
-    def _build_constraint_set(
-        constraints: dict[str, Any],
-    ) -> ConstraintSet:
-        """
-        Convert raw constraint data into the domain constraint object.
-
-        The constraints module is responsible for validating and
-        normalizing the individual constraint groups.
-        """
-
-        try:
-            return build_constraints(
-                constraints
-            )
-        except Exception as exc:
-            raise GenerativeDesignGenerationError(
-                f"Invalid design constraints: {exc}"
-            ) from exc
-
-    @staticmethod
-    def _serialize_constraints(
-        constraint_set: ConstraintSet,
-    ) -> dict[str, Any]:
-        """
-        Convert the domain constraint object into JSON-compatible data.
-        """
-
-        if hasattr(
-            constraint_set,
-            "model_dump",
-        ):
-            return constraint_set.model_dump(
-                mode="json"
+        if run is None:
+            raise RuntimeError(
+                "Generative design run could not be "
+                "loaded after successful commit."
             )
 
-        if hasattr(
-            constraint_set,
-            "dict",
-        ):
-            return constraint_set.dict()
-
-        if isinstance(
-            constraint_set,
-            dict,
-        ):
-            return dict(constraint_set)
-
-        if hasattr(
-            constraint_set,
-            "__dict__",
-        ):
-            return dict(
-                constraint_set.__dict__
-            )
-
-        raise TypeError(
-            "ConstraintSet cannot be serialized to JSON."
+        return GenerativeDesignRunResponse.model_validate(
+            run
         )
-
-    # =====================================================================
-    # GENERATOR
-    # =====================================================================
-
-    @staticmethod
-    def _generate_candidates(
-        *,
-        constraint_set: ConstraintSet,
-        candidate_count: int,
-    ) -> list[Any]:
-        """
-        Generate candidate designs from the constraint set.
-        """
-
-        try:
-            return list(
-                generate_designs(
-                    constraints=constraint_set,
-                    count=candidate_count,
-                )
-            )
-        except TypeError:
-            # Compatibility fallback for generators that use
-            # positional arguments.
-            try:
-                return list(
-                    generate_designs(
-                        constraint_set,
-                        candidate_count,
-                    )
-                )
-            except Exception as exc:
-                raise GenerativeDesignGenerationError(
-                    f"Design generation failed: {exc}"
-                ) from exc
-
-        except Exception as exc:
-            raise GenerativeDesignGenerationError(
-                f"Design generation failed: {exc}"
-            ) from exc
-
-    # =====================================================================
-    # SCORING
-    # =====================================================================
-
-    @staticmethod
-    def _score_candidate(
-        *,
-        candidate: Any,
-        constraints: ConstraintSet,
-    ) -> Any:
-        """
-        Score a generated candidate against the constraint set.
-        """
-
-        try:
-            return score_design(
-                candidate=candidate,
-                constraints=constraints,
-            )
-        except TypeError:
-            try:
-                return score_design(
-                    candidate,
-                    constraints,
-                )
-            except Exception as exc:
-                raise GenerativeDesignGenerationError(
-                    f"Candidate scoring failed: {exc}"
-                ) from exc
-
-        except Exception as exc:
-            raise GenerativeDesignGenerationError(
-                f"Candidate scoring failed: {exc}"
-            ) from exc
-
-    @staticmethod
-    def _rank_candidates(
-        *,
-        candidates: list[dict[str, Any]],
-        constraints: ConstraintSet,
-    ) -> list[dict[str, Any]]:
-        """
-        Rank scored candidates.
-
-        The scoring module owns the ranking strategy.
-        """
-
-        try:
-            ranked = rank_designs(
-                candidates=candidates,
-                constraints=constraints,
-            )
-
-            return list(ranked)
-
-        except TypeError:
-            try:
-                ranked = rank_designs(
-                    candidates,
-                )
-
-                return list(ranked)
-
-            except Exception as exc:
-                raise GenerativeDesignGenerationError(
-                    f"Candidate ranking failed: {exc}"
-                ) from exc
-
-        except Exception as exc:
-            raise GenerativeDesignGenerationError(
-                f"Candidate ranking failed: {exc}"
-            ) from exc
-
-    # =====================================================================
-    # CANDIDATE SERIALIZATION
-    # =====================================================================
-
-    @staticmethod
-    def _candidate_name(
-        candidate: Any,
-        index: int,
-    ) -> str:
-        """
-        Extract a candidate name.
-        """
-
-        if isinstance(candidate, dict):
-            name = candidate.get("name")
-
-            if name:
-                return str(name)
-
-        name = getattr(
-            candidate,
-            "name",
-            None,
-        )
-
-        if name:
-            return str(name)
-
-        return f"Design Option {index}"
-
-    @staticmethod
-    def _candidate_geometry(
-        candidate: Any,
-    ) -> dict[str, Any]:
-        """
-        Extract geometry from a generated candidate.
-        """
-
-        if isinstance(candidate, dict):
-            geometry = candidate.get(
-                "geometry",
-                {},
-            )
-        else:
-            geometry = getattr(
-                candidate,
-                "geometry",
-                {},
-            )
-
-        if geometry is None:
-            return {}
-
-        if isinstance(geometry, dict):
-            return geometry
-
-        if hasattr(
-            geometry,
-            "model_dump",
-        ):
-            return geometry.model_dump(
-                mode="json"
-            )
-
-        if hasattr(
-            geometry,
-            "dict",
-        ):
-            return geometry.dict()
-
-        if hasattr(
-            geometry,
-            "__dict__",
-        ):
-            return dict(
-                geometry.__dict__
-            )
-
-        return {
-            "value": geometry
-        }
-
-    @staticmethod
-    def _candidate_metrics(
-        candidate: Any,
-    ) -> dict[str, Any]:
-        """
-        Extract calculated metrics from a candidate.
-        """
-
-        if isinstance(candidate, dict):
-            metrics = candidate.get(
-                "metrics",
-                {},
-            )
-        else:
-            metrics = getattr(
-                candidate,
-                "metrics",
-                {},
-            )
-
-        if metrics is None:
-            return {}
-
-        if isinstance(metrics, dict):
-            return metrics
-
-        if hasattr(
-            metrics,
-            "model_dump",
-        ):
-            return metrics.model_dump(
-                mode="json"
-            )
-
-        if hasattr(
-            metrics,
-            "dict",
-        ):
-            return metrics.dict()
-
-        if hasattr(
-            metrics,
-            "__dict__",
-        ):
-            return dict(
-                metrics.__dict__
-            )
-
-        return {
-            "value": metrics
-        }
-
-    @staticmethod
-    def _candidate_evaluation(
-        scored_candidate: Any,
-    ) -> dict[str, Any]:
-        """
-        Extract the scoring/evaluation result.
-        """
-
-        if isinstance(
-            scored_candidate,
-            dict,
-        ):
-            evaluation = scored_candidate.get(
-                "evaluation",
-                scored_candidate,
-            )
-        else:
-            evaluation = getattr(
-                scored_candidate,
-                "evaluation",
-                {},
-            )
-
-        if evaluation is None:
-            return {}
-
-        if isinstance(
-            evaluation,
-            dict,
-        ):
-            return evaluation
-
-        if hasattr(
-            evaluation,
-            "model_dump",
-        ):
-            return evaluation.model_dump(
-                mode="json"
-            )
-
-        if hasattr(
-            evaluation,
-            "dict",
-        ):
-            return evaluation.dict()
-
-        if hasattr(
-            evaluation,
-            "__dict__",
-        ):
-            return dict(
-                evaluation.__dict__
-            )
-
-        return {
-            "value": evaluation
-        }
-
-    @staticmethod
-    def _candidate_score(
-        scored_candidate: Any,
-    ) -> float:
-        """
-        Extract the final numerical candidate score.
-        """
-
-        if isinstance(
-            scored_candidate,
-            dict,
-        ):
-            value = scored_candidate.get(
-                "score",
-                0.0,
-            )
-        else:
-            value = getattr(
-                scored_candidate,
-                "score",
-                0.0,
-            )
-
-        try:
-            return float(value)
-        except (
-            TypeError,
-            ValueError,
-        ):
-            return 0.0
