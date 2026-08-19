@@ -345,6 +345,15 @@ IMAGINE/
             ├── test_schemas.py
             └── test_service.py
 
+room_adjacencies
+├── id
+├── room_program_id
+├── target_room_program_id
+├── adjacency_type
+├── distance_m
+├── required
+└── notes
+
 
 architecture/room_programming/
 ├── __init__.py
