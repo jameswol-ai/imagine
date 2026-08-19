@@ -6,6 +6,17 @@ from typing import Any, Awaitable, Callable
 
 import streamlit as st
 
+from database.connection import AsyncSessionLocal
+
+# Register all Project relationship targets before any ORM query.
+from projects.model_registry import Project  # noqa: F401
+
+from projects.projects.service import ProjectService
+
+from projects.projects.schemas import (
+    ProjectCreate,
+    ProjectUpdate,
+)
 # ============================================================
 # DATABASE / ASYNC SESSION
 # ============================================================
