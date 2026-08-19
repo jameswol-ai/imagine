@@ -406,3 +406,139 @@ architecture/generative_design/
     ├── test_repository.py
     ├── test_service.py
     └── test_ui.py
+
+
+
+🏗️ IMAGINE
+
+🏠 Overview
+
+📁 PROJECTS
+   Projects
+   Approvals
+   Revisions
+   Workflows
+   Governance
+
+🏛️ ARCHITECTURE
+   Zoning
+   Site Planning
+   Floor Planning
+   Room Programming
+   Compliance
+   Generative Design
+
+🏗️ STRUCTURAL
+   Eurocode EN 1990
+   Eurocode EN 1991
+   Eurocode EN 1992
+   Eurocode EN 1993
+   Eurocode EN 1995
+   Eurocode EN 1997
+   Eurocode EN 1998
+   Beam Design
+   Column Design
+   Slab Design
+   Foundation Design
+   Retaining Walls
+   Steel Connections
+   Finite Element Analysis
+
+🧱 BIM
+   Buildings
+   Storeys
+   Spaces
+   Elements
+   IFC
+   COBie
+   BIM Digital Twin
+
+⚡ MEP
+   HVAC
+   Ventilation
+   Chilled Water
+   Energy Simulation
+   Electrical Load Analysis
+   Transformers
+   Generators
+   Cable Sizing
+   Solar PV
+   Water Supply
+   Drainage
+   Stormwater
+   Sewer Networks
+   Firefighting
+
+💰 COSTING
+   BOQ
+   Quantity Takeoff
+   Procurement
+   Forex
+   Inflation
+   Risk Analysis
+   Cashflow
+
+🏭 CONSTRUCTION
+   Planning
+   Scheduling
+   RFIs
+   Submittals
+   Variations
+   Snagging
+   Progress Tracking
+   Site Diaries
+
+📚 DOCUMENTS
+   Drawing Management
+   Specifications
+   Contracts
+   Reports
+   Version Control
+   Archives
+
+🤖 AI
+   IMAGINE Architect
+   IMAGINE Engineer
+   IMAGINE MEP
+   IMAGINE QS
+   IMAGINE PM
+   Vector Store
+   RAG
+   Prompt Library
+
+📊 ANALYTICS
+   Dashboards
+   KPIs
+   Portfolio
+   Forecasting
+   Reporting
+
+🌍 REGIONAL
+   Uganda
+   Kenya
+   Tanzania
+   Rwanda
+   South Sudan
+   Codes
+   Zoning Laws
+
+🔌 INTEGRATIONS
+   Microsoft
+   AutoCAD
+   Revit
+   Archicad
+   Tekla
+   IfcOpenShell
+   ArcGIS
+   Azure
+   Mapbox
+
+🌐 DIGITAL TWIN
+   Assets
+   Sensors
+   Telemetry
+   Energy
+   Maintenance
+   Predictive AI
+
+🩺 System Health
