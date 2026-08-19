@@ -1,6 +1,8 @@
 """
 IMAGINE
 Application Health Checks
+
+Provides safe, isolated import checks for application modules.
 """
 
 from __future__ import annotations
@@ -9,6 +11,11 @@ import importlib
 import traceback
 from dataclasses import dataclass
 from typing import Any
+
+
+# ============================================================
+# DATA MODEL
+# ============================================================
 
 
 @dataclass
@@ -22,10 +29,20 @@ class ModuleHealth:
     traceback_text: str | None = None
 
 
+# ============================================================
+# MODULE CHECK
+# ============================================================
+
+
 def check_module(
     module_name: str,
 ) -> ModuleHealth:
-    """Safely import and inspect a module."""
+    """
+    Safely import one module.
+
+    Returns a ModuleHealth object instead of allowing an
+    import exception to crash the caller.
+    """
 
     try:
         module = importlib.import_module(
@@ -52,12 +69,26 @@ def check_module(
         )
 
 
+# ============================================================
+# STARTUP HEALTH CHECK
+# ============================================================
+
+
 def run_startup_health_check() -> list[ModuleHealth]:
     """
-    Check the core IMAGINE application modules.
+    Check the core Generative Design dependency chain.
 
-    Generative Design is intentionally included because it is
-    currently one of the primary application workflows.
+    The order is intentional:
+
+        schemas
+            ↓
+        constraints
+            ↓
+        generator
+            ↓
+        service
+            ↓
+        ui
     """
 
     modules = [
@@ -74,9 +105,15 @@ def run_startup_health_check() -> list[ModuleHealth]:
     ]
 
 
+# ============================================================
+# SUMMARY
+# ============================================================
+
+
 def health_summary(
     results: list[ModuleHealth],
 ) -> dict[str, Any]:
+    """Return aggregate health information."""
 
     total = len(results)
 
@@ -97,6 +134,11 @@ def health_summary(
             else "degraded"
         ),
     }
+
+
+# ============================================================
+# PUBLIC API
+# ============================================================
 
 
 __all__ = [
