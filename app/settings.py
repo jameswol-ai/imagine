@@ -5,50 +5,84 @@ Application Settings
 
 from __future__ import annotations
 
-from pydantic import Field
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-)
+import os
 
 
-class Settings(BaseSettings):
-    """Application configuration."""
+class Settings:
+    """Application configuration.
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        extra="ignore",
+    Environment variables override the defaults.
+    This implementation intentionally avoids making the
+    database layer depend on pydantic-settings just to import.
+    """
+
+    APP_NAME: str = os.getenv(
+        "APP_NAME",
+        "IMAGINE",
     )
 
-    APP_NAME: str = "IMAGINE"
+    DEBUG: bool = os.getenv(
+        "DEBUG",
+        "false",
+    ).lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
-    DEBUG: bool = False
-
-    API_V1_PREFIX: str = "/api/v1"
-
-    SECRET_KEY: str = Field(
-        default="your-secret-key"
+    API_V1_PREFIX: str = os.getenv(
+        "API_V1_PREFIX",
+        "/api/v1",
     )
 
-    ALGORITHM: str = "HS256"
+    SECRET_KEY: str = os.getenv(
+        "SECRET_KEY",
+        "your-secret-key",
+    )
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
+    ALGORITHM: str = os.getenv(
+        "ALGORITHM",
+        "HS256",
+    )
 
-    DB_USER: str = "postgres"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
+        os.getenv(
+            "ACCESS_TOKEN_EXPIRE_MINUTES",
+            "10080",
+        )
+    )
 
-    DB_PASSWORD: str = "postgres"
+    DB_USER: str = os.getenv(
+        "DB_USER",
+        "postgres",
+    )
 
-    DB_HOST: str = "localhost"
+    DB_PASSWORD: str = os.getenv(
+        "DB_PASSWORD",
+        "postgres",
+    )
 
-    DB_PORT: int = 5432
+    DB_HOST: str = os.getenv(
+        "DB_HOST",
+        "localhost",
+    )
 
-    DB_NAME: str = "imagine"
+    DB_PORT: int = int(
+        os.getenv(
+            "DB_PORT",
+            "5432",
+        )
+    )
+
+    DB_NAME: str = os.getenv(
+        "DB_NAME",
+        "imagine",
+    )
 
     @property
     def DATABASE_URL(self) -> str:
-        """Return the asynchronous PostgreSQL connection URL."""
+        """Return the asynchronous PostgreSQL URL."""
 
         return (
             "postgresql+asyncpg://"
