@@ -58,7 +58,7 @@ class Project(BaseModel):
         nullable=True,
     )
 
-    # Organization.id is Integer in the existing database model.
+    # Organization.id is Integer.
     client_id = Column(
         ForeignKey("organizations.id"),
         nullable=True,
@@ -69,6 +69,8 @@ class Project(BaseModel):
         foreign_keys=[client_id],
     )
 
+    # These relationship targets are registered by
+    # projects.model_registry before ORM queries execute.
     approvals = relationship(
         "Approval",
         back_populates="project",
