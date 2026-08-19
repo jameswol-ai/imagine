@@ -1,15 +1,8 @@
 """
 streamlit_app.py
 ----------------
-IMAGINE - Generative Architecture & Civil Engine
-Resilient Streamlit Application Shell & Centralized Renderer Registry.
-
-This shell handles:
-    - Application layout & global glassmorphism CSS
-    - Module registry for Architecture, Structural Analysis, Projects, BIM, MEP, Costing, AI, & System
-    - Dynamic safe module loading & runtime error isolation
-    - Projects ORM model registration
-    - Comprehensive system health diagnostics
+studiohome - Generative Architecture & Civil Engine
+Sidebar-free layout with top navigation header & centralized module registry.
 """
 
 from __future__ import annotations
@@ -23,122 +16,84 @@ from typing import Any, Callable
 
 import streamlit as st
 
-
 # ============================================================================
 # APPLICATION CONFIGURATION
 # ============================================================================
 
-APP_NAME = "IMAGINE"
+APP_NAME = "studiohome"
 APP_SUBTITLE = "Generative Architecture & Civil Engine"
 APP_VERSION = "1.0.0 Alpha"
 
-
 st.set_page_config(
-    page_title=f"{APP_NAME} | Generative Architecture & Civil Engine",
-    page_icon="🏗️",
+    page_title=f"{APP_NAME} | {APP_SUBTITLE}",
+    page_icon="🏠",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-
 # ============================================================================
-# GLOBAL STYLES
+# GLOBAL STYLES & SIDEBAR REMOVAL
 # ============================================================================
 
 st.markdown(
     """
     <style>
-        #MainMenu { visibility: hidden; }
-        footer { visibility: hidden; }
-        header { visibility: hidden; }
+        /* Completely remove standard sidebar */
+        [data-testid="stSidebar"] { display: none !important; }
+        #MainMenu, footer, header { visibility: hidden; }
 
         .block-container {
             padding-top: 1rem;
             padding-bottom: 2rem;
+            max-width: 96%;
         }
 
-        [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(128, 128, 128, 0.18);
-        }
-
-        [data-testid="stSidebar"] > div:first-child {
-            padding-top: 1rem;
-        }
-
-        .imagine-brand {
-            font-size: 1.45rem;
-            font-weight: 800;
-            line-height: 1.2;
-            letter-spacing: 0.02em;
-        }
-
-        .imagine-subtitle {
-            color: #777;
-            font-size: 0.78rem;
-            line-height: 1.35;
-            margin-top: 0.2rem;
-        }
-
-        .imagine-section {
-            color: #777;
-            font-size: 0.68rem;
-            font-weight: 800;
-            letter-spacing: 0.12em;
-            margin-top: 1rem;
-            margin-bottom: 0.3rem;
-        }
-
-        .imagine-user-panel {
+        /* Top Navigation Glass Container */
+        .studio-navbar {
             border: 1px solid rgba(128, 128, 128, 0.18);
-            border-radius: 10px;
-            padding: 0.75rem;
-            margin-top: 0.5rem;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.25rem;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(8px);
         }
 
-        .imagine-user-name {
+        .studio-brand {
+            font-size: 1.6rem;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            line-height: 1.1;
+        }
+
+        .studio-subtitle {
+            color: #888;
+            font-size: 0.8rem;
+            margin-top: 0.15rem;
+        }
+
+        .studio-user-badge {
+            text-align: right;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+
+        .studio-user-name {
             font-weight: 700;
-            font-size: 0.9rem;
+            color: #fff;
         }
 
-        .imagine-user-role {
-            color: #777;
-            font-size: 0.75rem;
-        }
-
-        .imagine-page-label {
+        .studio-page-label {
             color: #777;
             font-size: 0.72rem;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            margin-bottom: -0.35rem;
-        }
-
-        .imagine-status-ready {
-            color: #16803c;
-            font-weight: 700;
-        }
-
-        .imagine-status-error {
-            color: #c62828;
-            font-weight: 700;
-        }
-
-        .imagine-status-warning {
-            color: #a86500;
-            font-weight: 700;
-        }
-
-        .imagine-kpi {
-            border: 1px solid rgba(128, 128, 128, 0.18);
-            border-radius: 12px;
-            padding: 1rem;
+            margin-bottom: 0.25rem;
         }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
 
 # ============================================================================
 # TYPES & DATACLASSES
@@ -169,20 +124,17 @@ class ModuleDefinition:
 # SESSION STATE INITIALIZATION
 # ============================================================================
 
-if "imagine_selected_module" not in st.session_state:
-    st.session_state.imagine_selected_module = "overview"
+if "selected_section" not in st.session_state:
+    st.session_state.selected_section = "MAIN"
 
-if "imagine_renderer_errors" not in st.session_state:
-    st.session_state.imagine_renderer_errors = {}
+if "selected_module" not in st.session_state:
+    st.session_state.selected_module = "overview"
 
-if "imagine_module_status" not in st.session_state:
-    st.session_state.imagine_module_status = {}
+if "user_name" not in st.session_state:
+    st.session_state.user_name = "admin"
 
-if "imagine_user" not in st.session_state:
-    st.session_state.imagine_user = "admin"
-
-if "imagine_role" not in st.session_state:
-    st.session_state.imagine_role = "Administrator"
+if "user_role" not in st.session_state:
+    st.session_state.user_role = "Administrator"
 
 
 # ============================================================================
@@ -190,7 +142,6 @@ if "imagine_role" not in st.session_state:
 # ============================================================================
 
 def _safe_import(module_path: str) -> tuple[Any | None, BaseException | None, str]:
-    """Import a module safely without raising unhandled exceptions to the main thread."""
     try:
         module = importlib.import_module(module_path)
         return module, None, ""
@@ -202,7 +153,6 @@ def _resolve_renderer(
     module_path: str,
     renderer_name: str,
 ) -> tuple[Renderer | None, BaseException | None, str]:
-    """Import a module and resolve its zero-argument Streamlit renderer adapter."""
     module, import_error, import_traceback = _safe_import(module_path)
 
     if import_error is not None:
@@ -234,7 +184,7 @@ def _resolve_renderer(
                 None,
                 TypeError(
                     f"{module_path}.{renderer_name} requires arguments ({names}). "
-                    "IMAGINE renderers must expose a zero-argument adapter."
+                    f"{APP_NAME} renderers must expose a zero-argument adapter."
                 ),
                 "",
             )
@@ -249,7 +199,6 @@ def _resolve_renderer(
 # ============================================================================
 
 def _register_project_models() -> tuple[bool, BaseException | None, str]:
-    """Register SQLAlchemy ORM models prior to query execution."""
     try:
         importlib.import_module("database.models.organization")
         importlib.import_module("database.models.user")
@@ -265,25 +214,21 @@ def _register_project_models() -> tuple[bool, BaseException | None, str]:
 
 
 # ============================================================================
-# CENTRALIZED MODULE REGISTRY
+# MODULE REGISTRY
 # ============================================================================
 
 MODULES: list[ModuleDefinition] = [
-    # ------------------------------------------------------------------------
     # MAIN
-    # ------------------------------------------------------------------------
     ModuleDefinition(
         key="overview",
         label="Overview",
         icon="🏠",
         section="MAIN",
-        description="IMAGINE business ecosystem and application hub.",
+        description=f"{APP_NAME} ecosystem dashboard and engine core.",
         implemented=True,
     ),
 
-    # ------------------------------------------------------------------------
     # ARCHITECTURE
-    # ------------------------------------------------------------------------
     ModuleDefinition(
         key="architecture",
         label="Architecture Suite",
@@ -355,9 +300,7 @@ MODULES: list[ModuleDefinition] = [
         implemented=True,
     ),
 
-    # ------------------------------------------------------------------------
-    # STRUCTURAL ANALYSIS AI
-    # ------------------------------------------------------------------------
+    # STRUCTURAL ANALYSIS
     ModuleDefinition(
         key="fea",
         label="FEA Structural Analysis",
@@ -409,9 +352,7 @@ MODULES: list[ModuleDefinition] = [
         implemented=True,
     ),
 
-    # ------------------------------------------------------------------------
     # PROJECTS
-    # ------------------------------------------------------------------------
     ModuleDefinition(
         key="projects",
         label="Projects",
@@ -463,9 +404,7 @@ MODULES: list[ModuleDefinition] = [
         implemented=True,
     ),
 
-    # ------------------------------------------------------------------------
     # BIM & DIGITAL TWIN
-    # ------------------------------------------------------------------------
     ModuleDefinition(
         key="bim_elements",
         label="BIM & IFC Model",
@@ -483,9 +422,7 @@ MODULES: list[ModuleDefinition] = [
         implemented=False,
     ),
 
-    # ------------------------------------------------------------------------
-    # MEP ENGINEERING
-    # ------------------------------------------------------------------------
+    # MEP
     ModuleDefinition(
         key="hvac",
         label="HVAC & Mechanical",
@@ -511,9 +448,7 @@ MODULES: list[ModuleDefinition] = [
         implemented=False,
     ),
 
-    # ------------------------------------------------------------------------
-    # COSTING & QUANTITY SURVEYING
-    # ------------------------------------------------------------------------
+    # COSTING
     ModuleDefinition(
         key="boq_takeoff",
         label="Quantity Takeoff & BOQ",
@@ -523,54 +458,41 @@ MODULES: list[ModuleDefinition] = [
         implemented=False,
     ),
 
-    # ------------------------------------------------------------------------
-    # IMAGINE AI AGENTS
-    # ------------------------------------------------------------------------
+    # AI SUITE
     ModuleDefinition(
         key="imagine_ai",
-        label="IMAGINE Copilots",
+        label=f"{APP_NAME} Copilots",
         icon="🤖",
         section="AI SUITE",
         description="Specialized AI agents for Architect, Structural Engineer, MEP, & QS.",
         implemented=False,
     ),
 
-    # ------------------------------------------------------------------------
-    # SYSTEM Diagnostics
-    # ------------------------------------------------------------------------
+    # SYSTEM
     ModuleDefinition(
         key="system_health",
         label="System Health",
         icon="🩺",
         section="SYSTEM",
-        description="IMAGINE diagnostics, runtime performance, and renderer state.",
+        description=f"{APP_NAME} diagnostics, runtime performance, and renderer state.",
         implemented=True,
     ),
 ]
-
 
 MODULE_REGISTRY: dict[str, ModuleDefinition] = {
     module.key: module for module in MODULES
 }
 
+SECTIONS = ["MAIN", "ARCHITECTURE", "STRUCTURAL ANALYSIS", "PROJECTS", "BIM & TWIN", "MEP", "COSTING", "AI SUITE", "SYSTEM"]
+
 
 # ============================================================================
-# RENDERER LOADING
+# RENDERER INITIALIZATION
 # ============================================================================
 
 def _load_module_renderer(module: ModuleDefinition) -> None:
-    """Resolve module renderers lazily/on startup safely."""
-    if not module.implemented:
-        module.loaded = False
-        return
-
-    if not module.renderer_path:
-        module.loaded = True
-        st.session_state.imagine_module_status[module.key] = {
-            "loaded": True,
-            "implemented": True,
-            "error": None,
-        }
+    if not module.implemented or not module.renderer_path:
+        module.loaded = module.implemented and module.renderer_path is None
         return
 
     renderer, error, error_traceback = _resolve_renderer(
@@ -583,134 +505,91 @@ def _load_module_renderer(module: ModuleDefinition) -> None:
     module.traceback_text = error_traceback
     module.loaded = renderer is not None
 
-    st.session_state.imagine_module_status[module.key] = {
-        "loaded": module.loaded,
-        "implemented": module.implemented,
-        "error": error,
-    }
 
-    if error is not None:
-        st.session_state.imagine_renderer_errors[module.key] = {
-            "error": error,
-            "traceback": error_traceback,
-        }
-
-
-def _load_all_renderers() -> None:
-    for module in MODULES:
-        _load_module_renderer(module)
-
-
-_load_all_renderers()
+for m in MODULES:
+    _load_module_renderer(m)
 
 
 # ============================================================================
-# NAVIGATION HELPERS
+# TOP NAVIGATION HEADER (NO SIDEBAR)
 # ============================================================================
 
-def _select_module(key: str) -> None:
-    st.session_state.imagine_selected_module = key
-
-
-def _module_button_label(module: ModuleDefinition) -> str:
-    label = f"{module.icon} {module.label}"
-    if module.renderer_path and not module.loaded:
-        label += " ⚠️"
-    return label
-
-
-def _render_navigation_section(section: str) -> None:
-    section_modules = [m for m in MODULES if m.section == section]
-    if not section_modules:
-        return
-
-    st.markdown(f'<div class="imagine-section">{section}</div>', unsafe_allow_html=True)
-
-    for module in section_modules:
-        selected = st.session_state.imagine_selected_module == module.key
-
-        if st.button(
-            _module_button_label(module),
-            key=f"imagine_nav_{module.key}",
-            use_container_width=True,
-            type="primary" if selected else "secondary",
-        ):
-            _select_module(module.key)
-            st.rerun()
-
-
-# ============================================================================
-# SIDEBAR NAVIGATION
-# ============================================================================
-
-def _render_sidebar() -> None:
-    """Full IMAGINE navigation panel with categorised sections."""
-    with st.sidebar:
+def _render_top_navigation() -> None:
+    # Brand & User Bar
+    c1, c2 = st.columns([3, 1])
+    with c1:
         st.markdown(
             f"""
-            <div class="imagine-brand">
-                🏗️ {APP_NAME}
-            </div>
-            <div class="imagine-subtitle">
-                {APP_SUBTITLE}
+            <div class="studio-brand">🏠 {APP_NAME}</div>
+            <div class="studio-subtitle">{APP_SUBTITLE}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c2:
+        st.markdown(
+            f"""
+            <div class="studio-user-badge">
+                <span class="studio-user-name">👤 {st.session_state.user_name}</span> ({st.session_state.user_role})
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.divider()
+    st.write("")
 
-        _render_navigation_section("MAIN")
-        _render_navigation_section("ARCHITECTURE")
-        _render_navigation_section("STRUCTURAL ANALYSIS")
-        _render_navigation_section("PROJECTS")
-        _render_navigation_section("BIM & TWIN")
-        _render_navigation_section("MEP")
-        _render_navigation_section("COSTING")
-        _render_navigation_section("AI SUITE")
-        _render_navigation_section("SYSTEM")
+    # Section Tabs Across Top
+    selected_sec = st.radio(
+        label="Navigation Sections",
+        options=SECTIONS,
+        index=SECTIONS.index(st.session_state.selected_section),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="top_section_radio",
+    )
 
-        st.divider()
+    if selected_sec != st.session_state.selected_section:
+        st.session_state.selected_section = selected_sec
+        # Pick first module in newly selected section
+        sec_mods = [m for m in MODULES if m.section == selected_sec]
+        if sec_mods:
+            st.session_state.selected_module = sec_mods[0].key
+        st.rerun()
 
-        st.markdown('<div class="imagine-section">USER PANEL</div>', unsafe_allow_html=True)
-        st.markdown(
-            f"""
-            <div class="imagine-user-panel">
-                <div class="imagine-user-name">
-                    👤 {st.session_state.imagine_user}
-                </div>
-                <div class="imagine-user-role">
-                    Role: {st.session_state.imagine_role}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    # Sub-module Selector Pills
+    section_modules = [m for m in MODULES if m.section == st.session_state.selected_section]
+    if section_modules:
+        cols = st.columns(len(section_modules))
+        for idx, mod in enumerate(section_modules):
+            is_active = st.session_state.selected_module == mod.key
+            btn_label = f"{mod.icon} {mod.label}"
+            if mod.renderer_path and not mod.loaded:
+                btn_label += " ⚠️"
 
-        st.write("")
+            if cols[idx].button(
+                btn_label,
+                key=f"nav_mod_{mod.key}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+            ):
+                st.session_state.selected_module = mod.key
+                st.rerun()
 
-        if st.button("🚪 Logout", key="imagine_logout", use_container_width=True):
-            st.session_state.imagine_user = "admin"
-            st.session_state.imagine_role = "Administrator"
-            st.session_state.imagine_selected_module = "overview"
-            st.rerun()
-
-        st.caption(f"{APP_NAME} {APP_VERSION}")
+    st.divider()
 
 
 # ============================================================================
-# PAGE HEADER & CORE VIEWS
+# CORE VIEWS
 # ============================================================================
 
 def _render_page_header(title: str, description: str = "") -> None:
-    st.markdown('<div class="imagine-page-label">IMAGINE | Generative Architecture & Civil Engine</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="studio-page-label">{APP_NAME} | {APP_SUBTITLE}</div>', unsafe_allow_html=True)
     st.title(title)
     if description:
         st.caption(description)
 
 
 def _render_overview() -> None:
-    _render_page_header("Overview", "Unified Multi-Disciplinary Generative Engine Dashboard")
+    _render_page_header("Overview", f"Unified Multi-Disciplinary Dashboard for {APP_NAME}")
 
     total = len(MODULES)
     implemented = sum(1 for m in MODULES if m.implemented)
@@ -724,7 +603,7 @@ def _render_overview() -> None:
     col4.metric("Import Errors", failed)
 
     st.markdown("### Structural & Architectural AI Capabilities")
-    
+
     a1, a2, a3 = st.columns(3)
     with a1:
         st.markdown("#### 🏛️ Architecture AI")
@@ -756,7 +635,7 @@ def _render_overview() -> None:
 
 
 def _render_system_health() -> None:
-    _render_page_header("System Health", "IMAGINE application, runtime diagnostics, and module status.")
+    _render_page_header("System Health", f"{APP_NAME} diagnostics, runtime performance, and module status.")
 
     st.subheader("Runtime Environment")
     columns = st.columns(4)
@@ -799,28 +678,20 @@ def _render_system_health() -> None:
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
-def _render_unavailable(module: ModuleDefinition) -> None:
-    _render_page_header(module.label, module.description)
-    st.error(f"{module.label} could not be loaded due to an import exception.")
-    if module.import_error is not None:
-        with st.expander("Import Exception & Stacktrace", expanded=True):
-            st.exception(module.import_error)
-            if module.traceback_text:
-                st.code(module.traceback_text, language="text")
-
-
-def _render_unimplemented(module: ModuleDefinition) -> None:
-    _render_page_header(module.label, module.description)
-    st.info(f"{module.label} is registered in the architecture schema, but its Streamlit UI renderer has not yet been implemented.")
-
-
 def _render_module(module: ModuleDefinition) -> None:
     if not module.implemented:
-        _render_unimplemented(module)
+        _render_page_header(module.label, module.description)
+        st.info(f"{module.label} is registered in the schema, but its Streamlit UI renderer is not yet implemented.")
         return
 
     if module.renderer is None:
-        _render_unavailable(module)
+        _render_page_header(module.label, module.description)
+        st.error(f"{module.label} could not be loaded due to an import exception.")
+        if module.import_error is not None:
+            with st.expander("Import Exception & Stacktrace", expanded=True):
+                st.exception(module.import_error)
+                if module.traceback_text:
+                    st.code(module.traceback_text, language="text")
         return
 
     try:
@@ -833,32 +704,25 @@ def _render_module(module: ModuleDefinition) -> None:
 
 
 # ============================================================================
-# ROUTING & ENTRY POINT
+# ENTRY POINT
 # ============================================================================
 
-def _render_current_module() -> None:
-    selected = st.session_state.imagine_selected_module
+def main() -> None:
+    _render_top_navigation()
+
+    selected = st.session_state.selected_module
     module = MODULE_REGISTRY.get(selected)
 
     if module is None:
         module = MODULE_REGISTRY["overview"]
-        st.session_state.imagine_selected_module = "overview"
+        st.session_state.selected_module = "overview"
 
     if module.key == "overview":
         _render_overview()
-        return
-
-    if module.key == "system_health":
+    elif module.key == "system_health":
         _render_system_health()
-        return
-
-    _render_module(module)
-
-
-def main() -> None:
-    """Zero-argument Streamlit application entry point."""
-    _render_sidebar()
-    _render_current_module()
+    else:
+        _render_module(module)
 
 
 if __name__ == "__main__":
