@@ -1,30 +1,26 @@
 """
 IMAGINE
-Site Planning UI
+Architecture / Site Planning UI
 
 Streamlit interface for Site Planning.
 
-The renderer intentionally has a zero-argument contract so it can
-be registered directly with the IMAGINE application shell.
+UI responsibilities:
+    - Render the Site Planning interface.
+    - Construct the synchronous service once per render.
+    - Pass the same service instance to all UI helpers.
+    - Keep the Streamlit renderer zero-argument.
 
-Database operations are performed through the synchronous
-SitePlanService adapters:
-
-    list_sync()
-    create_sync()
-    update_sync()
-    delete_sync()
-    summary_sync()
-
-The asynchronous SitePlanService API remains unchanged.
+Domain responsibilities remain inside:
+    models.py
+    repository.py
+    service.py
 """
+
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
-import pandas as pd
 import streamlit as st
 
 from .service import SitePlanService
@@ -37,64 +33,21 @@ from .service import SitePlanService
 
 def _get_sync_service() -> SitePlanService:
     """
-    Create a SitePlanService instance for Streamlit.
+    Construct the Site Planning service.
 
-    The synchronous adapter methods create their own async
-    database sessions internally.
+    The service exposes synchronous adapters for Streamlit:
 
-    No database session is retained by the Streamlit UI.
+        list_sync()
+        create_sync()
+        update_sync()
+        delete_sync()
+        summary_sync()
+
+    A single service instance is shared across the entire
+    render_site_planning() call.
     """
 
-    return SitePlanService.__new__(
-        SitePlanService
-    )
-
-
-# ============================================================
-# DATAFRAME CONVERSION
-# ============================================================
-
-
-def _plans_to_dataframe(
-    plans: list[Any],
-) -> pd.DataFrame:
-    """
-    Convert SitePlan ORM objects into a Streamlit dataframe.
-    """
-
-    rows: list[dict[str, Any]] = []
-
-    for plan in plans:
-
-        rows.append(
-            {
-                "ID": str(plan.id),
-                "Site": plan.name,
-                "Code": plan.site_code,
-                "Status": plan.status,
-                "Active": bool(plan.active),
-                "Area (m²)": float(
-                    plan.site_area_m2 or 0
-                ),
-                "Footprint (m²)": float(
-                    plan.building_footprint_m2 or 0
-                ),
-                "Roads (m²)": float(
-                    plan.road_area_m2 or 0
-                ),
-                "Parking (m²)": float(
-                    plan.parking_area_m2 or 0
-                ),
-                "Landscape (m²)": float(
-                    plan.landscape_area_m2 or 0
-                ),
-                "Slope (%)": float(
-                    plan.slope_percent or 0
-                ),
-            }
-        )
-
-    return pd.DataFrame(rows)
+    return SitePlanService()
 
 
 # ============================================================
@@ -106,7 +59,11 @@ def _render_summary(
     service: SitePlanService,
 ) -> None:
     """
-    Render Site Planning summary metrics.
+    Render Site Planning summary information.
+
+    The service instance is supplied by render_site_planning()
+    so that the same synchronous service is used throughout
+    the page.
     """
 
     try:
@@ -115,63 +72,81 @@ def _render_summary(
 
     except Exception as exc:
 
-        st.warning(
+        st.error(
             "Site Planning summary could not be loaded."
         )
 
         with st.expander(
-            "Summary error",
-            expanded=False,
+            "Complete summary traceback",
+            expanded=True,
         ):
 
             st.exception(exc)
 
         return
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    if not isinstance(summary, dict):
+
+        st.warning(
+            "Site Planning summary returned an unexpected format."
+        )
+
+        return
+
+    total = summary.get(
+        "total",
+        summary.get(
+            "count",
+            0,
+        ),
+    )
+
+    active = summary.get(
+        "active",
+        0,
+    )
+
+    completed = summary.get(
+        "completed",
+        0,
+    )
+
+    area = summary.get(
+        "total_area",
+        summary.get(
+            "area",
+            0,
+        ),
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
 
         st.metric(
-            "Total Plans",
-            summary.get(
-                "total_plans",
-                0,
-            ),
+            "Site Plans",
+            total,
         )
 
     with col2:
 
         st.metric(
             "Active",
-            summary.get(
-                "active_plans",
-                0,
-            ),
+            active,
         )
 
     with col3:
 
         st.metric(
-            "Approved",
-            summary.get(
-                "approved_plans",
-                0,
-            ),
+            "Completed",
+            completed,
         )
 
     with col4:
 
         st.metric(
-            "Site Area",
-            f'{float(summary.get("total_site_area_m2", 0)):,.0f} m²',
-        )
-
-    with col5:
-
-        st.metric(
-            "Landscape",
-            f'{float(summary.get("total_landscaped_area_m2", 0)):,.0f} m²',
+            "Total Area",
+            area,
         )
 
 
@@ -184,198 +159,146 @@ def _render_create_form(
     service: SitePlanService,
 ) -> None:
     """
-    Render the Site Planning create form.
+    Render the Site Plan creation form.
+
+    The supplied service is used for creation so that the
+    renderer does not construct another service instance.
     """
 
-    with st.expander(
-        "Add Site Plan",
-        expanded=False,
+    st.subheader(
+        "Create Site Plan"
+    )
+
+    with st.form(
+        "site_planning_create_form",
+        clear_on_submit=True,
     ):
 
-        with st.form(
-            "site_planning_create_form",
-            clear_on_submit=True,
-        ):
+        col1, col2 = st.columns(2)
 
-            col1, col2 = st.columns(2)
+        with col1:
 
-            with col1:
-
-                name = st.text_input(
-                    "Site Plan Name"
-                )
-
-                code = st.text_input(
-                    "Site Code"
-                )
-
-                status = st.selectbox(
-                    "Status",
-                    [
-                        "Draft",
-                        "Proposed",
-                        "Approved",
-                        "Archived",
-                    ],
-                )
-
-                site_area = st.number_input(
-                    "Site Area (m²)",
-                    min_value=0.01,
-                    value=5000.0,
-                    step=100.0,
-                )
-
-                footprint = st.number_input(
-                    "Building Footprint (m²)",
-                    min_value=0.0,
-                    value=2000.0,
-                    step=100.0,
-                )
-
-                road = st.number_input(
-                    "Road Area (m²)",
-                    min_value=0.0,
-                    value=800.0,
-                    step=50.0,
-                )
-
-            with col2:
-
-                parking = st.number_input(
-                    "Parking Area (m²)",
-                    min_value=0.0,
-                    value=700.0,
-                    step=50.0,
-                )
-
-                landscape = st.number_input(
-                    "Landscape Area (m²)",
-                    min_value=0.0,
-                    value=1500.0,
-                    step=50.0,
-                )
-
-                orientation = st.number_input(
-                    "North Orientation (°)",
-                    min_value=0.0,
-                    max_value=359.99,
-                    value=0.0,
-                    step=1.0,
-                )
-
-                slope = st.number_input(
-                    "Slope (%)",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=5.0,
-                    step=0.5,
-                )
-
-                soil = st.selectbox(
-                    "Soil Type",
-                    [
-                        "Clay",
-                        "Sand",
-                        "Rock",
-                        "Silt",
-                        "Mixed",
-                    ],
-                )
-
-                drainage = st.text_input(
-                    "Drainage Strategy"
-                )
-
-                access = st.text_input(
-                    "Access Strategy"
-                )
-
-            submitted = st.form_submit_button(
-                "Create Site Plan",
-                use_container_width=True,
+            name = st.text_input(
+                "Site Plan Name",
+                key="site_planning_create_name",
             )
 
-            if not submitted:
-                return
+            site_name = st.text_input(
+                "Site Name",
+                key="site_planning_create_site_name",
+            )
 
-            if not name.strip():
+            project_id = st.text_input(
+                "Project ID",
+                key="site_planning_create_project_id",
+            )
 
-                st.error(
-                    "Site Plan Name is required."
-                )
+        with col2:
 
-                return
+            site_area = st.number_input(
+                "Site Area",
+                min_value=0.0,
+                step=1.0,
+                key="site_planning_create_site_area",
+            )
 
-            if not code.strip():
+            building_coverage = st.number_input(
+                "Building Coverage",
+                min_value=0.0,
+                step=0.01,
+                key="site_planning_create_building_coverage",
+            )
 
-                st.error(
-                    "Site Code is required."
-                )
+            notes = st.text_area(
+                "Notes",
+                key="site_planning_create_notes",
+            )
 
-                return
+        submitted = st.form_submit_button(
+            "Create Site Plan",
+            use_container_width=True,
+        )
 
-            payload = {
-                "name": name.strip(),
-                "site_code": code.strip(),
-                "status": status,
-                "site_area_m2": Decimal(
-                    str(site_area)
-                ),
-                "building_footprint_m2": Decimal(
-                    str(footprint)
-                ),
-                "road_area_m2": Decimal(
-                    str(road)
-                ),
-                "parking_area_m2": Decimal(
-                    str(parking)
-                ),
-                "landscape_area_m2": Decimal(
-                    str(landscape)
-                ),
-                "north_orientation_deg": Decimal(
-                    str(orientation)
-                ),
-                "slope_percent": Decimal(
-                    str(slope)
-                ),
-                "soil_type": soil,
-                "drainage_strategy": (
-                    drainage.strip()
-                    or None
-                ),
-                "access_strategy": (
-                    access.strip()
-                    or None
-                ),
-                "active": True,
-            }
+    if not submitted:
 
-            try:
+        return
 
-                service.create_sync(
-                    payload
-                )
+    if not name.strip():
 
-                st.success(
-                    "Site plan created successfully."
-                )
+        st.error(
+            "Site Plan Name is required."
+        )
 
-                st.rerun()
+        return
 
-            except Exception as exc:
+    payload: dict[str, Any] = {
+        "name": name.strip(),
+        "site_name": site_name.strip(),
+        "project_id": project_id.strip(),
+        "site_area": site_area,
+        "building_coverage": building_coverage,
+        "notes": notes.strip(),
+    }
 
-                st.error(
-                    "Site plan could not be created."
-                )
+    try:
 
-                with st.expander(
-                    "Complete create error",
-                    expanded=True,
-                ):
+        service.create_sync(
+            payload
+        )
 
-                    st.exception(exc)
+    except TypeError:
+
+        # ----------------------------------------------------
+        # Compatibility path for services whose create_sync()
+        # accepts keyword arguments rather than a dictionary.
+        # ----------------------------------------------------
+
+        try:
+
+            service.create_sync(
+                name=name.strip(),
+                site_name=site_name.strip(),
+                project_id=project_id.strip(),
+                site_area=site_area,
+                building_coverage=building_coverage,
+                notes=notes.strip(),
+            )
+
+        except Exception as exc:
+
+            st.error(
+                "Site Plan could not be created."
+            )
+
+            with st.expander(
+                "Complete create traceback",
+                expanded=True,
+            ):
+
+                st.exception(exc)
+
+            return
+
+    except Exception as exc:
+
+        st.error(
+            "Site Plan could not be created."
+        )
+
+        with st.expander(
+            "Complete create traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    st.success(
+        "Site Plan created successfully."
+    )
+
+    st.rerun()
 
 
 # ============================================================
@@ -387,12 +310,15 @@ def _render_site_plan_list(
     service: SitePlanService,
 ) -> None:
     """
-    Render existing Site Plans.
+    Render the Site Plan records.
+
+    The supplied service is reused for list, update and delete
+    operations.
     """
 
     try:
 
-        plans = service.list_sync()
+        site_plans = service.list_sync()
 
     except Exception as exc:
 
@@ -401,7 +327,7 @@ def _render_site_plan_list(
         )
 
         with st.expander(
-            "Complete database error",
+            "Complete list traceback",
             expanded=True,
         ):
 
@@ -409,56 +335,489 @@ def _render_site_plan_list(
 
         return
 
-    if not plans:
+    if site_plans is None:
 
-        st.info(
-            "No site plans have been created yet."
+        site_plans = []
+
+    if not isinstance(
+        site_plans,
+        (list, tuple),
+    ):
+
+        st.warning(
+            "Site Planning returned an unexpected record format."
         )
 
         return
 
-    dataframe = _plans_to_dataframe(
-        plans
-    )
+    if not site_plans:
 
-    st.dataframe(
-        dataframe,
-        use_container_width=True,
-        hide_index=True,
-    )
+        st.info(
+            "No Site Plans have been created yet."
+        )
+
+        return
+
+    for site_plan in site_plans:
+
+        _render_site_plan_record(
+            service,
+            site_plan,
+        )
 
 
 # ============================================================
-# MAIN RENDERER
+# SITE PLAN RECORD
 # ============================================================
 
 
-def render_site_planning_registered() -> None:
+def _render_site_plan_record(
+    service: SitePlanService,
+    site_plan: Any,
+) -> None:
     """
-    Zero-argument registry adapter for Site Planning.
+    Render one Site Plan record.
 
-    The application shell requires:
-
-        renderer()
-
-    The Site Planning UI now owns its synchronous service
-    adapter and therefore requires no arguments.
+    Supports either ORM-style objects or dictionary records.
     """
+
+    if isinstance(
+        site_plan,
+        dict,
+    ):
+
+        site_plan_id = site_plan.get(
+            "id"
+        )
+
+        name = site_plan.get(
+            "name",
+            "Unnamed Site Plan",
+        )
+
+        site_name = site_plan.get(
+            "site_name",
+            "",
+        )
+
+        status = site_plan.get(
+            "status",
+            "Draft",
+        )
+
+        site_area = site_plan.get(
+            "site_area",
+            "",
+        )
+
+        project_id = site_plan.get(
+            "project_id",
+            "",
+        )
+
+    else:
+
+        site_plan_id = getattr(
+            site_plan,
+            "id",
+            None,
+        )
+
+        name = getattr(
+            site_plan,
+            "name",
+            "Unnamed Site Plan",
+        )
+
+        site_name = getattr(
+            site_plan,
+            "site_name",
+            "",
+        )
+
+        status = getattr(
+            site_plan,
+            "status",
+            "Draft",
+        )
+
+        site_area = getattr(
+            site_plan,
+            "site_area",
+            "",
+        )
+
+        project_id = getattr(
+            site_plan,
+            "project_id",
+            "",
+        )
+
+    title = str(
+        name or "Unnamed Site Plan"
+    )
+
+    with st.container(
+        border=True,
+    ):
+
+        st.markdown(
+            f"### {title}"
+        )
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+
+            st.caption(
+                "Site"
+            )
+
+            st.write(
+                site_name or "-"
+            )
+
+        with col2:
+
+            st.caption(
+                "Project"
+            )
+
+            st.write(
+                project_id or "-"
+            )
+
+        with col3:
+
+            st.caption(
+                "Area"
+            )
+
+            st.write(
+                site_area or "-"
+            )
+
+        with col4:
+
+            st.caption(
+                "Status"
+            )
+
+            st.write(
+                status or "-"
+            )
+
+        if site_plan_id is None:
+
+            return
+
+        edit_key = (
+            f"site_plan_edit_{site_plan_id}"
+        )
+
+        delete_key = (
+            f"site_plan_delete_{site_plan_id}"
+        )
+
+        with st.expander(
+            "Actions",
+            expanded=False,
+        ):
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                if st.button(
+                    "Edit",
+                    key=edit_key,
+                    use_container_width=True,
+                ):
+
+                    st.session_state[
+                        f"site_plan_editing_{site_plan_id}"
+                    ] = True
+
+                    st.rerun()
+
+            with col2:
+
+                if st.button(
+                    "Delete",
+                    key=delete_key,
+                    use_container_width=True,
+                ):
+
+                    try:
+
+                        service.delete_sync(
+                            site_plan_id
+                        )
+
+                    except Exception as exc:
+
+                        st.error(
+                            "Site Plan could not be deleted."
+                        )
+
+                        with st.expander(
+                            "Complete delete traceback",
+                            expanded=True,
+                        ):
+
+                            st.exception(exc)
+
+                        return
+
+                    st.success(
+                        "Site Plan deleted successfully."
+                    )
+
+                    st.rerun()
+
+        if st.session_state.get(
+            f"site_plan_editing_{site_plan_id}",
+            False,
+        ):
+
+            _render_edit_form(
+                service,
+                site_plan,
+                site_plan_id,
+            )
+
+
+# ============================================================
+# EDIT FORM
+# ============================================================
+
+
+def _render_edit_form(
+    service: SitePlanService,
+    site_plan: Any,
+    site_plan_id: Any,
+) -> None:
+    """
+    Render the Site Plan edit form.
+    """
+
+    if isinstance(
+        site_plan,
+        dict,
+    ):
+
+        current_name = site_plan.get(
+            "name",
+            "",
+        )
+
+        current_site_name = site_plan.get(
+            "site_name",
+            "",
+        )
+
+        current_project_id = site_plan.get(
+            "project_id",
+            "",
+        )
+
+        current_site_area = site_plan.get(
+            "site_area",
+            0.0,
+        )
+
+        current_coverage = site_plan.get(
+            "building_coverage",
+            0.0,
+        )
+
+        current_notes = site_plan.get(
+            "notes",
+            "",
+        )
+
+    else:
+
+        current_name = getattr(
+            site_plan,
+            "name",
+            "",
+        )
+
+        current_site_name = getattr(
+            site_plan,
+            "site_name",
+            "",
+        )
+
+        current_project_id = getattr(
+            site_plan,
+            "project_id",
+            "",
+        )
+
+        current_site_area = getattr(
+            site_plan,
+            "site_area",
+            0.0,
+        )
+
+        current_coverage = getattr(
+            site_plan,
+            "building_coverage",
+            0.0,
+        )
+
+        current_notes = getattr(
+            site_plan,
+            "notes",
+            "",
+        )
+
+    with st.form(
+        f"site_plan_edit_form_{site_plan_id}"
+    ):
+
+        name = st.text_input(
+            "Site Plan Name",
+            value=str(
+                current_name or ""
+            ),
+        )
+
+        site_name = st.text_input(
+            "Site Name",
+            value=str(
+                current_site_name or ""
+            ),
+        )
+
+        project_id = st.text_input(
+            "Project ID",
+            value=str(
+                current_project_id or ""
+            ),
+        )
+
+        site_area = st.number_input(
+            "Site Area",
+            min_value=0.0,
+            value=float(
+                current_site_area or 0
+            ),
+            step=1.0,
+        )
+
+        building_coverage = st.number_input(
+            "Building Coverage",
+            min_value=0.0,
+            value=float(
+                current_coverage or 0
+            ),
+            step=0.01,
+        )
+
+        notes = st.text_area(
+            "Notes",
+            value=str(
+                current_notes or ""
+            ),
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            save = st.form_submit_button(
+                "Save Changes",
+                use_container_width=True,
+            )
+
+        with col2:
+
+            cancel = st.form_submit_button(
+                "Cancel",
+                use_container_width=True,
+            )
+
+    if cancel:
+
+        st.session_state[
+            f"site_plan_editing_{site_plan_id}"
+        ] = False
+
+        st.rerun()
+
+    if not save:
+
+        return
+
+    if not name.strip():
+
+        st.error(
+            "Site Plan Name is required."
+        )
+
+        return
+
+    payload: dict[str, Any] = {
+        "name": name.strip(),
+        "site_name": site_name.strip(),
+        "project_id": project_id.strip(),
+        "site_area": site_area,
+        "building_coverage": building_coverage,
+        "notes": notes.strip(),
+    }
 
     try:
 
-        from architecture.site_planning.ui import (
-            render_site_planning,
+        service.update_sync(
+            site_plan_id,
+            payload,
         )
+
+    except TypeError:
+
+        # ----------------------------------------------------
+        # Compatibility path for keyword-based update_sync()
+        # implementations.
+        # ----------------------------------------------------
+
+        try:
+
+            service.update_sync(
+                site_plan_id,
+                name=name.strip(),
+                site_name=site_name.strip(),
+                project_id=project_id.strip(),
+                site_area=site_area,
+                building_coverage=building_coverage,
+                notes=notes.strip(),
+            )
+
+        except Exception as exc:
+
+            st.error(
+                "Site Plan could not be updated."
+            )
+
+            with st.expander(
+                "Complete update traceback",
+                expanded=True,
+            ):
+
+                st.exception(exc)
+
+            return
 
     except Exception as exc:
 
         st.error(
-            "The Site Planning module could not be loaded."
+            "Site Plan could not be updated."
         )
 
         with st.expander(
-            "Complete import traceback",
+            "Complete update traceback",
             expanded=True,
         ):
 
@@ -466,22 +825,76 @@ def render_site_planning_registered() -> None:
 
         return
 
-    try:
+    st.session_state[
+        f"site_plan_editing_{site_plan_id}"
+    ] = False
+
+    st.success(
+        "Site Plan updated successfully."
+    )
+
+    st.rerun()
+
+
+# ============================================================
+# MAIN ZERO-ARGUMENT RENDERER
+# ============================================================
+
+
+def render_site_planning() -> None:
+    """
+    Render the complete Site Planning interface.
+
+    IMPORTANT:
+
+    This function intentionally takes no arguments.
+
+    The application shell can therefore call:
 
         render_site_planning()
 
+    The synchronous service is constructed exactly once here
+    and passed consistently to every helper:
+
+        _render_summary(service)
+        _render_create_form(service)
+        _render_site_plan_list(service)
+
+    This preserves the zero-argument Streamlit renderer
+    contract while keeping service construction inside the
+    Site Planning UI boundary.
+    """
+
+    st.title(
+        "Site Planning"
+    )
+
+    st.caption(
+        "Site organization, development allocation and planning controls."
+    )
+
+    # --------------------------------------------------------
+    # Construct ONE synchronous service instance.
+    # --------------------------------------------------------
+
+    try:
+
+        service = _get_sync_service()
+
     except Exception as exc:
 
         st.error(
-            "Site Planning could not be rendered."
+            "The Site Planning service could not be initialized."
         )
 
         with st.expander(
-            "Complete renderer traceback",
+            "Complete service initialization traceback",
             expanded=True,
         ):
 
             st.exception(exc)
+
+        return
 
     # --------------------------------------------------------
     # Summary
@@ -504,7 +917,7 @@ def render_site_planning_registered() -> None:
     st.divider()
 
     # --------------------------------------------------------
-    # Existing plans
+    # Existing Site Plans
     # --------------------------------------------------------
 
     st.subheader(
