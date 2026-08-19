@@ -1,1 +1,1 @@
-"""IMAGINE Architecture domain package."""
+
