@@ -1,15 +1,58 @@
 """
-IMAGINE Project Governance Streamlit UI.
+IMAGINE
+Project Governance Streamlit UI.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
+
+
+def _get_attr(
+    obj: Any,
+    name: str,
+    default: Any = None,
+) -> Any:
+
+    return getattr(
+        obj,
+        name,
+        default,
+    )
+
+
+def _status_value(
+    value: Any,
+) -> str:
+
+    if value is None:
+        return "unknown"
+
+    return str(
+        getattr(
+            value,
+            "value",
+            value,
+        )
+    )
+
+
+def _session():
+
+    from database.connection import (
+        SessionLocal,
+    )
+
+    return SessionLocal()
 
 
 def render_governance() -> None:
 
-    st.title("Governance")
+    st.title(
+        "Governance"
+    )
 
     st.caption(
         "Project governance rules and controls."
@@ -24,10 +67,6 @@ def render_governance() -> None:
         from projects.governance.service import (
             create_rule,
             list_rules,
-        )
-
-        from database.connection import (
-            SessionLocal,
         )
 
     except Exception as exc:
@@ -47,11 +86,18 @@ def render_governance() -> None:
     project_id = st.number_input(
         "Project ID",
         min_value=1,
+        value=1,
         step=1,
         key="governance_project_id",
     )
 
-    with st.form("governance_form"):
+    st.subheader(
+        "Create Governance Rule"
+    )
+
+    with st.form(
+        "governance_create_form"
+    ):
 
         rule_name = st.text_input(
             "Rule Name"
@@ -76,18 +122,22 @@ def render_governance() -> None:
 
         else:
 
-            db = SessionLocal()
+            db = None
 
             try:
 
                 payload = GovernanceCreate(
-                    project_id=int(project_id),
+                    project_id=int(
+                        project_id
+                    ),
                     rule_name=rule_name.strip(),
                     description=(
                         description.strip()
                         or None
                     ),
                 )
+
+                db = _session()
 
                 create_rule(
                     db=db,
@@ -97,14 +147,16 @@ def render_governance() -> None:
                 )
 
                 st.success(
-                    "Governance rule created."
+                    "Governance rule created successfully."
                 )
 
                 st.rerun()
 
             except Exception as exc:
 
-                db.rollback()
+                if db is not None:
+
+                    db.rollback()
 
                 st.error(
                     "Governance rule could not be created."
@@ -117,30 +169,82 @@ def render_governance() -> None:
                     st.exception(exc)
 
             finally:
-                db.close()
+
+                if db is not None:
+
+                    db.close()
 
     st.divider()
 
-    db = SessionLocal()
+    db = None
 
     try:
 
+        db = _session()
+
         rules = list_rules(
             db=db,
-            project_id=int(project_id),
+            project_id=int(
+                project_id
+            ),
         )
 
-        st.dataframe(
-            [
+        rules = list(
+            rules or []
+        )
+
+        st.subheader(
+            "Governance Rules"
+        )
+
+        if not rules:
+
+            st.info(
+                "No governance rules exist for this project."
+            )
+
+            return
+
+        rows = []
+
+        for rule in rules:
+
+            rows.append(
                 {
-                    "ID": rule.id,
-                    "Project": rule.project_id,
-                    "Rule": rule.rule_name,
-                    "Description": rule.description,
-                    "Status": rule.status,
+                    "ID": _get_attr(
+                        rule,
+                        "id",
+                    ),
+                    "Project ID": _get_attr(
+                        rule,
+                        "project_id",
+                    ),
+                    "Rule Name": _get_attr(
+                        rule,
+                        "rule_name",
+                        "",
+                    ),
+                    "Description": _get_attr(
+                        rule,
+                        "description",
+                        "",
+                    ),
+                    "Status": _status_value(
+                        _get_attr(
+                            rule,
+                            "status",
+                        )
+                    ),
+                    "Created": _get_attr(
+                        rule,
+                        "created_at",
+                        "",
+                    ),
                 }
-                for rule in rules
-            ],
+            )
+
+        st.dataframe(
+            rows,
             use_container_width=True,
             hide_index=True,
         )
@@ -148,7 +252,7 @@ def render_governance() -> None:
     except Exception as exc:
 
         st.error(
-            "Governance rules could not be listed."
+            "Governance rules could not be loaded."
         )
 
         with st.expander(
@@ -158,4 +262,7 @@ def render_governance() -> None:
             st.exception(exc)
 
     finally:
-        db.close()
+
+        if db is not None:
+
+            db.close()
