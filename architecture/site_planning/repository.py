@@ -1,29 +1,139 @@
+"""
+IMAGINE Site Planning repository.
+"""
+
 from __future__ import annotations
-from uuid import UUID
+
+from typing import Any
+
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
 from .models import SitePlan
 
-class SitePlanRepository:
-    def __init__(self, session: AsyncSession): self.session = session
-    async def list(self, project_id: UUID | None = None, active_only: bool = False):
-        stmt = select(SitePlan).order_by(SitePlan.created_at.desc())
-        if project_id: stmt = stmt.where(SitePlan.project_id == project_id)
-        if active_only: stmt = stmt.where(SitePlan.active.is_(True))
-        return list((await self.session.scalars(stmt)).all())
-    async def get(self, site_plan_id: UUID): return await self.session.get(SitePlan, site_plan_id)
-    async def get_by_code(self, site_code: str):
-        return await self.session.scalar(select(SitePlan).where(SitePlan.site_code == site_code))
-    async def create(self, site_plan: SitePlan):
-        self.session.add(site_plan); await self.session.flush(); await self.session.refresh(site_plan); return site_plan
-    async def update(self, site_plan: SitePlan, values: dict):
-        for key, value in values.items(): setattr(site_plan, key, value)
-        await self.session.flush(); await self.session.refresh(site_plan); return site_plan
-    async def delete(self, site_plan: SitePlan):
-        await self.session.delete(site_plan); await self.session.flush()
-    async def summary(self):
-        plans = list((await self.session.scalars(select(SitePlan))).all())
-        return {"total_plans": len(plans), "active_plans": sum(p.active for p in plans),
-                "approved_plans": sum(p.status == "Approved" for p in plans),
-                "total_site_area_m2": sum((p.site_area_m2 or 0) for p in plans),
-                "total_landscaped_area_m2": sum((p.landscape_area_m2 or 0) for p in plans)}
+
+class SitePlanningRepository:
+    """
+    Persistence layer for Site Planning.
+
+    The repository deliberately receives a SQLAlchemy session
+    rather than creating its own connection.
+    """
+
+    def __init__(
+        self,
+        db: Session | None = None,
+    ) -> None:
+
+        self.db = db
+
+    # ========================================================
+    # SESSION
+    # ========================================================
+
+    def _require_db(self) -> Session:
+
+        if self.db is None:
+
+            raise RuntimeError(
+                "SitePlanningRepository requires a database session."
+            )
+
+        return self.db
+
+    # ========================================================
+    # LIST
+    # ========================================================
+
+    def list(
+        self,
+    ) -> list[SitePlan]:
+
+        db = self._require_db()
+
+        statement = (
+            select(SitePlan)
+            .order_by(SitePlan.id)
+        )
+
+        return list(
+            db.scalars(statement).all()
+        )
+
+    # ========================================================
+    # GET
+    # ========================================================
+
+    def get(
+        self,
+        site_plan_id: Any,
+    ) -> SitePlan | None:
+
+        db = self._require_db()
+
+        return db.get(
+            SitePlan,
+            site_plan_id,
+        )
+
+    # ========================================================
+    # CREATE
+    # ========================================================
+
+    def create(
+        self,
+        site_plan: SitePlan,
+    ) -> SitePlan:
+
+        db = self._require_db()
+
+        db.add(site_plan)
+
+        db.commit()
+
+        db.refresh(site_plan)
+
+        return site_plan
+
+    # ========================================================
+    # UPDATE
+    # ========================================================
+
+    def update(
+        self,
+        site_plan: SitePlan,
+        values: dict[str, Any],
+    ) -> SitePlan:
+
+        db = self._require_db()
+
+        for key, value in values.items():
+
+            if hasattr(site_plan, key):
+
+                setattr(
+                    site_plan,
+                    key,
+                    value,
+                )
+
+        db.commit()
+
+        db.refresh(site_plan)
+
+        return site_plan
+
+    # ========================================================
+    # DELETE
+    # ========================================================
+
+    def delete(
+        self,
+        site_plan: SitePlan,
+    ) -> None:
+
+        db = self._require_db()
+
+        db.delete(site_plan)
+
+        db.commit()
