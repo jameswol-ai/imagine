@@ -1,10 +1,13 @@
 """
 IMAGINE
 Generative Architecture & Civil Engine
+
+Main Streamlit application entry point.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 import streamlit as st
@@ -27,6 +30,10 @@ st.set_page_config(
 )
 
 
+# ============================================================
+# TYPES
+# ============================================================
+
 RenderFunction = Callable[[], Any]
 
 
@@ -34,12 +41,20 @@ RenderFunction = Callable[[], Any]
 # SAFE IMPORT
 # ============================================================
 
+
 def _safe_import(
     module_name: str,
     function_name: str,
 ) -> RenderFunction | None:
+    """
+    Safely import a renderer.
+
+    A broken optional module must not prevent the main
+    Streamlit application from starting.
+    """
 
     try:
+
         module = __import__(
             module_name,
             fromlist=[function_name],
@@ -55,16 +70,37 @@ def _safe_import(
             return renderer
 
     except Exception:
+
         return None
 
     return None
 
 
 # ============================================================
+# PLACEHOLDER
+# ============================================================
+
+
+def render_placeholder(
+    module_name: str,
+) -> None:
+    """Render a safe placeholder for an unavailable module."""
+
+    st.title(module_name)
+
+    st.info(
+        f"{module_name} is registered in IMAGINE, "
+        "but its full interface is not available yet."
+    )
+
+
+# ============================================================
 # OVERVIEW
 # ============================================================
 
+
 def render_overview() -> None:
+    """Render the IMAGINE overview dashboard."""
 
     st.title("🏗️ IMAGINE")
 
@@ -85,16 +121,28 @@ def render_overview() -> None:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Projects", "0")
+        st.metric(
+            "Projects",
+            "0",
+        )
 
     with col2:
-        st.metric("Design Runs", "0")
+        st.metric(
+            "Design Runs",
+            "0",
+        )
 
     with col3:
-        st.metric("Candidates", "0")
+        st.metric(
+            "Candidates",
+            "0",
+        )
 
     with col4:
-        st.metric("Best Designs", "0")
+        st.metric(
+            "Best Designs",
+            "0",
+        )
 
     st.divider()
 
@@ -136,10 +184,29 @@ def render_overview() -> None:
                 unsafe_allow_html=True,
             )
 
+    st.divider()
+
+    st.subheader("System Status")
+
+    status_col1, status_col2 = st.columns(2)
+
+    with status_col1:
+
+        st.success(
+            "IMAGINE application is running."
+        )
+
+    with status_col2:
+
+        st.info(
+            "Generative Design is constraint-driven."
+        )
+
 
 # ============================================================
 # GENERATIVE DESIGN
 # ============================================================
+
 
 GENERATIVE_DESIGN_RENDERER = _safe_import(
     "architecture.generative_design.ui",
@@ -148,6 +215,12 @@ GENERATIVE_DESIGN_RENDERER = _safe_import(
 
 
 def render_generative_design_safe() -> None:
+    """
+    Render the Generative Design interface safely.
+
+    Import or runtime failures are displayed without bringing
+    down the entire Streamlit application.
+    """
 
     st.title("✨ Generative Design")
 
@@ -166,6 +239,7 @@ def render_generative_design_safe() -> None:
         return
 
     try:
+
         GENERATIVE_DESIGN_RENDERER()
 
     except Exception as exc:
@@ -177,28 +251,14 @@ def render_generative_design_safe() -> None:
         with st.expander(
             "Show error details"
         ):
+
             st.exception(exc)
 
 
 # ============================================================
-# PLACEHOLDER
+# OPTIONAL MODULE RENDERERS
 # ============================================================
 
-def render_placeholder(
-    module_name: str,
-) -> None:
-
-    st.title(module_name)
-
-    st.info(
-        f"{module_name} is registered in IMAGINE "
-        "but its full interface is not available yet."
-    )
-
-
-# ============================================================
-# OPTIONAL RENDERERS
-# ============================================================
 
 OPTIONAL_RENDERERS: dict[
     str,
@@ -241,6 +301,7 @@ OPTIONAL_RENDERERS: dict[
 # MODULE REGISTRY
 # ============================================================
 
+
 MODULE_REGISTRY: list[dict[str, Any]] = [
 
     {
@@ -254,42 +315,54 @@ MODULE_REGISTRY: list[dict[str, Any]] = [
         "label": "Projects",
         "icon": "📁",
         "route": "projects",
-        "renderer": OPTIONAL_RENDERERS["projects"],
+        "renderer": OPTIONAL_RENDERERS[
+            "projects"
+        ],
     },
 
     {
         "label": "Zoning",
         "icon": "📐",
         "route": "zoning",
-        "renderer": OPTIONAL_RENDERERS["zoning"],
+        "renderer": OPTIONAL_RENDERERS[
+            "zoning"
+        ],
     },
 
     {
         "label": "Site Planning",
         "icon": "🌐",
         "route": "site_planning",
-        "renderer": OPTIONAL_RENDERERS["site_planning"],
+        "renderer": OPTIONAL_RENDERERS[
+            "site_planning"
+        ],
     },
 
     {
         "label": "Floor Planning",
         "icon": "🏢",
         "route": "floor_planning",
-        "renderer": OPTIONAL_RENDERERS["floor_planning"],
+        "renderer": OPTIONAL_RENDERERS[
+            "floor_planning"
+        ],
     },
 
     {
         "label": "Room Programming",
         "icon": "🚪",
         "route": "room_programming",
-        "renderer": OPTIONAL_RENDERERS["room_programming"],
+        "renderer": OPTIONAL_RENDERERS[
+            "room_programming"
+        ],
     },
 
     {
         "label": "Compliance",
         "icon": "✅",
         "route": "compliance",
-        "renderer": OPTIONAL_RENDERERS["compliance"],
+        "renderer": OPTIONAL_RENDERERS[
+            "compliance"
+        ],
     },
 
     {
@@ -309,8 +382,9 @@ MODULE_REGISTRY: list[dict[str, Any]] = [
 
 
 # ============================================================
-# ROUTES
+# ROUTE MAP
 # ============================================================
+
 
 MODULES_BY_ROUTE: dict[
     str,
@@ -325,7 +399,9 @@ MODULES_BY_ROUTE: dict[
 # REGISTRY VALIDATION
 # ============================================================
 
+
 def validate_module_registry() -> None:
+    """Validate module routes and required application routes."""
 
     routes = [
         module["route"]
@@ -341,35 +417,37 @@ def validate_module_registry() -> None:
     )
 
     if duplicates:
+
         raise RuntimeError(
             "Duplicate module routes detected: "
             + ", ".join(duplicates)
         )
 
-    if "overview" not in MODULES_BY_ROUTE:
-        raise RuntimeError(
-            "Overview route is missing."
-        )
+    required_routes = (
+        "overview",
+        "generative_design",
+        "system_health",
+    )
 
-    if "generative_design" not in MODULES_BY_ROUTE:
-        raise RuntimeError(
-            "Generative Design route is missing."
-        )
+    for route in required_routes:
 
-    if "system_health" not in MODULES_BY_ROUTE:
-        raise RuntimeError(
-            "System Health route is missing."
-        )
+        if route not in MODULES_BY_ROUTE:
+
+            raise RuntimeError(
+                f"Required module route is missing: {route}"
+            )
 
 
 validate_module_registry()
 
 
 # ============================================================
-# HEALTH PAGE
+# SYSTEM HEALTH
 # ============================================================
 
+
 def render_system_health() -> None:
+    """Render application health and dependency diagnostics."""
 
     st.title("🩺 System Health")
 
@@ -377,42 +455,158 @@ def render_system_health() -> None:
         "IMAGINE startup and module diagnostics"
     )
 
+    # --------------------------------------------------------
+    # Execute health check
+    # --------------------------------------------------------
+
     results = run_startup_health_check()
+
+    checked_at = datetime.now(
+        timezone.utc
+    )
+
+    # --------------------------------------------------------
+    # Save latest timestamp
+    # --------------------------------------------------------
+
+    st.session_state[
+        "health_last_checked_at"
+    ] = checked_at
+
+    # --------------------------------------------------------
+    # Determine whether the entire dependency chain passed
+    # --------------------------------------------------------
+
+    all_modules_healthy = all(
+        result.status == "ok"
+        for result in results
+    )
+
+    # --------------------------------------------------------
+    # Only update successful timestamp when every module
+    # passes.
+    # --------------------------------------------------------
+
+    if all_modules_healthy:
+
+        st.session_state[
+            "health_last_successful_at"
+        ] = checked_at
+
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
 
     summary = health_summary(
         results
     )
 
+    # ========================================================
+    # TIMESTAMPS
+    # ========================================================
+
+    timestamp_col1, timestamp_col2 = st.columns(2)
+
+    with timestamp_col1:
+
+        st.markdown(
+            "**Latest Health Check**"
+        )
+
+        last_checked = st.session_state.get(
+            "health_last_checked_at"
+        )
+
+        if last_checked is not None:
+
+            st.code(
+                last_checked.strftime(
+                    "%Y-%m-%d %H:%M:%S UTC"
+                )
+            )
+
+        else:
+
+            st.code(
+                "No health check recorded"
+            )
+
+    with timestamp_col2:
+
+        st.markdown(
+            "**Last Successful Check**"
+        )
+
+        last_successful = st.session_state.get(
+            "health_last_successful_at"
+        )
+
+        if last_successful is not None:
+
+            st.code(
+                last_successful.strftime(
+                    "%Y-%m-%d %H:%M:%S UTC"
+                )
+            )
+
+        else:
+
+            st.code(
+                "No successful check recorded"
+            )
+
+    st.divider()
+
+    # ========================================================
+    # HEALTH METRICS
+    # ========================================================
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
+
         st.metric(
             "Modules Checked",
             summary["total"],
         )
 
     with col2:
+
         st.metric(
             "Healthy",
             summary["healthy"],
         )
 
     with col3:
+
         st.metric(
             "Failed",
             summary["failed"],
         )
 
+    # ========================================================
+    # OVERALL STATUS
+    # ========================================================
+
     if summary["status"] == "healthy":
+
         st.success(
             "All checked modules imported successfully."
         )
+
     else:
+
         st.warning(
             "IMAGINE is running in degraded mode."
         )
 
     st.divider()
+
+    # ========================================================
+    # MODULE RESULTS
+    # ========================================================
+
+    st.subheader("Module Results")
 
     for result in results:
 
@@ -423,8 +617,9 @@ def render_system_health() -> None:
             )
 
             if result.path:
+
                 st.caption(
-                    result.path
+                    f"Loaded from: {result.path}"
                 )
 
         else:
@@ -434,31 +629,46 @@ def render_system_health() -> None:
             )
 
             if result.error:
-                st.code(
-                    result.error
-                )
-
-            with st.expander(
-                "Complete traceback"
-            ):
 
                 st.code(
-                    result.traceback_text or "",
+                    result.error,
                     language="text",
                 )
 
+            if result.traceback_text:
+
+                with st.expander(
+                    "Complete traceback"
+                ):
+
+                    st.code(
+                        result.traceback_text,
+                        language="text",
+                    )
+
             if result.path:
+
                 st.caption(
-                    result.path
+                    f"Loaded from: {result.path}"
                 )
 
     st.divider()
+
+    # ========================================================
+    # REFRESH
+    # ========================================================
 
     if st.button(
         "🔄 Run Health Check Again",
         use_container_width=True,
     ):
+
         st.rerun()
+
+
+# ============================================================
+# CONNECT SYSTEM HEALTH RENDERER
+# ============================================================
 
 
 MODULES_BY_ROUTE[
@@ -470,6 +680,7 @@ MODULES_BY_ROUTE[
 # SESSION STATE
 # ============================================================
 
+
 if "active_route" not in st.session_state:
 
     st.session_state.active_route = (
@@ -480,6 +691,7 @@ if "active_route" not in st.session_state:
 # ============================================================
 # SIDEBAR
 # ============================================================
+
 
 with st.sidebar:
 
@@ -504,21 +716,25 @@ with st.sidebar:
             f'{module["label"]}'
         )
 
+        is_active = (
+            st.session_state.active_route
+            == route
+        )
+
         if st.button(
             label,
             key=f"nav_{route}",
             use_container_width=True,
             type=(
                 "primary"
-                if (
-                    st.session_state.active_route
-                    == route
-                )
+                if is_active
                 else "secondary"
             ),
         ):
 
-            st.session_state.active_route = route
+            st.session_state.active_route = (
+                route
+            )
 
             st.rerun()
 
@@ -532,6 +748,7 @@ with st.sidebar:
 # ============================================================
 # ROUTE RESOLUTION
 # ============================================================
+
 
 active_route = st.session_state.get(
     "active_route",
@@ -554,8 +771,9 @@ if module is None:
 
 
 # ============================================================
-# RENDER
+# RENDER ACTIVE MODULE
 # ============================================================
+
 
 renderer = module.get(
     "renderer"
