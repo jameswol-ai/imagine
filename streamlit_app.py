@@ -402,11 +402,10 @@ def page_architecture():
         st.subheader("Room Programming")
         st.session_state.room_program = editable_table(st.session_state.room_program, "room_editor")
 
-    with tab_objects[5]:
-        st.subheader("Compliance Checking")
-        st.selectbox("Select Code", ["Uganda National Building Code", "Kenya Building Code", "Tanzania Building Standards"])
-        st.file_uploader("Upload floor plan (DXF/PDF)", type=["dxf", "pdf"])
-        if st.button("Run Compliance Check"):
+ with tab_objects[5]:
+    from architecture.compliance.ui import render_compliance
+
+    render_compliance()
             results = pd.DataFrame({
                 "Rule": ["Fire escape distance", "Parking ratio", "Daylight factor"],
                 "Required": ["< 30m", "1:100 m²", "> 2%"],
