@@ -1,6 +1,14 @@
 # IMAGINE/database/models/audit.py
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    func,
+)
 from sqlalchemy.orm import relationship
 
 from . import Base
@@ -9,11 +17,18 @@ from . import Base
 class AuditRecord(Base):
     __tablename__ = "audit_records"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
+        ForeignKey(
+            "users.id",
+            ondelete="SET NULL",
+        ),
         nullable=True,
     )
 
@@ -27,10 +42,13 @@ class AuditRecord(Base):
         nullable=True,
     )
 
-    # "metadata" is reserved by SQLAlchemy's Declarative API.
+    # IMPORTANT:
     #
-    # Keep the database column name as "metadata" for compatibility,
-    # but expose it through the Python ORM as "metadata_json".
+    # SQLAlchemy reserves the Python attribute name "metadata"
+    # for Declarative models.
+    #
+    # We therefore expose the column to Python as metadata_json
+    # while keeping the actual database column name as "metadata".
     metadata_json = Column(
         "metadata",
         JSON,
