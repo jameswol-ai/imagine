@@ -1,9 +1,6 @@
 """
 IMAGINE
 Generative Design Constraints
-
-Constraint normalization, deterministic validation, and
-geometric calculations used by the generative-design engine.
 """
 
 from __future__ import annotations
@@ -38,7 +35,7 @@ SETBACK_FIELDS = (
 
 @dataclass(frozen=True)
 class BuildableSite:
-    """Rectangular site remaining after setbacks."""
+    """Calculated rectangular buildable site."""
 
     width: float
     depth: float
@@ -48,27 +45,35 @@ class BuildableSite:
 def normalize_constraints(
     constraints: DesignConstraints | Mapping[str, Any],
 ) -> DesignConstraints:
-    """
-    Normalize incoming data into DesignConstraints.
+    """Normalize input into DesignConstraints."""
 
-    No database access occurs here.
-    """
-
-    if isinstance(constraints, DesignConstraints):
+    if isinstance(
+        constraints,
+        DesignConstraints,
+    ):
         return DesignConstraints.model_validate(
-            constraints.model_dump(mode="python")
+            constraints.model_dump(
+                mode="python",
+            )
         )
 
-    if not isinstance(constraints, Mapping):
+    if not isinstance(
+        constraints,
+        Mapping,
+    ):
         raise ValueError(
             "Constraints must be a DesignConstraints instance "
             "or a mapping."
         )
 
-    payload = deepcopy(dict(constraints))
+    payload = deepcopy(
+        dict(constraints)
+    )
 
     try:
-        return DesignConstraints.model_validate(payload)
+        return DesignConstraints.model_validate(
+            payload
+        )
     except ValidationError as exc:
         raise ValueError(
             _format_validation_errors(exc)
@@ -84,7 +89,9 @@ def normalize_and_validate_constraints(
     """Normalize and validate constraints."""
 
     try:
-        normalized = normalize_constraints(constraints)
+        normalized = normalize_constraints(
+            constraints
+        )
     except ValueError as exc:
         return (
             None,
@@ -95,7 +102,9 @@ def normalize_and_validate_constraints(
             ),
         )
 
-    result = validate_constraints(normalized)
+    result = validate_constraints(
+        normalized
+    )
 
     return normalized, result
 
@@ -103,10 +112,12 @@ def normalize_and_validate_constraints(
 def validate_constraints(
     constraints: DesignConstraints | Mapping[str, Any],
 ) -> ConstraintValidationResult:
-    """Validate normalized generative-design constraints."""
+    """Validate generative-design constraints."""
 
     try:
-        normalized = normalize_constraints(constraints)
+        normalized = normalize_constraints(
+            constraints
+        )
     except ValueError as exc:
         return ConstraintValidationResult(
             valid=False,
@@ -171,7 +182,10 @@ def _validate_site(
         )
 
     for field_name in SETBACK_FIELDS:
-        value = getattr(site, field_name)
+        value = getattr(
+            site,
+            field_name,
+        )
 
         if value < 0:
             errors.append(
@@ -201,19 +215,22 @@ def _validate_site(
         )
 
     if buildable_width > 0 and buildable_depth > 0:
-        gross_area = site.width * site.depth
+        gross_area = (
+            site.width * site.depth
+        )
+
         buildable_area = (
             buildable_width * buildable_depth
         )
 
-        if gross_area > 0:
-            ratio = buildable_area / gross_area
-
-            if ratio < 0.25:
-                warnings.append(
-                    "site setbacks leave less than 25% of the "
-                    "gross site area available for development."
-                )
+        if (
+            gross_area > 0
+            and buildable_area / gross_area < 0.25
+        ):
+            warnings.append(
+                "site setbacks leave less than 25% of the "
+                "gross site area available for development."
+            )
 
     if not site.north_access:
         warnings.append(
@@ -293,8 +310,13 @@ def _validate_program(
 
     seen_names: set[str] = set()
 
-    for index, room in enumerate(program.rooms, start=1):
-        normalized_name = room.name.strip().lower()
+    for index, room in enumerate(
+        program.rooms,
+        start=1,
+    ):
+        normalized_name = (
+            room.name.strip().lower()
+        )
 
         if not normalized_name:
             errors.append(
@@ -307,7 +329,9 @@ def _validate_program(
                 "another room requirement."
             )
 
-        seen_names.add(normalized_name)
+        seen_names.add(
+            normalized_name
+        )
 
         if room.area < MIN_ROOM_AREA:
             errors.append(
@@ -366,9 +390,13 @@ def _validate_cross_constraints(
     warnings: list[str],
 ) -> None:
 
-    buildable = calculate_buildable_site(constraints)
+    buildable = calculate_buildable_site(
+        constraints
+    )
 
-    required_area = calculate_required_gross_area(constraints)
+    required_area = calculate_required_gross_area(
+        constraints
+    )
 
     site_area = (
         constraints.site.width
@@ -406,7 +434,6 @@ def _validate_cross_constraints(
             "the requested program requires more storeys "
             "than zoning.max_storeys permits."
         )
-
     elif (
         required_storeys
         > constraints.zoning.max_storeys * 0.85
@@ -420,7 +447,7 @@ def _validate_cross_constraints(
 def calculate_buildable_site(
     constraints: DesignConstraints,
 ) -> BuildableSite:
-    """Calculate the rectangular buildable site."""
+    """Calculate site area remaining after setbacks."""
 
     width = (
         constraints.site.width
@@ -470,11 +497,15 @@ def calculate_required_gross_area(
 def constraint_summary(
     constraints: DesignConstraints | Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Return a UI-friendly constraint summary."""
+    """Build a UI-friendly constraint summary."""
 
-    normalized = normalize_constraints(constraints)
+    normalized = normalize_constraints(
+        constraints
+    )
 
-    buildable = calculate_buildable_site(normalized)
+    buildable = calculate_buildable_site(
+        normalized
+    )
 
     required_area = calculate_required_gross_area(
         normalized
