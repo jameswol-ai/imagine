@@ -1,6 +1,6 @@
 # =========================================================
 # IMAGINE – Architectural Intellect, MEP Engine & Enterprise System
-# Integrated Unified Edition v23.1 (Navigation Logos Removed)
+# Integrated Unified Edition v23.1
 # =========================================================
 
 import json
@@ -10,9 +10,7 @@ import uuid
 import math
 import hashlib
 import random
-from datetime import datetime, timedelta
-from io import BytesIO
-
+from datetime import datetime
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -462,7 +460,7 @@ else:
 current_role = st.session_state["user"]["role"]
 can_approve = current_role in ["Admin", "Project Lead"]
 
-# Navigation options (logos removed from navigation keys per instruction)
+# Navigation options
 nav_options = [
     "Dashboard & Portfolio",
     "Generative Synthesis Lab",
