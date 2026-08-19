@@ -21,19 +21,13 @@ class DesignCandidate:
     """In-memory generated design candidate."""
 
     name: str
-
     geometry: dict[str, Any]
-
     metrics: dict[str, Any]
-
     evaluation: dict[str, Any] = field(
-        default_factory=dict,
+        default_factory=dict
     )
-
     score: float = 0.0
-
     rank: int | None = None
-
     status: str = "generated"
 
 
@@ -41,7 +35,6 @@ def _generate_layout(
     constraints: DesignConstraints,
     storeys: int,
 ) -> DesignCandidate:
-    """Generate a simple rectangular massing option."""
 
     buildable = calculate_buildable_site(
         constraints
@@ -86,8 +79,7 @@ def _generate_layout(
     )
 
     total_height = (
-        height_per_storey
-        * storeys
+        height_per_storey * storeys
     )
 
     room_count = sum(
@@ -98,20 +90,11 @@ def _generate_layout(
     geometry = {
         "type": "rectangular_massing",
         "footprint": {
-            "width": round(
-                width,
-                3,
-            ),
-            "depth": round(
-                depth,
-                3,
-            ),
+            "width": round(width, 3),
+            "depth": round(depth, 3),
         },
         "storeys": storeys,
-        "height": round(
-            total_height,
-            3,
-        ),
+        "height": round(total_height, 3),
         "orientation": (
             "north_access"
             if constraints.site.north_access
@@ -158,8 +141,6 @@ def generate_candidates(
             "Candidate count must be at least 1."
         )
 
-    candidates: list[DesignCandidate] = []
-
     minimum_required_area = (
         calculate_required_gross_area(
             constraints
@@ -170,14 +151,21 @@ def generate_candidates(
         constraints
     )
 
+    maximum_footprint = (
+        buildable.area
+        * constraints.zoning.max_site_coverage
+    )
+
+    if maximum_footprint <= 0:
+        raise ValueError(
+            "No positive building footprint is available."
+        )
+
     minimum_storeys = max(
         1,
         ceil(
             minimum_required_area
-            / (
-                buildable.area
-                * constraints.zoning.max_site_coverage
-            )
+            / maximum_footprint
         ),
     )
 
@@ -185,15 +173,14 @@ def generate_candidates(
         constraints.zoning.max_storeys
     )
 
+    candidates: list[DesignCandidate] = []
+
     for index in range(count):
 
-        storeys = (
-            minimum_storeys
-            + index
+        storeys = min(
+            minimum_storeys + index,
+            maximum_storeys,
         )
-
-        if storeys > maximum_storeys:
-            storeys = maximum_storeys
 
         candidate = _generate_layout(
             constraints,
@@ -204,10 +191,12 @@ def generate_candidates(
             f"Generated Option {index + 1}"
         )
 
-        candidate.rank = index + 1
-
-        candidates.append(
-            candidate
-        )
+        candidates.append(candidate)
 
     return candidates
+
+
+__all__ = [
+    "DesignCandidate",
+    "generate_candidates",
+]
