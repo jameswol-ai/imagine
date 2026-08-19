@@ -29,6 +29,20 @@ Domain logic belongs inside:
 
 from __future__ import annotations
 
+from pathlib import Path
+import sys
+
+
+# Ensure the IMAGINE repository root is first on sys.path.
+# This prevents an unrelated module named "app" from shadowing
+# the repository's app/ package.
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+if str(PROJECT_ROOT) in sys.path:
+    sys.path.remove(str(PROJECT_ROOT))
+
+sys.path.insert(0, str(PROJECT_ROOT))
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from importlib import import_module
