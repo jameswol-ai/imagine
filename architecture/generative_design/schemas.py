@@ -1,9 +1,6 @@
 """
 IMAGINE
 Generative Design Schemas
-
-Pydantic schemas for constraint-driven architectural
-generative design.
 """
 
 from __future__ import annotations
@@ -15,22 +12,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# =====================================================================
-# SITE CONSTRAINTS
-# =====================================================================
-
 class SiteConstraints(BaseModel):
-    """
-    Physical site constraints.
-    """
+    """Physical site constraints."""
 
-    width: float = Field(
-        gt=0,
-    )
-
-    depth: float = Field(
-        gt=0,
-    )
+    width: float = Field(gt=0)
+    depth: float = Field(gt=0)
 
     north_access: bool = True
 
@@ -55,14 +41,8 @@ class SiteConstraints(BaseModel):
     )
 
 
-# =====================================================================
-# ZONING CONSTRAINTS
-# =====================================================================
-
 class ZoningConstraints(BaseModel):
-    """
-    Planning and zoning constraints.
-    """
+    """Planning and zoning constraints."""
 
     max_site_coverage: float = Field(
         default=0.60,
@@ -86,14 +66,8 @@ class ZoningConstraints(BaseModel):
     )
 
 
-# =====================================================================
-# ROOM REQUIREMENTS
-# =====================================================================
-
 class RoomRequirement(BaseModel):
-    """
-    Individual room/program requirement.
-    """
+    """Individual room/program requirement."""
 
     name: str = Field(
         min_length=1,
@@ -111,14 +85,8 @@ class RoomRequirement(BaseModel):
     required: bool = True
 
 
-# =====================================================================
-# PROGRAM CONSTRAINTS
-# =====================================================================
-
 class ProgramConstraints(BaseModel):
-    """
-    Functional building-program constraints.
-    """
+    """Functional building-program constraints."""
 
     rooms: list[RoomRequirement] = Field(
         default_factory=list,
@@ -131,14 +99,8 @@ class ProgramConstraints(BaseModel):
     )
 
 
-# =====================================================================
-# COMPLIANCE CONSTRAINTS
-# =====================================================================
-
 class ComplianceConstraints(BaseModel):
-    """
-    High-level compliance constraints.
-    """
+    """High-level compliance constraints."""
 
     minimum_egress_width: float = Field(
         default=1.1,
@@ -150,21 +112,13 @@ class ComplianceConstraints(BaseModel):
     fire_separation_required: bool = True
 
 
-# =====================================================================
-# NORMALIZED DESIGN CONSTRAINTS
-# =====================================================================
-
 class DesignConstraints(BaseModel):
-    """
-    Complete normalized generative-design input.
-    """
+    """Complete normalized generative-design input."""
 
     project_id: UUID | None = None
 
     site: SiteConstraints
-
     zoning: ZoningConstraints
-
     program: ProgramConstraints
 
     compliance: ComplianceConstraints = Field(
@@ -176,14 +130,8 @@ class DesignConstraints(BaseModel):
     )
 
 
-# =====================================================================
-# CONSTRAINT VALIDATION
-# =====================================================================
-
 class ConstraintValidationResult(BaseModel):
-    """
-    Result of constraint validation.
-    """
+    """Result of constraint validation."""
 
     valid: bool
 
@@ -196,25 +144,14 @@ class ConstraintValidationResult(BaseModel):
     )
 
 
-# =====================================================================
-# DESIGN CANDIDATE
-# =====================================================================
-
 class DesignCandidateSchema(BaseModel):
-    """
-    Generated candidate representation.
-
-    This schema mirrors DesignCandidateRecord while remaining
-    independent of SQLAlchemy.
-    """
+    """Generated candidate representation."""
 
     model_config = ConfigDict(
         from_attributes=True,
     )
 
     id: UUID | None = None
-
-    run_id: UUID | None = None
 
     name: str
 
@@ -237,14 +174,8 @@ class DesignCandidateSchema(BaseModel):
     )
 
 
-# =====================================================================
-# GENERATIVE DESIGN RUN CREATE
-# =====================================================================
-
 class GenerativeDesignRunCreate(BaseModel):
-    """
-    Input schema for creating a generative-design run.
-    """
+    """Create a new generative-design run."""
 
     project_id: UUID | None = None
 
@@ -263,14 +194,8 @@ class GenerativeDesignRunCreate(BaseModel):
     )
 
 
-# =====================================================================
-# GENERATIVE DESIGN RUN RESPONSE
-# =====================================================================
-
 class GenerativeDesignRunResponse(BaseModel):
-    """
-    API/UI representation of a persisted generative-design run.
-    """
+    """API response for a design run."""
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -289,12 +214,6 @@ class GenerativeDesignRunResponse(BaseModel):
     candidate_count: int
 
     created_at: datetime
-
-    updated_at: datetime | None = None
-
-    created_by: str | None = None
-
-    updated_by: str | None = None
 
     completed_at: datetime | None = None
 
