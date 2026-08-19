@@ -1,6 +1,7 @@
 """
 Main Eurocode Structural Design Navigation Router Module
 Path: structural/eurocode/router.py
+App: imagine
 """
 
 import streamlit as st
@@ -32,7 +33,7 @@ def render_placeholder(eurocode_code: str, eurocode_name: str, standard_ref: str
 
 
 def render_eurocode_router() -> None:
-    """Main routing controller for Eurocode Structural Analysis Suite in studiohome."""
+    """Main routing controller for Eurocode Structural Analysis Suite in imagine."""
 
     # Top Header & Category Overview
     st.markdown("## 🏗️ Structural Eurocode Suite")
@@ -64,7 +65,7 @@ def render_eurocode_router() -> None:
         "EN 1993": {
             "title": "Design of Steel Structures",
             "ref": "EN 1993",
-            "desc": "Member cross-section classification, flexural bucking, lateral-torsional buckling, and connections.",
+            "desc": "Member cross-section classification, flexural buckling, lateral-torsional buckling, and connections.",
             "icon": "⚙️",
             "renderer": lambda: render_placeholder("EN 1993", "Design of Steel Structures", "EN 1993"),
         },
@@ -128,7 +129,7 @@ def render_eurocode_router() -> None:
 
 if __name__ == "__main__":
     st.set_page_config(
-        page_title="studiohome - Eurocode Suite",
+        page_title="imagine - Eurocode Suite",
         page_icon="📐",
         layout="wide",
     )
