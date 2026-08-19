@@ -23,13 +23,12 @@ from database.connection import AsyncSessionLocal
 # SQLAlchemy declarative registry.
 # ============================================================
 
-from database.models.organization import Organization  # noqa: F401
-from database.models.user import User  # noqa: F401
+# ============================================================
+# SQLALCHEMY MODEL REGISTRATION
+# ============================================================
 
-from projects.approvals.models import Approval  # noqa: F401
-from projects.revisions.models import Revision  # noqa: F401
+from projects.model_registry import Project  # noqa: F401
 
-from projects.projects.models import Project  # noqa: F401
 
 # ============================================================
 # PROJECT SERVICE
