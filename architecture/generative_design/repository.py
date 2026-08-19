@@ -4,11 +4,39 @@ Generative Design Repository
 
 Async persistence layer for generative design runs and candidates.
 
-Responsibilities:
-    - Create, retrieve, update, and delete generative design runs.
-    - Create, retrieve, update, and delete generated candidates.
-    - Persist data using SQLAlchemy AsyncSession.
-    - Keep database transaction handling inside the repository.
+Transaction policy
+------------------
+The repository does NOT commit or rollback transactions.
+
+The service layer owns the transaction boundary:
+
+    BEGIN
+      |
+      +-- repository operations
+      |
+    COMMIT
+
+or:
+
+    BEGIN
+      |
+      +-- repository operations
+      |
+    ROLLBACK
+
+Repository responsibilities:
+    - Create generative design runs.
+    - Retrieve generative design runs.
+    - Update generative design runs.
+    - Delete generative design runs.
+    - Create generated candidates.
+    - Retrieve generated candidates.
+    - Update generated candidates.
+    - Delete generated candidates.
+    - Bulk candidate persistence.
+    - Candidate counting.
+
+All database operations are asynchronous.
 """
 
 from __future__ import annotations
@@ -16,9 +44,10 @@ from __future__ import annotations
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from architecture.generative_design.models import (
     DesignCandidateRecord,
@@ -30,12 +59,16 @@ class GenerativeDesignRepository:
     """
     Async repository for generative design persistence.
 
-    The repository deliberately does not contain generation,
-    scoring, compliance, or architectural decision logic.
-    It is responsible only for database persistence.
+    Important:
+        This class intentionally does not call commit() or rollback().
+
+    Transaction ownership belongs to GenerativeDesignService.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+    ) -> None:
         self.session = session
 
     # =====================================================================
@@ -53,10 +86,12 @@ class GenerativeDesignRepository:
         created_by: str | None = None,
     ) -> GenerativeDesignRun:
         """
-        Create and persist a generative design run.
+        Create a generative design run.
 
-        The transaction is committed only after the object has
-        been flushed successfully.
+        The record is added and flushed so that database-generated
+        values are available to the caller.
+
+        No commit is performed.
         """
 
         run = GenerativeDesignRun(
@@ -70,33 +105,27 @@ class GenerativeDesignRepository:
 
         self.session.add(run)
 
-        try:
-            await self.session.flush()
-            await self.session.commit()
+        await self.session.flush()
 
-            # Refresh so server-generated fields such as created_at
-            # are available to the caller.
-            await self.session.refresh(run)
-
-            return run
-
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+        return run
 
     async def get_run(
         self,
         run_id: UUID,
     ) -> GenerativeDesignRun | None:
         """
-        Retrieve a single generative design run by UUID.
+        Retrieve a generative design run by UUID.
         """
 
-        statement = select(GenerativeDesignRun).where(
+        statement = select(
+            GenerativeDesignRun
+        ).where(
             GenerativeDesignRun.id == run_id
         )
 
-        result = await self.session.execute(statement)
+        result = await self.session.execute(
+            statement
+        )
 
         return result.scalar_one_or_none()
 
@@ -105,16 +134,16 @@ class GenerativeDesignRepository:
         run_id: UUID,
     ) -> GenerativeDesignRun | None:
         """
-        Retrieve a run and its candidates.
+        Retrieve a run together with its generated candidates.
 
-        Uses select-in loading explicitly so the async repository
-        does not accidentally trigger synchronous lazy loading.
+        selectinload() is explicitly used because implicit lazy loading
+        is unsafe in asynchronous SQLAlchemy code.
         """
 
-        from sqlalchemy.orm import selectinload
-
         statement = (
-            select(GenerativeDesignRun)
+            select(
+                GenerativeDesignRun
+            )
             .options(
                 selectinload(
                     GenerativeDesignRun.candidates
@@ -125,7 +154,9 @@ class GenerativeDesignRepository:
             )
         )
 
-        result = await self.session.execute(statement)
+        result = await self.session.execute(
+            statement
+        )
 
         return result.scalar_one_or_none()
 
@@ -140,23 +171,35 @@ class GenerativeDesignRepository:
         """
         Return generative design runs.
 
-        Optional filtering:
+        Optional filters:
             project_id
             status
-
-        Results are ordered newest first.
         """
 
-        statement = select(GenerativeDesignRun)
+        if limit < 1:
+            raise ValueError(
+                "limit must be greater than zero."
+            )
+
+        if offset < 0:
+            raise ValueError(
+                "offset cannot be negative."
+            )
+
+        statement = select(
+            GenerativeDesignRun
+        )
 
         if project_id is not None:
             statement = statement.where(
-                GenerativeDesignRun.project_id == project_id
+                GenerativeDesignRun.project_id
+                == project_id
             )
 
         if status is not None:
             statement = statement.where(
-                GenerativeDesignRun.status == status
+                GenerativeDesignRun.status
+                == status
             )
 
         statement = (
@@ -168,7 +211,9 @@ class GenerativeDesignRepository:
             .limit(limit)
         )
 
-        result = await self.session.execute(statement)
+        result = await self.session.execute(
+            statement
+        )
 
         return result.scalars().all()
 
@@ -187,10 +232,14 @@ class GenerativeDesignRepository:
         """
         Update a generative design run.
 
-        Only explicitly supplied values are changed.
+        Only supplied values are changed.
+
+        No commit is performed.
         """
 
-        run = await self.get_run(run_id)
+        run = await self.get_run(
+            run_id
+        )
 
         if run is None:
             return None
@@ -205,6 +254,11 @@ class GenerativeDesignRepository:
             run.constraints = constraints
 
         if candidate_count is not None:
+            if candidate_count < 0:
+                raise ValueError(
+                    "candidate_count cannot be negative."
+                )
+
             run.candidate_count = candidate_count
 
         if completed_at is not None:
@@ -216,16 +270,9 @@ class GenerativeDesignRepository:
         if updated_by is not None:
             run.updated_by = updated_by
 
-        try:
-            await self.session.flush()
-            await self.session.commit()
-            await self.session.refresh(run)
+        await self.session.flush()
 
-            return run
-
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+        return run
 
     async def delete_run(
         self,
@@ -234,25 +281,26 @@ class GenerativeDesignRepository:
         """
         Delete a generative design run.
 
-        The database FK and SQLAlchemy relationship cascade
-        remove associated candidate records.
+        Candidate deletion is handled by the configured
+        SQLAlchemy/database cascade.
+
+        No commit is performed.
         """
 
-        run = await self.get_run(run_id)
+        run = await self.get_run(
+            run_id
+        )
 
         if run is None:
             return False
 
-        try:
-            await self.session.delete(run)
-            await self.session.flush()
-            await self.session.commit()
+        await self.session.delete(
+            run
+        )
 
-            return True
+        await self.session.flush()
 
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+        return True
 
     # =====================================================================
     # DESIGN CANDIDATES
@@ -272,7 +320,9 @@ class GenerativeDesignRepository:
         created_by: str | None = None,
     ) -> DesignCandidateRecord:
         """
-        Create and persist a generated design candidate.
+        Create a generated design candidate.
+
+        No commit is performed.
         """
 
         candidate = DesignCandidateRecord(
@@ -287,18 +337,13 @@ class GenerativeDesignRepository:
             created_by=created_by,
         )
 
-        self.session.add(candidate)
+        self.session.add(
+            candidate
+        )
 
-        try:
-            await self.session.flush()
-            await self.session.commit()
-            await self.session.refresh(candidate)
+        await self.session.flush()
 
-            return candidate
-
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+        return candidate
 
     async def get_candidate(
         self,
@@ -311,10 +356,13 @@ class GenerativeDesignRepository:
         statement = select(
             DesignCandidateRecord
         ).where(
-            DesignCandidateRecord.id == candidate_id
+            DesignCandidateRecord.id
+            == candidate_id
         )
 
-        result = await self.session.execute(statement)
+        result = await self.session.execute(
+            statement
+        )
 
         return result.scalar_one_or_none()
 
@@ -329,20 +377,35 @@ class GenerativeDesignRepository:
         """
         List generated candidates.
 
-        Candidates are ordered by rank when available,
-        followed by descending score.
+        Candidates are ordered by:
+            1. rank ascending
+            2. score descending
         """
 
-        statement = select(DesignCandidateRecord)
+        if limit < 1:
+            raise ValueError(
+                "limit must be greater than zero."
+            )
+
+        if offset < 0:
+            raise ValueError(
+                "offset cannot be negative."
+            )
+
+        statement = select(
+            DesignCandidateRecord
+        )
 
         if run_id is not None:
             statement = statement.where(
-                DesignCandidateRecord.run_id == run_id
+                DesignCandidateRecord.run_id
+                == run_id
             )
 
         if status is not None:
             statement = statement.where(
-                DesignCandidateRecord.status == status
+                DesignCandidateRecord.status
+                == status
             )
 
         statement = (
@@ -355,7 +418,9 @@ class GenerativeDesignRepository:
             .limit(limit)
         )
 
-        result = await self.session.execute(statement)
+        result = await self.session.execute(
+            statement
+        )
 
         return result.scalars().all()
 
@@ -373,12 +438,14 @@ class GenerativeDesignRepository:
         updated_by: str | None = None,
     ) -> DesignCandidateRecord | None:
         """
-        Update a generated candidate.
+        Update a generated design candidate.
 
-        Only explicitly supplied non-None values are changed.
+        No commit is performed.
         """
 
-        candidate = await self.get_candidate(candidate_id)
+        candidate = await self.get_candidate(
+            candidate_id
+        )
 
         if candidate is None:
             return None
@@ -390,6 +457,11 @@ class GenerativeDesignRepository:
             candidate.status = status
 
         if rank is not None:
+            if rank < 1:
+                raise ValueError(
+                    "rank must be greater than zero."
+                )
+
             candidate.rank = rank
 
         if score is not None:
@@ -407,40 +479,34 @@ class GenerativeDesignRepository:
         if updated_by is not None:
             candidate.updated_by = updated_by
 
-        try:
-            await self.session.flush()
-            await self.session.commit()
-            await self.session.refresh(candidate)
+        await self.session.flush()
 
-            return candidate
-
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+        return candidate
 
     async def delete_candidate(
         self,
         candidate_id: UUID,
     ) -> bool:
         """
-        Delete a generated design candidate.
+        Delete a single generated candidate.
+
+        No commit is performed.
         """
 
-        candidate = await self.get_candidate(candidate_id)
+        candidate = await self.get_candidate(
+            candidate_id
+        )
 
         if candidate is None:
             return False
 
-        try:
-            await self.session.delete(candidate)
-            await self.session.flush()
-            await self.session.commit()
+        await self.session.delete(
+            candidate
+        )
 
-            return True
+        await self.session.flush()
 
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+        return True
 
     # =====================================================================
     # BULK CANDIDATE OPERATIONS
@@ -454,23 +520,48 @@ class GenerativeDesignRepository:
         created_by: str | None = None,
     ) -> list[DesignCandidateRecord]:
         """
-        Persist multiple generated candidates as one transaction.
+        Persist a complete candidate population.
 
-        This is the preferred method when the generator produces
-        an entire population of design options.
+        All candidates are added to the current transaction and
+        flushed together.
+
+        The caller controls commit/rollback.
         """
 
-        records: list[DesignCandidateRecord] = []
+        if not candidates:
+            return []
+
+        records: list[
+            DesignCandidateRecord
+        ] = []
 
         for candidate_data in candidates:
             record = DesignCandidateRecord(
                 run_id=run_id,
-                name=candidate_data["name"],
-                geometry=candidate_data.get("geometry", {}),
-                metrics=candidate_data.get("metrics", {}),
-                evaluation=candidate_data.get("evaluation", {}),
-                score=candidate_data.get("score", 0.0),
-                rank=candidate_data.get("rank"),
+                name=str(
+                    candidate_data["name"]
+                ),
+                geometry=candidate_data.get(
+                    "geometry",
+                    {},
+                ),
+                metrics=candidate_data.get(
+                    "metrics",
+                    {},
+                ),
+                evaluation=candidate_data.get(
+                    "evaluation",
+                    {},
+                ),
+                score=float(
+                    candidate_data.get(
+                        "score",
+                        0.0,
+                    )
+                ),
+                rank=candidate_data.get(
+                    "rank"
+                ),
                 status=candidate_data.get(
                     "status",
                     "generated",
@@ -478,60 +569,55 @@ class GenerativeDesignRepository:
                 created_by=created_by,
             )
 
-            self.session.add(record)
-            records.append(record)
+            self.session.add(
+                record
+            )
 
-        try:
-            await self.session.flush()
-            await self.session.commit()
+            records.append(
+                record
+            )
 
-            for record in records:
-                await self.session.refresh(record)
+        await self.session.flush()
 
-            return records
-
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+        return records
 
     async def delete_candidates_for_run(
         self,
         run_id: UUID,
     ) -> int:
         """
-        Delete all candidates belonging to a run.
+        Delete every candidate belonging to a run.
 
-        This is useful when regenerating a run's population.
+        No commit is performed.
         """
 
         statement = select(
             DesignCandidateRecord
         ).where(
-            DesignCandidateRecord.run_id == run_id
+            DesignCandidateRecord.run_id
+            == run_id
         )
 
-        result = await self.session.execute(statement)
+        result = await self.session.execute(
+            statement
+        )
 
         candidates = result.scalars().all()
 
         if not candidates:
             return 0
 
-        try:
-            for candidate in candidates:
-                await self.session.delete(candidate)
+        for candidate in candidates:
+            await self.session.delete(
+                candidate
+            )
 
-            await self.session.flush()
-            await self.session.commit()
+        await self.session.flush()
 
-            return len(candidates)
-
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+        return len(candidates)
 
     # =====================================================================
-    # RUN / CANDIDATE UTILITIES
+    # COUNTS
     # =====================================================================
 
     async def count_candidates(
@@ -539,45 +625,135 @@ class GenerativeDesignRepository:
         run_id: UUID,
     ) -> int:
         """
-        Return the number of candidates belonging to a run.
+        Count candidates belonging to a run.
         """
 
-        from sqlalchemy import func
-
         statement = select(
-            func.count(DesignCandidateRecord.id)
+            func.count(
+                DesignCandidateRecord.id
+            )
         ).where(
-            DesignCandidateRecord.run_id == run_id
+            DesignCandidateRecord.run_id
+            == run_id
         )
 
-        result = await self.session.execute(statement)
+        result = await self.session.execute(
+            statement
+        )
 
-        return int(result.scalar_one())
+        return int(
+            result.scalar_one()
+        )
 
     async def update_run_candidate_count(
         self,
         run_id: UUID,
     ) -> GenerativeDesignRun | None:
         """
-        Synchronize a run's candidate_count with the database.
+        Synchronize candidate_count with the actual candidate count.
+
+        No commit is performed.
         """
 
-        run = await self.get_run(run_id)
+        run = await self.get_run(
+            run_id
+        )
 
         if run is None:
             return None
 
-        count = await self.count_candidates(run_id)
+        count = await self.count_candidates(
+            run_id
+        )
 
         run.candidate_count = count
 
-        try:
-            await self.session.flush()
-            await self.session.commit()
-            await self.session.refresh(run)
+        await self.session.flush()
 
-            return run
+        return run
 
-        except SQLAlchemyError:
-            await self.session.rollback()
-            raise
+    # =====================================================================
+    # BEST / RANKED CANDIDATES
+    # =====================================================================
+
+    async def get_best_candidate(
+        self,
+        run_id: UUID,
+    ) -> DesignCandidateRecord | None:
+        """
+        Return the highest-ranked candidate for a run.
+
+        Rank takes precedence over score.
+        """
+
+        statement = (
+            select(
+                DesignCandidateRecord
+            )
+            .where(
+                DesignCandidateRecord.run_id
+                == run_id
+            )
+            .order_by(
+                DesignCandidateRecord.rank.asc().nullslast(),
+                DesignCandidateRecord.score.desc(),
+            )
+            .limit(1)
+        )
+
+        result = await self.session.execute(
+            statement
+        )
+
+        return result.scalar_one_or_none()
+
+    async def get_top_candidates(
+        self,
+        run_id: UUID,
+        *,
+        limit: int = 10,
+    ) -> Sequence[DesignCandidateRecord]:
+        """
+        Return the top-ranked candidates for a run.
+        """
+
+        if limit < 1:
+            raise ValueError(
+                "limit must be greater than zero."
+            )
+
+        statement = (
+            select(
+                DesignCandidateRecord
+            )
+            .where(
+                DesignCandidateRecord.run_id
+                == run_id
+            )
+            .order_by(
+                DesignCandidateRecord.rank.asc().nullslast(),
+                DesignCandidateRecord.score.desc(),
+            )
+            .limit(limit)
+        )
+
+        result = await self.session.execute(
+            statement
+        )
+
+        return result.scalars().all()
+
+    # =====================================================================
+    # TRANSACTION SAFETY
+    # =====================================================================
+
+    async def flush(self) -> None:
+        """
+        Explicitly flush the current transaction.
+
+        This is provided for service-layer orchestration.
+
+        It does NOT commit.
+        """
+
+        await self.session.flush()
