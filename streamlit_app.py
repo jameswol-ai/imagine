@@ -19,7 +19,7 @@ from architecture.health import (
 
 
 # ============================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
@@ -47,14 +47,13 @@ def _safe_import(
     function_name: str,
 ) -> RenderFunction | None:
     """
-    Safely import a renderer.
+    Safely import a zero-argument renderer.
 
-    A broken optional module must not prevent the main
-    Streamlit application from starting.
+    This helper prevents optional modules from breaking the
+    entire Streamlit application during startup.
     """
 
     try:
-
         module = __import__(
             module_name,
             fromlist=[function_name],
@@ -70,7 +69,6 @@ def _safe_import(
             return renderer
 
     except Exception:
-
         return None
 
     return None
@@ -113,7 +111,7 @@ def render_overview() -> None:
         ## Project Overview
 
         IMAGINE connects architectural constraints,
-        planning, programming, compliance and generative
+        planning, programming, compliance, and generative
         design into one workflow.
         """
     )
@@ -166,9 +164,7 @@ def render_overview() -> None:
         columns,
         pipeline,
     ):
-
         with column:
-
             st.markdown(
                 f"""
                 <div style="
@@ -191,13 +187,11 @@ def render_overview() -> None:
     status_col1, status_col2 = st.columns(2)
 
     with status_col1:
-
         st.success(
             "IMAGINE application is running."
         )
 
     with status_col2:
-
         st.info(
             "Generative Design is constraint-driven."
         )
@@ -208,39 +202,43 @@ def render_overview() -> None:
 # ============================================================
 
 
-GENERATIVE_DESIGN_RENDERER = _safe_import(
-    "architecture.generative_design.ui",
-    "render_generative_design",
-)
-
-
 def render_generative_design_safe() -> None:
     """
-    Render the Generative Design interface safely.
+    Lazily load and render Generative Design.
 
-    Import or runtime failures are displayed without bringing
-    down the entire Streamlit application.
+    Import failures remain isolated to the Generative Design
+    route instead of preventing IMAGINE from starting.
     """
 
     st.title("✨ Generative Design")
 
-    if GENERATIVE_DESIGN_RENDERER is None:
+    try:
+
+        from architecture.generative_design.ui import (
+            render_generative_design,
+        )
+
+    except Exception as exc:
 
         st.error(
-            "The Generative Design interface "
-            "could not be loaded."
+            "The Generative Design module could not be loaded."
         )
 
-        st.info(
-            "Open System Health to identify the "
-            "first failing module."
+        st.warning(
+            "The rest of IMAGINE is still available."
         )
+
+        with st.expander(
+            "Complete import traceback",
+            expanded=True,
+        ):
+            st.exception(exc)
 
         return
 
     try:
 
-        GENERATIVE_DESIGN_RENDERER()
+        render_generative_design()
 
     except Exception as exc:
 
@@ -249,10 +247,54 @@ def render_generative_design_safe() -> None:
         )
 
         with st.expander(
-            "Show error details"
+            "Complete renderer traceback",
+            expanded=True,
         ):
-
             st.exception(exc)
+
+
+# ============================================================
+# SITE PLANNING REGISTRY ADAPTER
+# ============================================================
+
+
+def render_site_planning_registered() -> None:
+    """
+    Zero-argument registry adapter for Site Planning.
+
+    The shared module registry expects renderers to have the
+    signature:
+
+        renderer()
+
+    Site Planning uses dependency injection:
+
+        render_site_planning(service)
+
+    This adapter bridges those two interfaces.
+    """
+
+    from architecture.site_planning.repository import (
+        SitePlanningRepository,
+    )
+
+    from architecture.site_planning.service import (
+        SitePlanningService,
+    )
+
+    from architecture.site_planning.ui import (
+        render_site_planning,
+    )
+
+    repository = SitePlanningRepository()
+
+    service = SitePlanningService(
+        repository
+    )
+
+    render_site_planning(
+        service
+    )
 
 
 # ============================================================
@@ -273,11 +315,6 @@ OPTIONAL_RENDERERS: dict[
     "zoning": _safe_import(
         "architecture.zoning.ui",
         "render_zoning",
-    ),
-
-    "site_planning": _safe_import(
-        "architecture.site_planning.ui",
-        "render_site_planning",
     ),
 
     "floor_planning": _safe_import(
@@ -333,9 +370,7 @@ MODULE_REGISTRY: list[dict[str, Any]] = [
         "label": "Site Planning",
         "icon": "🌐",
         "route": "site_planning",
-        "renderer": OPTIONAL_RENDERERS[
-            "site_planning"
-        ],
+        "renderer": render_site_planning_registered,
     },
 
     {
@@ -382,7 +417,7 @@ MODULE_REGISTRY: list[dict[str, Any]] = [
 
 
 # ============================================================
-# ROUTE MAP
+# MODULES BY ROUTE
 # ============================================================
 
 
@@ -401,14 +436,14 @@ MODULES_BY_ROUTE: dict[
 
 
 def validate_module_registry() -> None:
-    """Validate module routes and required application routes."""
+    """Validate registry routes and required routes."""
 
     routes = [
         module["route"]
         for module in MODULE_REGISTRY
     ]
 
-    duplicates = sorted(
+    duplicate_routes = sorted(
         {
             route
             for route in routes
@@ -416,11 +451,13 @@ def validate_module_registry() -> None:
         }
     )
 
-    if duplicates:
+    if duplicate_routes:
 
         raise RuntimeError(
             "Duplicate module routes detected: "
-            + ", ".join(duplicates)
+            + ", ".join(
+                duplicate_routes
+            )
         )
 
     required_routes = (
@@ -437,6 +474,34 @@ def validate_module_registry() -> None:
                 f"Required module route is missing: {route}"
             )
 
+    generative_design = MODULES_BY_ROUTE[
+        "generative_design"
+    ]
+
+    if (
+        generative_design["renderer"]
+        is not render_generative_design_safe
+    ):
+
+        raise RuntimeError(
+            "Generative Design must use "
+            "render_generative_design_safe."
+        )
+
+    site_planning = MODULES_BY_ROUTE[
+        "site_planning"
+    ]
+
+    if (
+        site_planning["renderer"]
+        is not render_site_planning_registered
+    ):
+
+        raise RuntimeError(
+            "Site Planning must use "
+            "render_site_planning_registered."
+        )
+
 
 validate_module_registry()
 
@@ -447,7 +512,14 @@ validate_module_registry()
 
 
 def render_system_health() -> None:
-    """Render application health and dependency diagnostics."""
+    """
+    Render application health and dependency diagnostics.
+
+    The latest check timestamp is updated on every check.
+
+    The last successful timestamp is updated only when every
+    monitored module passes.
+    """
 
     st.title("🩺 System Health")
 
@@ -456,7 +528,7 @@ def render_system_health() -> None:
     )
 
     # --------------------------------------------------------
-    # Execute health check
+    # Run health check
     # --------------------------------------------------------
 
     results = run_startup_health_check()
@@ -466,7 +538,7 @@ def render_system_health() -> None:
     )
 
     # --------------------------------------------------------
-    # Save latest timestamp
+    # Store latest health-check timestamp
     # --------------------------------------------------------
 
     st.session_state[
@@ -474,7 +546,7 @@ def render_system_health() -> None:
     ] = checked_at
 
     # --------------------------------------------------------
-    # Determine whether the entire dependency chain passed
+    # Determine complete health status
     # --------------------------------------------------------
 
     all_modules_healthy = all(
@@ -483,8 +555,8 @@ def render_system_health() -> None:
     )
 
     # --------------------------------------------------------
-    # Only update successful timestamp when every module
-    # passes.
+    # Store last successful timestamp only when every
+    # monitored module succeeds.
     # --------------------------------------------------------
 
     if all_modules_healthy:
@@ -638,7 +710,8 @@ def render_system_health() -> None:
             if result.traceback_text:
 
                 with st.expander(
-                    "Complete traceback"
+                    "Complete traceback",
+                    expanded=True,
                 ):
 
                     st.code(
@@ -667,7 +740,7 @@ def render_system_health() -> None:
 
 
 # ============================================================
-# CONNECT SYSTEM HEALTH RENDERER
+# CONNECT SYSTEM HEALTH TO REGISTRY
 # ============================================================
 
 
@@ -705,7 +778,9 @@ with st.sidebar:
 
     st.divider()
 
-    st.caption("NAVIGATION")
+    st.caption(
+        "NAVIGATION"
+    )
 
     for module in MODULE_REGISTRY:
 
@@ -792,10 +867,13 @@ if callable(renderer):
         )
 
         with st.expander(
-            "Show error details"
+            "Complete renderer traceback",
+            expanded=True,
         ):
 
-            st.exception(exc)
+            st.exception(
+                exc
+            )
 
 else:
 
