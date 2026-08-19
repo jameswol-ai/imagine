@@ -1,6 +1,6 @@
 """
 IMAGINE
-Generative Design Package
+Generative Design
 """
 
-__all__: list[str] = []
+__all__ = []
