@@ -257,3 +257,31 @@ IMAGINE/bim/
 ├── ifc/
 ├── cobie/
 └── digital_twin/
+
+
+architecture/
+├── __init__.py
+├── routes.py
+└── zoning/
+    ├── __init__.py
+    ├── models.py
+    ├── schemas.py
+    ├── repository.py
+    ├── service.py
+    ├── routes.py
+    ├── seed.py
+    └── ui.py
+
+database/
+└── migrations/
+    └── sql/
+        └── 001_create_zoning_rules.sql
+
+tests/
+└── unit/
+    ├── test_zoning_schemas.py
+    ├── test_zoning_service.py
+    └── test_zoning_repository.py
+
+streamlit_zoning_integration.py
+README_ZONING.md
