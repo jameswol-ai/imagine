@@ -433,28 +433,55 @@ def _render_site_plan_list(
 # ============================================================
 
 
-def render_site_planning() -> None:
+def render_site_planning_registered() -> None:
     """
-    Zero-argument Site Planning renderer.
+    Zero-argument registry adapter for Site Planning.
 
-    This is the renderer expected by the IMAGINE application
-    registry:
+    The application shell requires:
+
+        renderer()
+
+    The Site Planning UI now owns its synchronous service
+    adapter and therefore requires no arguments.
+    """
+
+    try:
+
+        from architecture.site_planning.ui import (
+            render_site_planning,
+        )
+
+    except Exception as exc:
+
+        st.error(
+            "The Site Planning module could not be loaded."
+        )
+
+        with st.expander(
+            "Complete import traceback",
+            expanded=True,
+        ):
+
+            st.exception(exc)
+
+        return
+
+    try:
 
         render_site_planning()
 
-    The renderer obtains a sync-capable SitePlanService and
-    delegates database work to its synchronous adapters.
-    """
+    except Exception as exc:
 
-    st.title(
-        "Site Planning"
-    )
+        st.error(
+            "Site Planning could not be rendered."
+        )
 
-    st.caption(
-        "Site organization, land allocation and development planning."
-    )
+        with st.expander(
+            "Complete renderer traceback",
+            expanded=True,
+        ):
 
-    service = _get_sync_service()
+            st.exception(exc)
 
     # --------------------------------------------------------
     # Summary
