@@ -186,11 +186,13 @@ def page_dashboard():
 def page_projects():
     st.title("📁 Projects")
 
+    # Refresh data from API
     if st.button("🔄 Refresh Projects"):
         st.session_state.projects_data = api_get("projects")
         st.rerun()
 
-    if st.session_state.projects_data is None:
+    # Load projects from session state or API
+    if "projects_data" not in st.session_state or st.session_state.projects_data is None:
         st.session_state.projects_data = api_get("projects")
 
     projects = st.session_state.projects_data
@@ -198,6 +200,7 @@ def page_projects():
         st.warning("No projects found or API error.")
         return
 
+    # Display projects as cards with edit/delete
     for idx, project in enumerate(projects):
         col1, col2, col3, col4, col5, col6 = st.columns([3, 2, 2, 2, 1, 1])
         with col1:
@@ -209,19 +212,20 @@ def page_projects():
         with col4:
             st.write(f"{project.get('progress', 0)}%")
         with col5:
+            # Edit button: opens an expander or a modal (we'll use a form in an expander)
             if st.button("✏️", key=f"edit_{project['id']}"):
                 st.session_state.editing_project = project
         with col6:
             if st.button("🗑️", key=f"del_{project['id']}"):
-                # Simple confirmation via checkbox (we'll use a small pop-up in practice)
                 if st.checkbox(f"Confirm delete {project['name']}?", key=f"confirm_{project['id']}"):
                     if api_delete(f"projects/{project['id']}"):
                         st.success("Project deleted!")
+                        # Remove from session state
                         st.session_state.projects_data = [p for p in st.session_state.projects_data if p['id'] != project['id']]
                         st.rerun()
                     else:
                         st.error("Delete failed.")
-
+        # If this project is being edited, show the edit form
         if st.session_state.get("editing_project", {}).get("id") == project.get("id"):
             with st.expander(f"Edit {project['name']}", expanded=True):
                 with st.form(key=f"edit_form_{project['id']}"):
@@ -244,10 +248,12 @@ def page_projects():
                             st.rerun()
                         else:
                             st.error("Update failed.")
+            # Close button to stop editing
             if st.button("Cancel", key=f"cancel_edit_{project['id']}"):
                 st.session_state.editing_project = None
                 st.rerun()
 
+    # Add new project form (existing)
     with st.expander("➕ Add New Project"):
         with st.form("new_project_form"):
             name = st.text_input("Project Name")
