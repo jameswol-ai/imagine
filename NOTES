@@ -617,3 +617,11 @@ modules/mep/
 ├── electrical.py
 ├── plumbing.py
 └── energy_simulation.py
+
+modules/costing/
+├── boq.py
+├── procurement.py
+├── forex.py
+├── escalation.py
+└── risk_analysis.py
+
