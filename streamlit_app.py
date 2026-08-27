@@ -11,7 +11,7 @@ import random
 # ---------------------------
 # Configuration
 # ---------------------------
-USE_MOCK = True  # Set to False to use real backend API
+USE_MOCK = True
 API_BASE_URL = st.secrets.get("API_BASE_URL", "http://localhost:8000/api/v1")
 
 # ---------------------------
@@ -108,7 +108,6 @@ def init_mock_data():
             {"id": 2, "name": "Tower B", "storeys": 18, "area": 12000, "ifc_version": "IFC4", "description": "Secondary tower"},
             {"id": 3, "name": "Pavilion", "storeys": 3, "area": 2500, "ifc_version": "IFC2x3", "description": "Event space"},
         ]
-        # Storeys for each building (will be stored as nested dict)
         if "storeys_data" not in st.session_state:
             st.session_state.storeys_data = {}
         for b in st.session_state.buildings_data:
@@ -118,7 +117,6 @@ def init_mock_data():
                     {"id": (b_id*100 + i), "level": f"Level {i}", "height": 4.0 + (i%2)*0.2, "area": 1200 - i*10}
                     for i in range(1, min(b["storeys"], 5)+1)
                 ]
-        # Spaces for each storey (will be stored as nested dict)
         if "spaces_data" not in st.session_state:
             st.session_state.spaces_data = {}
         space_id_counter = 1
@@ -235,7 +233,6 @@ def init_mock_data():
             {"id": 4, "sensor_id": "OCC-01", "location": "Office", "value": 245, "unit": "people"},
         ]
 
-    # Regional codes (static, not CRUD)
     if "regional_codes" not in st.session_state:
         st.session_state.regional_codes = {
             "Uganda": {"Code": "UNBC 2020", "Seismic Zone": "Zone 3", "Wind Speed": "35 m/s"},
@@ -249,7 +246,6 @@ def init_mock_data():
 # Session state initialisation
 # ---------------------------
 def init_session_state():
-    # Editing states
     edit_vars = [
         "editing_project", "editing_building", "editing_zoning", "editing_room",
         "editing_beam", "editing_column", "editing_slab", "editing_foundation",
@@ -260,7 +256,6 @@ def init_session_state():
         if var not in st.session_state:
             st.session_state[var] = None
 
-    # Data variables (will be filled with mock data)
     data_vars = [
         "projects_data", "buildings_data", "zoning_data", "room_program_data",
         "beam_data", "column_data", "slab_data", "foundation_data", "retaining_data",
@@ -270,28 +265,13 @@ def init_session_state():
         if var not in st.session_state:
             st.session_state[var] = None
 
-    # Load mock data if not already loaded
     if USE_MOCK:
         init_mock_data()
 
 init_session_state()
 
 # ---------------------------
-# Helper: get data from session state (mock) or API
-# ---------------------------
-def get_data(key, api_endpoint=None):
-    if USE_MOCK:
-        return st.session_state.get(key, [])
-    else:
-        if api_endpoint:
-            return api_get(api_endpoint)
-        return st.session_state.get(key, [])
-
-def set_data(key, data):
-    st.session_state[key] = data
-
-# ---------------------------
-# Helper for generic CRUD table (mock-friendly)
+# Helper: CRUD table (FIXED)
 # ---------------------------
 def crud_table(data_key, item_name, endpoint, id_field="id", display_fields=None, edit_fields=None, add_fields=None):
     data = st.session_state.get(data_key, [])
@@ -327,52 +307,62 @@ def crud_table(data_key, item_name, endpoint, id_field="id", display_fields=None
                             st.error("Delete failed.")
 
         editing_key = f"editing_{item_name}"
-        if st.session_state.get(editing_key, {}).get(id_field) == item.get(id_field):
-            with st.expander(f"Edit {item.get('name', item.get('level', ''))}", expanded=True):
-                with st.form(key=f"edit_{item_name}_form_{item[id_field]}"):
-                    edit_values = {}
-                    for field, input_type in edit_fields.items():
-                        if input_type == "text":
-                            edit_values[field] = st.text_input(field.capitalize(), value=item.get(field, ''))
-                        elif input_type == "number":
-                            edit_values[field] = st.number_input(field.capitalize(), value=item.get(field, 0.0), step=0.1)
-                        elif input_type == "select":
-                            edit_values[field] = st.selectbox(field.capitalize(), item.get('options', []), index=item.get('options', []).index(item.get(field)) if item.get(field) in item.get('options', []) else 0)
-                    if st.form_submit_button("Update"):
-                        if USE_MOCK:
-                            for d in data:
-                                if d[id_field] == item[id_field]:
-                                    for k, v in edit_values.items():
-                                        d[k] = v
-                                    break
-                            st.session_state[data_key] = data
-                            st.success(f"{item_name.capitalize()} updated!")
-                            st.session_state[editing_key] = None
-                            st.rerun()
-                        else:
-                            result = api_put(f"{endpoint}/{item[id_field]}", edit_values)
-                            if result:
+        # Safer check: avoid nested .get calls
+        if editing_key in st.session_state and st.session_state[editing_key] is not None:
+            editing_item = st.session_state[editing_key]
+            if isinstance(editing_item, dict) and editing_item.get(id_field) == item.get(id_field):
+                with st.expander(f"Edit {item.get('name', item.get('level', ''))}", expanded=True):
+                    with st.form(key=f"edit_{item_name}_form_{item[id_field]}"):
+                        edit_values = {}
+                        if edit_fields is None:
+                            edit_fields = {field: "text" for field in display_fields}
+                        for field, input_type in edit_fields.items():
+                            if input_type == "text":
+                                edit_values[field] = st.text_input(field.capitalize(), value=item.get(field, ''))
+                            elif input_type == "number":
+                                edit_values[field] = st.number_input(field.capitalize(), value=item.get(field, 0.0), step=0.1)
+                            elif input_type == "select":
+                                options = item.get('options', [])
+                                current = item.get(field, options[0] if options else '')
+                                edit_values[field] = st.selectbox(field.capitalize(), options, index=options.index(current) if current in options else 0)
+                        if st.form_submit_button("Update"):
+                            if USE_MOCK:
+                                for d in data:
+                                    if d[id_field] == item[id_field]:
+                                        for k, v in edit_values.items():
+                                            d[k] = v
+                                        break
+                                st.session_state[data_key] = data
                                 st.success(f"{item_name.capitalize()} updated!")
-                                st.session_state[data_key] = api_get(endpoint)
                                 st.session_state[editing_key] = None
                                 st.rerun()
                             else:
-                                st.error("Update failed.")
-            if st.button("Cancel", key=f"cancel_{item_name}_edit_{item[id_field]}"):
-                st.session_state[editing_key] = None
-                st.rerun()
+                                result = api_put(f"{endpoint}/{item[id_field]}", edit_values)
+                                if result:
+                                    st.success(f"{item_name.capitalize()} updated!")
+                                    st.session_state[data_key] = api_get(endpoint)
+                                    st.session_state[editing_key] = None
+                                    st.rerun()
+                                else:
+                                    st.error("Update failed.")
+                if st.button("Cancel", key=f"cancel_{item_name}_edit_{item[id_field]}"):
+                    st.session_state[editing_key] = None
+                    st.rerun()
 
     with st.expander(f"➕ Add New {item_name.capitalize()}"):
         with st.form(key=f"new_{item_name}_form"):
             add_values = {}
             add_fields_to_use = add_fields if add_fields is not None else edit_fields
+            if add_fields_to_use is None:
+                add_fields_to_use = {field: "text" for field in display_fields}
             for field, input_type in add_fields_to_use.items():
                 if input_type == "text":
                     add_values[field] = st.text_input(field.capitalize())
                 elif input_type == "number":
                     add_values[field] = st.number_input(field.capitalize(), value=0.0, step=0.1)
                 elif input_type == "select":
-                    add_values[field] = st.selectbox(field.capitalize(), item.get('options', []))
+                    options = data[0].get('options', []) if data else []
+                    add_values[field] = st.selectbox(field.capitalize(), options)
             if st.form_submit_button("Create"):
                 if USE_MOCK:
                     new_id = max([d[id_field] for d in data]) + 1 if data else 1
