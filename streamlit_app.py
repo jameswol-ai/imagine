@@ -116,11 +116,19 @@ def api_delete(endpoint):
 # Session state initialisation
 # ---------------------------
 def init_session_state():
+    # Projects
     if "editing_project" not in st.session_state:
         st.session_state.editing_project = None
     if "projects_data" not in st.session_state:
         st.session_state.projects_data = None
-    # Add other state variables as needed
+    
+    # BIM - Buildings
+    if "editing_building" not in st.session_state:
+        st.session_state.editing_building = None
+    if "buildings_data" not in st.session_state:
+        st.session_state.buildings_data = None
+    
+    # BIM - Storeys and Spaces are dynamic; they will be created as needed.
 
 init_session_state()
 
@@ -275,76 +283,7 @@ def page_projects():
                     st.error("Creation failed.")
 
 # ---------------------------
-# PAGE: ARCHITECTURE (stub)
-# ---------------------------
-def page_architecture():
-    st.title("📐 Architecture")
-    st.info("Architecture pages coming soon. (Will integrate with generative_design, zoning, etc.)")
-
-
-    ])
-
-    with tab1:
-        st.subheader("Buildings")
-
-        # Refresh button
-        if st.button("🔄 Refresh Buildings"):
-            st.session_state.buildings_data = api_get("bim/buildings")
-            st.rerun()
-
-        # Load buildings
-        if "buildings_data" not in st.session_state or st.session_state.buildings_data is None:
-            st.session_state.buildings_data = api_get("bim/buildings")
-
-        buildings = st.session_state.buildings_data
-        if buildings is None:
-            st.warning("No buildings found or API error.")
-            return
-
-        # Display each building with edit/delete
-        for idx, building in enumerate(buildings):
-            col1, col2, col3, col4, col5, col6 = st.columns([3, 1, 2, 1, 1, 1])
-            with col1:
-                st.markdown(f"**{building.get('name', 'Unnamed')}**")
-            with col2:
-                st.write(building.get('storeys', 'N/A'))
-            with col3:
-                st.write(f"{building.get('area', 0)} m²")
-            with col4:
-                st.write(building.get('ifc_version', 'N/A'))
-            with col5:
-                if st.button("✏️", key=f"edit_building_{building['id']}"):
-                    st.session_state.editing_building = building
-            with col6:
-                if st.button("🗑️", key=f"del_building_{building['id']}"):
-                    if st.checkbox(f"Confirm delete {building.get('name', 'this building')}?", key=f"confirm_building_{building['id']}"):
-                        if api_delete(f"bim/buildings/{building['id']}"):
-                            st.success("Building deleted!")
-                            st.session_state.buildings_data = [b for b in st.session_state.buildings_data if b['id'] != building['id']]
-                            st.rerun()
-                        else:
-                            st.error("Delete failed.")
-
-            # Editing form (if this building is being edited)
-            if st.session_state.get("editing_building", {}).get("id") == building.get("id"):
-                with st.expander(f"Edit {building.get('name', '')}", expanded=True):
-                    with st.form(key=f"edit_building_form_{building['id']}"):
-                        new_name = st.text_input("Name", value=building.get('name', ''))
-                        new_storeys = st.number_input("Storeys", value=building.get('storeys', 0), step=1, min_value=0)
-                        new_area = st.number_input("Area (m²)", value=building.get('area', 0.0), step=10.0)
-                        new_ifc = st.text_input("IFC Version", value=building.get('ifc_version', ''))
-                        new_desc = st.text_area("Description", value=building.get('description', ''))
-                        if st.form_submit_button("Update"):
-                            updated = {
-                                "name": new_name,
-                                "storeys": new_storeys,
-                                "area": new_area,
-                                "ifc_version": new_ifc,
-                                "description": new_desc
-                            }
-                       
-# ---------------------------
-# PAGE: BIM (Buildings + Storeys CRUD)
+# PAGE: BIM (full CRUD for Buildings, Storeys, Spaces)
 # ---------------------------
 def page_bim():
     st.title("🏛️ BIM")
@@ -354,7 +293,7 @@ def page_bim():
         "Buildings", "Storeys", "Spaces", "Elements", "IFC Viewer", "COBie", "Digital Twin"
     ])
 
-    # ---------- TAB 1: BUILDINGS (already implemented) ----------
+    # ---------- TAB 1: BUILDINGS ----------
     with tab1:
         st.subheader("Buildings")
 
@@ -362,7 +301,7 @@ def page_bim():
             st.session_state.buildings_data = api_get("bim/buildings")
             st.rerun()
 
-        if "buildings_data" not in st.session_state or st.session_state.buildings_data is None:
+        if st.session_state.buildings_data is None:
             st.session_state.buildings_data = api_get("bim/buildings")
 
         buildings = st.session_state.buildings_data
@@ -370,7 +309,6 @@ def page_bim():
             st.warning("No buildings found or API error.")
             return
 
-        # Display buildings with edit/delete (same as before)
         for idx, building in enumerate(buildings):
             col1, col2, col3, col4, col5, col6 = st.columns([3, 1, 2, 1, 1, 1])
             with col1:
@@ -445,42 +383,37 @@ def page_bim():
                     else:
                         st.error("Creation failed.")
 
-    # ---------- TAB 2: STOREYS (NEW - FULL CRUD) ----------
+    # ---------- TAB 2: STOREYS ----------
     with tab2:
         st.subheader("Storeys")
 
-        # Get list of buildings for the dropdown
         buildings = st.session_state.buildings_data
         if not buildings:
             st.warning("Please create a building first.")
             return
 
-        # Select building
         building_names = {b["id"]: b["name"] for b in buildings}
         selected_building_id = st.selectbox(
             "Select Building",
             options=list(building_names.keys()),
-            format_func=lambda x: building_names[x]
+            format_func=lambda x: building_names[x],
+            key="storey_building_select"
         )
 
         if selected_building_id:
-            # Refresh button for storeys
             if st.button("🔄 Refresh Storeys", key="refresh_storeys"):
-                st.session_state.storeys_data = api_get(f"bim/buildings/{selected_building_id}/storeys")
+                st.session_state[f"storeys_{selected_building_id}"] = api_get(f"bim/buildings/{selected_building_id}/storeys")
                 st.rerun()
 
-            # Load storeys for selected building
             storeys_key = f"storeys_{selected_building_id}"
             if storeys_key not in st.session_state or st.session_state.get(storeys_key) is None:
                 st.session_state[storeys_key] = api_get(f"bim/buildings/{selected_building_id}/storeys")
 
             storeys = st.session_state.get(storeys_key, [])
-
             if storeys is None:
                 st.warning("Could not load storeys.")
                 return
 
-            # Display storeys with edit/delete
             for idx, storey in enumerate(storeys):
                 col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 1])
                 with col1:
@@ -497,13 +430,11 @@ def page_bim():
                         if st.checkbox(f"Confirm delete {storey.get('level', 'this storey')}?", key=f"confirm_storey_{storey['id']}"):
                             if api_delete(f"bim/storeys/{storey['id']}"):
                                 st.success("Storey deleted!")
-                                # Refresh storeys list
                                 st.session_state[storeys_key] = api_get(f"bim/buildings/{selected_building_id}/storeys")
                                 st.rerun()
                             else:
                                 st.error("Delete failed.")
 
-                # Editing form
                 editing_key = f"editing_storey_{selected_building_id}"
                 if st.session_state.get(editing_key, {}).get("id") == storey.get("id"):
                     with st.expander(f"Edit {storey.get('level', '')}", expanded=True):
@@ -530,7 +461,6 @@ def page_bim():
                         st.session_state[editing_key] = None
                         st.rerun()
 
-            # Add new storey
             with st.expander("➕ Add New Storey"):
                 with st.form("new_storey_form"):
                     level = st.text_input("Level (e.g., Level 1, Ground Floor)")
@@ -551,9 +481,131 @@ def page_bim():
                         else:
                             st.error("Creation failed.")
 
-    # ---------- OTHER TABS (stubs) ----------
+    # ---------- TAB 3: SPACES ----------
     with tab3:
-        st.info("Spaces management coming soon.")
+        st.subheader("Spaces")
+
+        buildings = st.session_state.buildings_data
+        if not buildings:
+            st.warning("Please create a building first.")
+            return
+
+        building_names = {b["id"]: b["name"] for b in buildings}
+        selected_building_id = st.selectbox(
+            "Select Building",
+            options=list(building_names.keys()),
+            format_func=lambda x: building_names[x],
+            key="space_building_select"
+        )
+
+        if selected_building_id:
+            storeys_key = f"storeys_{selected_building_id}"
+            if storeys_key not in st.session_state or st.session_state.get(storeys_key) is None:
+                st.session_state[storeys_key] = api_get(f"bim/buildings/{selected_building_id}/storeys")
+
+            storeys = st.session_state.get(storeys_key, [])
+            if not storeys:
+                st.warning("Please create a storey first.")
+                return
+
+            storey_options = {s["id"]: s["level"] for s in storeys}
+            selected_storey_id = st.selectbox(
+                "Select Storey",
+                options=list(storey_options.keys()),
+                format_func=lambda x: storey_options[x],
+                key="space_storey_select"
+            )
+
+            if selected_storey_id:
+                if st.button("🔄 Refresh Spaces", key="refresh_spaces"):
+                    st.session_state[f"spaces_{selected_storey_id}"] = api_get(f"bim/storeys/{selected_storey_id}/spaces")
+                    st.rerun()
+
+                spaces_key = f"spaces_{selected_storey_id}"
+                if spaces_key not in st.session_state or st.session_state.get(spaces_key) is None:
+                    st.session_state[spaces_key] = api_get(f"bim/storeys/{selected_storey_id}/spaces")
+
+                spaces = st.session_state.get(spaces_key, [])
+                if spaces is None:
+                    st.warning("Could not load spaces.")
+                    return
+
+                for idx, space in enumerate(spaces):
+                    col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 1, 1, 1, 1])
+                    with col1:
+                        st.markdown(f"**{space.get('name', 'Unnamed')}**")
+                    with col2:
+                        st.write(space.get('space_type', 'N/A'))
+                    with col3:
+                        st.write(f"{space.get('area', 0)} m²")
+                    with col4:
+                        st.write(f"{space.get('height', 0)} m")
+                    with col5:
+                        if st.button("✏️", key=f"edit_space_{space['id']}"):
+                            st.session_state[f"editing_space_{selected_storey_id}"] = space
+                    with col6:
+                        if st.button("🗑️", key=f"del_space_{space['id']}"):
+                            if st.checkbox(f"Confirm delete {space.get('name', 'this space')}?", key=f"confirm_space_{space['id']}"):
+                                if api_delete(f"bim/spaces/{space['id']}"):
+                                    st.success("Space deleted!")
+                                    st.session_state[spaces_key] = api_get(f"bim/storeys/{selected_storey_id}/spaces")
+                                    st.rerun()
+                                else:
+                                    st.error("Delete failed.")
+
+                    editing_key = f"editing_space_{selected_storey_id}"
+                    if st.session_state.get(editing_key, {}).get("id") == space.get("id"):
+                        with st.expander(f"Edit {space.get('name', '')}", expanded=True):
+                            with st.form(key=f"edit_space_form_{space['id']}"):
+                                new_name = st.text_input("Space Name", value=space.get('name', ''))
+                                new_type = st.text_input("Space Type (e.g., Office, Conference)", value=space.get('space_type', ''))
+                                new_area = st.number_input("Area (m²)", value=space.get('area', 0.0), step=5.0)
+                                new_height = st.number_input("Height (m)", value=space.get('height', 0.0), step=0.1)
+                                if st.form_submit_button("Update"):
+                                    updated = {
+                                        "name": new_name,
+                                        "space_type": new_type,
+                                        "area": new_area,
+                                        "height": new_height,
+                                        "storey_id": selected_storey_id,
+                                        "building_id": selected_building_id
+                                    }
+                                    result = api_put(f"bim/spaces/{space['id']}", updated)
+                                    if result:
+                                        st.success("Space updated!")
+                                        st.session_state[spaces_key] = api_get(f"bim/storeys/{selected_storey_id}/spaces")
+                                        st.session_state[editing_key] = None
+                                        st.rerun()
+                                    else:
+                                        st.error("Update failed.")
+                        if st.button("Cancel", key=f"cancel_space_edit_{space['id']}"):
+                            st.session_state[editing_key] = None
+                            st.rerun()
+
+                with st.expander("➕ Add New Space"):
+                    with st.form("new_space_form"):
+                        name = st.text_input("Space Name")
+                        space_type = st.text_input("Space Type (e.g., Office, Conference, Lobby)")
+                        area = st.number_input("Area (m²)", step=5.0, value=20.0)
+                        height = st.number_input("Height (m)", step=0.1, value=3.0)
+                        if st.form_submit_button("Create"):
+                            new_data = {
+                                "name": name,
+                                "space_type": space_type,
+                                "area": area,
+                                "height": height,
+                                "storey_id": selected_storey_id,
+                                "building_id": selected_building_id
+                            }
+                            result = api_post("bim/spaces", new_data)
+                            if result:
+                                st.success("Space created!")
+                                st.session_state[spaces_key] = api_get(f"bim/storeys/{selected_storey_id}/spaces")
+                                st.rerun()
+                            else:
+                                st.error("Creation failed.")
+
+    # ---------- OTHER TABS (stubs) ----------
     with tab4:
         st.info("Elements management coming soon.")
     with tab5:
@@ -564,53 +616,67 @@ def page_bim():
         st.info("Digital Twin integration coming soon.")
 
 # ---------------------------
+# PAGE: ARCHITECTURE (stub)
+# ---------------------------
+def page_architecture():
+    st.title("📐 Architecture")
+    st.info("Architecture pages coming soon. (Generative Design, Zoning, Site Planning, Floor Planning, Room Programming, Compliance)")
+
+# ---------------------------
+# PAGE: STRUCTURAL (stub)
+# ---------------------------
+def page_structural():
+    st.title("🔩 Structural Engineering")
+    st.info("Structural pages coming soon. (Eurocode, beams, columns, slabs, foundations, retaining walls, steel connections, FEA)")
+
+# ---------------------------
 # PAGE: MEP (stub)
 # ---------------------------
 def page_mep():
     st.title("⚡ MEP")
-    st.info("MEP pages coming soon. (HVAC, electrical, plumbing)")
+    st.info("MEP pages coming soon. (HVAC, ventilation, chilled water, electrical, plumbing)")
 
 # ---------------------------
 # PAGE: COSTING (stub)
 # ---------------------------
 def page_costing():
     st.title("💰 Cost Estimation")
-    st.info("Costing pages coming soon. (BOQ, quantity takeoff, etc.)")
+    st.info("Costing pages coming soon. (BOQ, quantity takeoff, procurement, forex, inflation, risk analysis, cashflow)")
 
 # ---------------------------
 # PAGE: CONSTRUCTION (stub)
 # ---------------------------
 def page_construction():
     st.title("🚧 Construction Management")
-    st.info("Construction pages coming soon. (RFIs, progress tracking, site diaries)")
+    st.info("Construction pages coming soon. (Planning, scheduling, RFIs, submittals, variations, snagging, progress tracking, site diaries)")
 
 # ---------------------------
 # PAGE: REGIONAL (stub)
 # ---------------------------
 def page_regional():
     st.title("🌍 Regional – East Africa Codes")
-    st.info("Regional pages coming soon. (Uganda, Kenya, Tanzania, etc.)")
+    st.info("Regional pages coming soon. (Uganda, Kenya, Tanzania, Rwanda, South Sudan, codes, zoning laws)")
 
 # ---------------------------
 # PAGE: DIGITAL TWIN (stub)
 # ---------------------------
 def page_digital_twin():
     st.title("🔄 Digital Twin – Live Monitoring")
-    st.info("Digital Twin pages coming soon. (Sensors, telemetry, predictive AI)")
+    st.info("Digital Twin pages coming soon. (Assets, sensors, telemetry, energy, maintenance, predictive AI)")
 
 # ---------------------------
 # PAGE: AI ASSISTANT (stub)
 # ---------------------------
 def page_ai():
     st.title("🤖 AI Assistant - IMAGINE Architect")
-    st.info("AI Assistant coming soon. (RAG, prompt library, imagine_architect)")
+    st.info("AI Assistant coming soon. (IMAGINE Architect, Engineer, MEP, QS, PM, vector store, RAG, prompt library)")
 
 # ---------------------------
 # PAGE: ANALYTICS (stub)
 # ---------------------------
 def page_analytics():
     st.title("📈 Analytics & Reporting")
-    st.info("Analytics pages coming soon. (KPIs, portfolio, forecasting)")
+    st.info("Analytics pages coming soon. (Dashboards, KPIs, portfolio, forecasting, reporting)")
 
 # ---------------------------
 # Route to selected page
