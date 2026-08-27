@@ -596,3 +596,18 @@ modules/
 │
 └── bim/
     └── ifc_export.py
+
+
+
+modules/bim/
+├── buildings.py
+├── storeys.py
+└── spaces.py
+
+
+modules/structural/
+├── beam_design.py
+├── column_design.py
+├── slab_design.py
+├── foundation_design.py
+└── retaining_walls.py
