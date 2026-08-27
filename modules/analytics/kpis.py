@@ -1,34 +1,16 @@
-"""
-IMAGINE Analytics Module
+import streamlit as st
 
-KPI Engine
-"""
+class KPIEngine:
+    def __init__(self):
+        pass
 
-class KPIService:
+    def run(self, inputs=None):
+        return {"kpis": "Demo KPI dashboard", "inputs": inputs or {}}
 
-    @staticmethod
-    def budget_variance(
-        planned,
-        actual
-    ):
-
-        variance = actual - planned
-
-        return {
-            "planned": planned,
-            "actual": actual,
-            "variance": variance,
-            "variance_percent":
-                round(
-                    (variance / planned) * 100,
-                    2
-                ) if planned else 0
-        }
-
-    @staticmethod
-    def schedule_variance(
-        planned_days,
-        actual_days
-    ):
-
-        return actual_days - planned_days
+def render():
+    st.header("📈 Analytics - KPIs")
+    engine = KPIEngine()
+    result = engine.run({"metric": "Cost Variance"})
+    for kpi in st.session_state.kpis_data:
+        st.metric(kpi["metric"], kpi["value"])
+    st.json(result)
