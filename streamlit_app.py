@@ -289,11 +289,123 @@ def page_bim():
     st.info("BIM pages coming soon. (Buildings, Storeys, Spaces, Elements, IFC, COBie, Digital Twin)")
 
 # ---------------------------
-# PAGE: STRUCTURAL (stub)
+# PAGE: BIM (Buildings CRUD)
 # ---------------------------
-def page_structural():
-    st.title("🔩 Structural Engineering")
-    st.info("Structural pages coming soon. (Eurocode, beams, columns, etc.)")
+def page_bim():
+    st.title("🏛️ BIM")
+
+    # Tabs for BIM submodules
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "Buildings", "Storeys", "Spaces", "Elements", "IFC Viewer", "COBie", "Digital Twin"
+    ])
+
+    with tab1:
+        st.subheader("Buildings")
+
+        # Refresh button
+        if st.button("🔄 Refresh Buildings"):
+            st.session_state.buildings_data = api_get("bim/buildings")
+            st.rerun()
+
+        # Load buildings
+        if "buildings_data" not in st.session_state or st.session_state.buildings_data is None:
+            st.session_state.buildings_data = api_get("bim/buildings")
+
+        buildings = st.session_state.buildings_data
+        if buildings is None:
+            st.warning("No buildings found or API error.")
+            return
+
+        # Display each building with edit/delete
+        for idx, building in enumerate(buildings):
+            col1, col2, col3, col4, col5, col6 = st.columns([3, 1, 2, 1, 1, 1])
+            with col1:
+                st.markdown(f"**{building.get('name', 'Unnamed')}**")
+            with col2:
+                st.write(building.get('storeys', 'N/A'))
+            with col3:
+                st.write(f"{building.get('area', 0)} m²")
+            with col4:
+                st.write(building.get('ifc_version', 'N/A'))
+            with col5:
+                if st.button("✏️", key=f"edit_building_{building['id']}"):
+                    st.session_state.editing_building = building
+            with col6:
+                if st.button("🗑️", key=f"del_building_{building['id']}"):
+                    if st.checkbox(f"Confirm delete {building.get('name', 'this building')}?", key=f"confirm_building_{building['id']}"):
+                        if api_delete(f"bim/buildings/{building['id']}"):
+                            st.success("Building deleted!")
+                            st.session_state.buildings_data = [b for b in st.session_state.buildings_data if b['id'] != building['id']]
+                            st.rerun()
+                        else:
+                            st.error("Delete failed.")
+
+            # Editing form (if this building is being edited)
+            if st.session_state.get("editing_building", {}).get("id") == building.get("id"):
+                with st.expander(f"Edit {building.get('name', '')}", expanded=True):
+                    with st.form(key=f"edit_building_form_{building['id']}"):
+                        new_name = st.text_input("Name", value=building.get('name', ''))
+                        new_storeys = st.number_input("Storeys", value=building.get('storeys', 0), step=1, min_value=0)
+                        new_area = st.number_input("Area (m²)", value=building.get('area', 0.0), step=10.0)
+                        new_ifc = st.text_input("IFC Version", value=building.get('ifc_version', ''))
+                        new_desc = st.text_area("Description", value=building.get('description', ''))
+                        if st.form_submit_button("Update"):
+                            updated = {
+                                "name": new_name,
+                                "storeys": new_storeys,
+                                "area": new_area,
+                                "ifc_version": new_ifc,
+                                "description": new_desc
+                            }
+                            result = api_put(f"bim/buildings/{building['id']}", updated)
+                            if result:
+                                st.success("Building updated!")
+                                st.session_state.buildings_data = api_get("bim/buildings")
+                                st.session_state.editing_building = None
+                                st.rerun()
+                            else:
+                                st.error("Update failed.")
+                if st.button("Cancel", key=f"cancel_building_edit_{building['id']}"):
+                    st.session_state.editing_building = None
+                    st.rerun()
+
+        # Add new building
+        with st.expander("➕ Add New Building"):
+            with st.form("new_building_form"):
+                name = st.text_input("Name")
+                storeys = st.number_input("Storeys", step=1, min_value=1, value=1)
+                area = st.number_input("Area (m²)", step=10.0, value=100.0)
+                ifc_version = st.text_input("IFC Version", value="IFC4")
+                description = st.text_area("Description")
+                if st.form_submit_button("Create"):
+                    new_data = {
+                        "name": name,
+                        "storeys": storeys,
+                        "area": area,
+                        "ifc_version": ifc_version,
+                        "description": description
+                    }
+                    result = api_post("bim/buildings", new_data)
+                    if result:
+                        st.success("Building created!")
+                        st.session_state.buildings_data = api_get("bim/buildings")
+                        st.rerun()
+                    else:
+                        st.error("Creation failed.")
+
+    # Other tabs are stubs for now
+    with tab2:
+        st.info("Storeys management coming soon.")
+    with tab3:
+        st.info("Spaces management coming soon.")
+    with tab4:
+        st.info("Elements management coming soon.")
+    with tab5:
+        st.info("IFC Viewer coming soon.")
+    with tab6:
+        st.info("COBie data management coming soon.")
+    with tab7:
+        st.info("Digital Twin integration coming soon.")
 
 # ---------------------------
 # PAGE: MEP (stub)
