@@ -1,5 +1,5 @@
 """
-IMAGINE AEC Engine — Enhanced UI
+IMAGINE AEC Engine — Enhanced UI (with class support)
 Path: streamlit_app.py
 """
 
@@ -13,11 +13,7 @@ import streamlit as st
 # ----------------------------------------------
 st.markdown("""
 <style>
-    /* Main container */
-    .main {
-        padding: 0 1rem;
-    }
-    /* Metric cards */
+    .main { padding: 0 1rem; }
     .metric-card {
         background: #f0f2f6;
         border-radius: 10px;
@@ -25,28 +21,11 @@ st.markdown("""
         margin: 0.5rem 0;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .metric-card h3 {
-        color: #1e3c72;
-        font-size: 1.2rem;
-        margin-bottom: 0.3rem;
-    }
-    .metric-value {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #1e3c72;
-    }
-    .metric-change {
-        font-size: 0.9rem;
-        color: #28a745;
-    }
-    /* Sidebar */
-    .sidebar .sidebar-content {
-        background: #f8f9fa;
-    }
-    .sidebar h1, .sidebar h2 {
-        color: #1e3c72;
-    }
-    /* Tabs */
+    .metric-card h3 { color: #1e3c72; font-size: 1.2rem; margin-bottom: 0.3rem; }
+    .metric-value { font-size: 2.2rem; font-weight: 700; color: #1e3c72; }
+    .metric-change { font-size: 0.9rem; color: #28a745; }
+    .sidebar .sidebar-content { background: #f8f9fa; }
+    .sidebar h1, .sidebar h2 { color: #1e3c72; }
     .stTabs [data-baseweb="tab-list"] {
         gap: 2px;
         background: #e9ecef;
@@ -62,7 +41,6 @@ st.markdown("""
         background: #1e3c72;
         color: white;
     }
-    /* Footer */
     .footer {
         margin-top: 2rem;
         padding-top: 1rem;
@@ -191,38 +169,53 @@ sub_modules = MODULE_CATALOG[domain_category]
 selected_submodule = st.sidebar.radio("Select Module", list(sub_modules.keys()))
 module_path, target_symbol = sub_modules[selected_submodule]
 
-# Show current module path for debugging (optional)
+# Debug: show module path
 st.sidebar.caption(f"📍 `{module_path}`")
 
 # ----------------------------------------------
-# Module Loader with UI feedback
+# Module Loader – handles both functions and classes
 # ----------------------------------------------
 def render_module(module_path, target_symbol):
     try:
         imported_module = importlib.import_module(module_path)
+
+        # 1. Try the exact target (e.g., "render")
         if hasattr(imported_module, target_symbol):
             render_func = getattr(imported_module, target_symbol)
             if callable(render_func):
                 render_func()
                 return True
             else:
-                st.error(f"❌ `{target_symbol}` is not callable.")
-                return False
-        else:
-            # Fallback: try "render"
-            if hasattr(imported_module, "render"):
-                render_func = getattr(imported_module, "render")
-                if callable(render_func):
-                    render_func()
+                st.error(f"❌ `{target_symbol}` exists but is not callable.")
+
+        # 2. Look for a class with a .render() method
+        for attr_name in dir(imported_module):
+            attr = getattr(imported_module, attr_name)
+            if isinstance(attr, type) and hasattr(attr, "render"):
+                render_method = getattr(attr, "render")
+                if callable(render_method):
+                    # If it's a classmethod or staticmethod, call it directly
+                    try:
+                        render_method()
+                    except TypeError:
+                        # It might need an instance – instantiate and call
+                        instance = attr()
+                        instance.render()
                     return True
-                else:
-                    st.error("❌ Module has 'render' but it's not callable.")
-                    return False
-            else:
-                st.warning(f"⚠️ Module `{module_path}` has no `render()` function.")
-                st.caption("Available attributes:")
-                st.code(dir(imported_module))
-                return False
+
+        # 3. Fallback: try a module-level "render" function
+        if hasattr(imported_module, "render"):
+            render_func = getattr(imported_module, "render")
+            if callable(render_func):
+                render_func()
+                return True
+
+        # 4. No render found
+        st.warning(f"⚠️ Module `{module_path}` has no `render()` function or class with `.render()`.")
+        st.caption("Available attributes:")
+        st.code(dir(imported_module))
+        return False
+
     except ModuleNotFoundError as e:
         st.info(f"🚧 **{selected_submodule}** is under development.")
         st.caption(f"Module `{module_path}` not found.")
