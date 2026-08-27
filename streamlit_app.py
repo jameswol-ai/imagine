@@ -1,4 +1,4 @@
-# streamlit_app.py
+# streamlit_app.py (full)
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -68,7 +68,6 @@ check_authentication()
 # API client functions
 # ---------------------------
 def api_get(endpoint, params=None):
-    """Make authenticated GET request."""
     headers = {"Authorization": f"Bearer {st.session_state.token}"}
     url = f"{API_BASE_URL}/{endpoint}"
     try:
@@ -113,20 +112,15 @@ def api_delete(endpoint):
         return False
 
 # ---------------------------
-# Session state initialisation (using real data)
+# Session state initialisation
 # ---------------------------
 def init_session_state():
-    # We'll fetch real data on demand; no need to pre-fill.
-    pass
+    if "editing_project" not in st.session_state:
+        st.session_state.editing_project = None
+    if "projects_data" not in st.session_state:
+        st.session_state.projects_data = None
 
-# ---------------------------
-# Helper: Convert API list to DataFrame
-# ---------------------------
-def api_list_to_df(endpoint):
-    data = api_get(endpoint)
-    if data:
-        return pd.DataFrame(data)
-    return pd.DataFrame()
+init_session_state()
 
 # ---------------------------
 # Navigation Sidebar
@@ -160,29 +154,10 @@ page = st.sidebar.radio(
 )
 
 # ---------------------------
-# Helper for editable tables (sync with API)
-# We'll implement a pattern: on edit, call api_put/delete/post.
-# For simplicity in this step, we'll still use session_state and then 
-# sync with API via a "Save" button or automatic update.
-# But to keep it simple now, we'll keep using session_state and later 
-# add sync buttons. Let's do a hybrid: fetch on load, edit locally, 
-# and provide a "Save" button to persist.
-# ---------------------------
-def editable_table(data, key, endpoint, columns=None):
-    df = pd.DataFrame(data)
-    if columns:
-        df = df[columns]
-    edited = st.data_editor(df, use_container_width=True, num_rows="dynamic", key=key)
-    # For now, just return edited; we'll handle saving outside.
-    return edited.to_dict('records')
-
-# ---------------------------
 # PAGE: DASHBOARD
 # ---------------------------
 def page_dashboard():
     st.title("📊 Dashboard")
-    # Fetch metrics from API (if available)
-    # For now, we'll keep static metrics as before.
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Active Projects", "12", "+2")
     col2.metric("Total Budget", "$184M", "+5%")
@@ -190,7 +165,7 @@ def page_dashboard():
     col4.metric("Open RFIs", "7", "-3")
 
     st.subheader("Project Health")
-    df_proj = api_list_to_df("projects")
+    df_proj = pd.DataFrame(api_get("projects") or [])
     if not df_proj.empty:
         fig = px.bar(df_proj, x="name", y="progress", color="status", text="progress")
         st.plotly_chart(fig, use_container_width=True)
@@ -198,7 +173,6 @@ def page_dashboard():
         st.info("No project data available.")
 
     st.subheader("Recent Activity")
-    # Placeholder; we can add an audit log endpoint later.
     activity = pd.DataFrame({
         "Time": [datetime.now() - timedelta(hours=i) for i in range(5)],
         "User": ["Alice", "Bob", "Charlie", "Alice", "Dave"],
@@ -207,21 +181,72 @@ def page_dashboard():
     st.dataframe(activity, use_container_width=True)
 
 # ---------------------------
-# PAGE: PROJECTS
+# PAGE: PROJECTS (full CRUD)
 # ---------------------------
 def page_projects():
     st.title("📁 Projects")
-    # Load projects from API
-    projects = api_get("projects")
-    if projects:
-        df = pd.DataFrame(projects)
-    else:
-        df = pd.DataFrame(columns=["id", "name", "status", "budget", "progress"])
-    # Use editable table (but saving not yet implemented)
-    # We'll implement a simple Save button that calls api_post/put
-    # For now, display and allow edits but don't save.
-    # To keep it simple, we'll just show.
-    st.dataframe(df, use_container_width=True)
+
+    if st.button("🔄 Refresh Projects"):
+        st.session_state.projects_data = api_get("projects")
+        st.rerun()
+
+    if st.session_state.projects_data is None:
+        st.session_state.projects_data = api_get("projects")
+
+    projects = st.session_state.projects_data
+    if projects is None:
+        st.warning("No projects found or API error.")
+        return
+
+    for idx, project in enumerate(projects):
+        col1, col2, col3, col4, col5, col6 = st.columns([3, 2, 2, 2, 1, 1])
+        with col1:
+            st.markdown(f"**{project['name']}**")
+        with col2:
+            st.write(project.get('status', 'N/A'))
+        with col3:
+            st.write(f"${project.get('budget', 0):.2f}M")
+        with col4:
+            st.write(f"{project.get('progress', 0)}%")
+        with col5:
+            if st.button("✏️", key=f"edit_{project['id']}"):
+                st.session_state.editing_project = project
+        with col6:
+            if st.button("🗑️", key=f"del_{project['id']}"):
+                # Simple confirmation via checkbox (we'll use a small pop-up in practice)
+                if st.checkbox(f"Confirm delete {project['name']}?", key=f"confirm_{project['id']}"):
+                    if api_delete(f"projects/{project['id']}"):
+                        st.success("Project deleted!")
+                        st.session_state.projects_data = [p for p in st.session_state.projects_data if p['id'] != project['id']]
+                        st.rerun()
+                    else:
+                        st.error("Delete failed.")
+
+        if st.session_state.get("editing_project", {}).get("id") == project.get("id"):
+            with st.expander(f"Edit {project['name']}", expanded=True):
+                with st.form(key=f"edit_form_{project['id']}"):
+                    new_name = st.text_input("Name", value=project['name'])
+                    new_status = st.selectbox("Status", ["planning", "active", "on_hold", "completed"], index=["planning", "active", "on_hold", "completed"].index(project.get('status', 'planning')))
+                    new_budget = st.number_input("Budget (M USD)", value=project.get('budget', 0.0), step=0.1)
+                    new_progress = st.slider("Progress %", 0, 100, project.get('progress', 0))
+                    if st.form_submit_button("Update"):
+                        updated = {
+                            "name": new_name,
+                            "status": new_status,
+                            "budget": new_budget,
+                            "progress": new_progress
+                        }
+                        result = api_put(f"projects/{project['id']}", updated)
+                        if result:
+                            st.success("Project updated!")
+                            st.session_state.projects_data = api_get("projects")
+                            st.session_state.editing_project = None
+                            st.rerun()
+                        else:
+                            st.error("Update failed.")
+            if st.button("Cancel", key=f"cancel_edit_{project['id']}"):
+                st.session_state.editing_project = None
+                st.rerun()
 
     with st.expander("➕ Add New Project"):
         with st.form("new_project_form"):
@@ -239,79 +264,53 @@ def page_projects():
                 result = api_post("projects", new_data)
                 if result:
                     st.success("Project created!")
+                    st.session_state.projects_data = api_get("projects")
                     st.rerun()
+                else:
+                    st.error("Creation failed.")
 
 # ---------------------------
-# PAGE: ARCHITECTURE (similar pattern)
+# Placeholder pages (stubs)
 # ---------------------------
 def page_architecture():
     st.title("📐 Architecture")
-    # ... implement using api_get, api_post, etc.
-    st.info("Architecture pages will use real API endpoints once the backend is running.")
-    # We'll reuse the same pattern: fetch data, display, edit with Save.
+    st.info("Architecture pages coming soon.")
 
-# ---------------------------
-# PAGE: BIM (similar pattern)
-# ---------------------------
 def page_bim():
     st.title("🏛️ BIM")
-    st.info("BIM pages will use real API endpoints.")
+    st.info("BIM pages coming soon.")
 
-# ---------------------------
-# PAGE: STRUCTURAL (similar pattern)
-# ---------------------------
 def page_structural():
     st.title("🔩 Structural Engineering")
-    st.info("Structural pages will use real API endpoints.")
+    st.info("Structural pages coming soon.")
 
-# ---------------------------
-# PAGE: MEP (similar pattern)
-# ---------------------------
 def page_mep():
     st.title("⚡ MEP")
-    st.info("MEP pages will use real API endpoints.")
+    st.info("MEP pages coming soon.")
 
-# ---------------------------
-# PAGE: COSTING (similar pattern)
-# ---------------------------
 def page_costing():
     st.title("💰 Cost Estimation")
-    st.info("Costing pages will use real API endpoints.")
+    st.info("Costing pages coming soon.")
 
-# ---------------------------
-# PAGE: CONSTRUCTION (similar pattern)
-# ---------------------------
 def page_construction():
     st.title("🚧 Construction Management")
-    st.info("Construction pages will use real API endpoints.")
+    st.info("Construction pages coming soon.")
 
-# ---------------------------
-# PAGE: REGIONAL (similar pattern)
-# ---------------------------
 def page_regional():
     st.title("🌍 Regional – East Africa Codes")
-    st.info("Regional pages will use real API endpoints.")
+    st.info("Regional pages coming soon.")
 
-# ---------------------------
-# PAGE: DIGITAL TWIN (similar pattern)
-# ---------------------------
 def page_digital_twin():
     st.title("🔄 Digital Twin – Live Monitoring")
-    st.info("Digital Twin pages will use real API endpoints.")
+    st.info("Digital Twin pages coming soon.")
 
-# ---------------------------
-# PAGE: AI ASSISTANT (similar pattern)
-# ---------------------------
 def page_ai():
     st.title("🤖 AI Assistant - IMAGINE Architect")
-    st.info("AI Assistant will use real endpoints for RAG and prompts.")
+    st.info("AI Assistant coming soon.")
 
-# ---------------------------
-# PAGE: ANALYTICS (similar pattern)
-# ---------------------------
 def page_analytics():
     st.title("📈 Analytics & Reporting")
-    st.info("Analytics will use real reporting endpoints.")
+    st.info("Analytics pages coming soon.")
 
 # ---------------------------
 # Route to selected page
