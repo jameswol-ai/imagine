@@ -34,3 +34,4 @@ def init_session_state() -> None:
     for key, default_val in schema.items():
         if key not in st.session_state:
             st.session_state[key] = default_val
+
