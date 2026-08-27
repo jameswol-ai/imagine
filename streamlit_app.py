@@ -22,9 +22,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Initialize Session State (mock data)
+# Initialize Session State
 try:
-    from modules.utils.mock_data import init_session_state
+    # The mock_data module defines init_mock_data(), not init_session_state()
+    from modules.utils.mock_data import init_mock_data as init_session_state
     init_session_state()
 except Exception as e:
     st.sidebar.warning(f"State Bootstrapper Warning: {e}")
