@@ -65,6 +65,7 @@ def init_session_state() -> None:
         "imagine_initialized": True,
         "active_domain": "Overview",
         "active_module": "Overview",
+
         "projects_data": [
             {
                 "id": 1,
@@ -88,6 +89,7 @@ def init_session_state() -> None:
                 "progress": 100,
             },
         ],
+
         "buildings_data": [
             {
                 "id": 1,
@@ -104,6 +106,7 @@ def init_session_state() -> None:
                 "ifc_version": "IFC4",
             },
         ],
+
         "zoning_data": [],
         "room_program_data": [],
         "beam_data": [],
@@ -598,7 +601,9 @@ def render_system_health() -> None:
             health_summary,
         )
     except Exception as exc:
-        st.error("System health module could not be loaded.")
+        st.error(
+            "System health module could not be loaded."
+        )
 
         with st.expander(
             "Complete health-module error",
@@ -655,16 +660,19 @@ def render_system_health() -> None:
     st.divider()
 
     for result in results:
+
         if result.status == "ok":
             st.success(
                 f"{result.name} — OK"
             )
+
         else:
             st.error(
                 f"{result.name} — FAILED"
             )
 
             if result.error:
+
                 with st.expander(
                     f"Error details: {result.name}"
                 ):
@@ -783,8 +791,10 @@ def render_sidebar() -> tuple[str, str]:
     with st.sidebar:
 
         st.title("IMAGINE")
+
         st.caption(
-            "Integrated Architecture, Engineering & Construction Engine"
+            "Integrated Architecture, Engineering & "
+            "Construction Engine"
         )
 
         st.divider()
@@ -860,7 +870,8 @@ def render_sidebar() -> tuple[str, str]:
         )
 
         st.caption(
-            "Enterprise Architecture & Civil Engineering Platform"
+            "Enterprise Architecture & Civil Engineering "
+            "Platform"
         )
 
     return domain, module
@@ -939,7 +950,7 @@ def render_selected_module(
             expanded=True,
         ):
             st.code(
-                f"Expected:\n"
+                "Expected:\n"
                 f"{module_path}.{target_symbol}"
             )
             st.exception(exc)
@@ -1031,6 +1042,7 @@ def main() -> None:
         left, right = st.columns(2)
 
         with left:
+
             st.markdown(
                 """
                 **PROJECTS**
@@ -1046,6 +1058,7 @@ def main() -> None:
             )
 
         with right:
+
             st.markdown(
                 """
                 **ENGINEERING**
