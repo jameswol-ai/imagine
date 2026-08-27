@@ -5,7 +5,6 @@ App: imagine
 """
 
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from modules.architecture.synthesis import ArchitectureSynthesisEngine, STATE_KEY
@@ -24,9 +23,6 @@ class ArchitectureSynthesisPage:
 
         tab_synthesis, tab_saved = st.tabs(["⚡ Layout Generator", "📚 Saved Layout Concepts"])
 
-        # ==============================================================================
-        # TAB 1: GENERATIVE SYNTHESIS SOLVER
-        # ==============================================================================
         with tab_synthesis:
             col_ctrl, col_view = st.columns([1, 2])
 
@@ -65,18 +61,15 @@ class ArchitectureSynthesisPage:
                 if not res.get("success", False):
                     st.error(res.get("error", "An error occurred during generative synthesis."))
                 else:
-                    # Executive Metrics Summary
                     m1, m2, m3, m4 = st.columns(4)
                     m1.metric("Site Area", f"{res['site_area_m2']} m²")
                     m2.metric("Gross Floor Area (GFA)", f"{res['total_gfa_m2']} m²")
                     m3.metric("Achieved FAR", f"{res['achieved_far']} / {target_far}")
                     m4.metric("Footprint", f"{res['footprint_area_m2']} m²")
 
-                    # Plotly 2D Synthesized Zoning Layout Visualizer
                     boxes = res["layout_boxes"]
                     fig = go.Figure()
 
-                    # Plot Site Outline
                     fig.add_shape(
                         type="rect",
                         x0=0,
@@ -121,7 +114,6 @@ class ArchitectureSynthesisPage:
 
                     st.plotly_chart(fig, use_container_width=True)
 
-                    # Save to state database
                     if st.button("💾 Save Synthesis Concept"):
                         record = {
                             "id": f"SYN-{len(CRUDService.get_all(STATE_KEY)) + 1:03d}",
@@ -134,9 +126,6 @@ class ArchitectureSynthesisPage:
                         CRUDService.create(STATE_KEY, record)
                         st.success(f"Saved concept `{layout_title}`!")
 
-        # ==============================================================================
-        # TAB 2: SAVED CONCEPTS REGISTER
-        # ==============================================================================
         with tab_saved:
             st.subheader("Saved Architecture Concepts")
             saved_records = CRUDService.get_all(STATE_KEY)
