@@ -1,187 +1,157 @@
 """
-IMAGINE Projects Module UI
-Path: Modules/projects/project_page.py
+IMAGINE Platform — Project Portfolio Interactive View
+Path: modules/projects/project_page.py
 App: imagine
 """
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
-from Modules.projects.projects import ProjectService
+from modules.projects.projects import ProjectService
 
 
 class ProjectPage:
-
-    @staticmethod
-    def render_portfolio_metrics(projects):
-        metrics = ProjectService.portfolio_metrics(projects)
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.metric("Projects", metrics["total_projects"])
-        with col2:
-            st.metric("Portfolio Budget", f"${metrics['total_budget']:,.2f}M")
-        with col3:
-            st.metric("Average Progress", f"{metrics['average_progress']}%")
-
-    @staticmethod
-    def render_project_table(projects):
-        if not projects:
-            st.info("No projects available.")
-            return
-
-        df = pd.DataFrame(projects)
-        st.dataframe(df, use_container_width=True)
-
-    @staticmethod
-    def render_create_project_form():
-        st.subheader("Create New Project")
-
-        with st.form("create_project_form"):
-            name = st.text_input("Project Name")
-            client = st.text_input("Client")
-            category = st.selectbox(
-                "Category",
-                ["Commercial", "Residential", "Industrial", "Infrastructure", "Mixed Use"],
-            )
-            budget = st.number_input("Budget (Million USD)", min_value=0.0, value=1.0, step=0.1)
-            status = st.selectbox("Status", ["planning", "active", "completed", "on_hold"])
-
-            create = st.form_submit_button("Create Project")
-
-            if create:
-                project = ProjectService.create_project(
-                    name=name,
-                    client=client,
-                    category=category,
-                    budget=budget,
-                    status=status,
-                )
-
-                if "projects_data" not in st.session_state:
-                    st.session_state.projects_data = []
-
-                st.session_state.projects_data.append(project)
-                st.success(f"Project '{name}' created.")
-                st.rerun()
-
-    @staticmethod
-    def render_gantt_chart(project_id: str):
-        """Renders an interactive Plotly Gantt chart for project milestones."""
-        df_milestones = ProjectService.get_project_milestones(project_id)
-
-        fig = px.timeline(
-            df_milestones,
-            x_start="Start",
-            x_end="Finish",
-            y="Task",
-            color="Phase",
-            title="Project Execution Timeline & Milestones",
-            hover_data=["Completion"],
-            color_discrete_sequence=px.colors.qualitative.Bold,
-        )
-        fig.update_yaxes(autorange="reversed")
-        fig.update_layout(
-            height=320,
-            margin=dict(l=10, r=10, t=40, b=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#CBD5E0"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    @staticmethod
-    def render_structural_history(project_id: str):
-        """Renders linked Eurocode structural calculation history."""
-        all_calcs = st.session_state.get("structural_calcs", [])
-        project_calcs = ProjectService.get_project_calculations(project_id, all_calcs)
-
-        if not project_calcs:
-            st.info("No structural calculations logged for this project yet.")
-            return
-
-        # Summary Metrics
-        passed = sum(1 for c in project_calcs if c.get("status") == "Passed")
-        warnings = sum(1 for c in project_calcs if c.get("status") == "Warning")
-        failed = sum(1 for c in project_calcs if c.get("status") == "Failed")
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Passed Checks", passed)
-        m2.metric("Warnings (U.C. > 0.90)", warnings)
-        m3.metric("Failed Checks", failed)
-
-        # Detailed Table
-        df_calcs = pd.DataFrame(project_calcs)
-        cols_to_show = ["id", "code", "element_name", "status", "unity_check", "updated_at"]
-        st.dataframe(
-            df_calcs[cols_to_show],
-            column_config={
-                "id": "Calc ID",
-                "code": "Standard",
-                "element_name": "Structural Element",
-                "unity_check": st.column_config.NumberColumn("Unity Check (η)", format="%.2f"),
-                "status": st.column_config.TextColumn("Status"),
-                "updated_at": "Timestamp",
-            },
-            use_container_width=True,
-            hide_index=True,
-        )
+    """Project Portfolio UI component called by streamlit_app router."""
 
     @classmethod
-    def render_project_details(cls, projects):
-        if not projects:
-            st.info("No projects available to view.")
-            return
+    def render(cls) -> None:
+        st.title("📂 Project Portfolio & Management")
+        st.caption("Manage active AEC assets, budget allocations, schedules, and site operations.")
 
-        options = {str(project["id"]): project["name"] for project in projects}
-        selected_id = st.selectbox(
-            "Select Project",
-            options=list(options.keys()),
-            format_func=lambda x: options[x],
+        projects = ProjectService.get_all_projects()
+
+        # ==============================================================================
+        # 1. TOP METRICS
+        # ==============================================================================
+        col1, col2, col3, col4 = st.columns(4)
+        total_projects = len(projects)
+        active_projects = sum(1 for p in projects if p.get("status") == "active")
+        total_budget_m = sum(p.get("budget", 0.0) for p in projects)
+        avg_progress = (
+            sum(p.get("progress_pct", 0.0) for p in projects) / total_projects
+            if total_projects > 0
+            else 0.0
         )
 
-        project = ProjectService.find_project(selected_id, projects)
+        col1.metric("Total Projects", total_projects)
+        col2.metric("Active Projects", active_projects)
+        col3.metric("Total Capital ($M)", f"${total_budget_m:,.1f}M")
+        col4.metric("Avg Portfolio Progress", f"{avg_progress:.1f}%")
 
-        if project:
-            st.subheader(f"📌 {project['name']}")
-            st.caption(f"ID: **{project['id']}** | Category: **{project.get('category', project.get('typology', 'N/A'))}**")
-
-            # Integrated Detail Sub-Tabs
-            det_tab1, det_tab2, det_tab3 = st.tabs([
-                "📅 Milestones Gantt Chart",
-                "🧱 Structural Calculations",
-                "⚙️ Raw Metadata",
-            ])
-
-            with det_tab1:
-                cls.render_gantt_chart(project["id"])
-
-            with det_tab2:
-                cls.render_structural_history(project["id"])
-
-            with det_tab3:
-                st.json(project)
-
-    @classmethod
-    def render(cls):
-        st.title("📁 Project Management")
-
-        # Synchronize state keys smoothly
-        if "projects_data" not in st.session_state:
-            st.session_state.projects_data = st.session_state.get("projects", [])
-
-        projects = st.session_state.projects_data
-
-        cls.render_portfolio_metrics(projects)
         st.divider()
 
-        tab1, tab2, tab3 = st.tabs(["Portfolio", "Project Details", "Create Project"])
+        # ==============================================================================
+        # 2. CONTROLS & TABULAR/CARD VIEWS
+        # ==============================================================================
+        tab_overview, tab_create, tab_manage = st.tabs(
+            ["📊 Portfolio Overview", "➕ Register Project", "⚙️ Manage & Edit"]
+        )
 
-        with tab1:
-            cls.render_project_table(projects)
+        # TAB 1: OVERVIEW & FILTERING
+        with tab_overview:
+            c_search, c_filter = st.columns([3, 1])
+            search_query = c_search.text_input("🔍 Search Projects", placeholder="Search name, ID, or client...")
+            category_filter = c_filter.selectbox("Filter Category", ["All", "Commercial", "Infrastructure", "Residential", "Industrial"])
 
-        with tab2:
-            cls.render_project_details(projects)
+            filtered = projects
+            if category_filter != "All":
+                filtered = [p for p in filtered if p.get("category") == category_filter]
+            if search_query:
+                q = search_query.lower()
+                filtered = [
+                    p for p in filtered
+                    if q in p.get("name", "").lower()
+                    or q in p.get("id", "").lower()
+                    or q in p.get("client", "").lower()
+                ]
 
-        with tab3:
-            cls.render_create_project_form()
+            if not filtered:
+                st.info("No projects match the search filter criteria.")
+            else:
+                for proj in filtered:
+                    with st.expander(f"**{proj['id']} — {proj['name']}** ({proj['category']})", expanded=True):
+                        p_col1, p_col2, p_col3 = st.columns([2, 2, 1])
+                        p_col1.write(f"**Client:** {proj.get('client', 'N/A')}")
+                        p_col1.write(f"**Location:** {proj.get('location', 'N/A')}")
+                        
+                        p_col2.write(f"**Budget:** ${proj.get('budget', 0.0):,.2f}M (€{proj.get('budget_eur', 0.0):,.0f})")
+                        p_col2.write(f"**Status:** `{proj.get('status', 'active').upper()}`")
+
+                        progress = float(proj.get("progress_pct", 0.0)) / 100.0
+                        p_col3.caption("Completion Progress")
+                        p_col3.progress(progress, text=f"{progress*100:.0f}%")
+
+        # TAB 2: REGISTER NEW PROJECT
+        with tab_create:
+            st.subheader("Register New AEC Project")
+            with st.form("create_project_form", clear_on_submit=True):
+                fc1, fc2 = st.columns(2)
+                p_id = fc1.text_input("Project ID", value=f"PRJ-00{len(projects) + 1}")
+                p_name = fc2.text_input("Project Name", placeholder="e.g., Riverside Commercial Complex")
+
+                fc3, fc4 = st.columns(2)
+                p_client = fc3.text_input("Client Name", placeholder="e.g., Global Real Estate LLC")
+                p_category = fc4.selectbox("Category", ["Commercial", "Infrastructure", "Residential", "Industrial"])
+
+                fc5, fc6, fc7 = st.columns(3)
+                p_budget = fc5.number_input("Budget ($ Millions)", min_value=0.1, value=10.0, step=0.5)
+                p_location = fc6.text_input("Location", placeholder="City / District")
+                p_status = fc7.selectbox("Status", ["active", "planning", "on-hold", "completed"])
+
+                submitted = st.form_submit_button("Submit Project")
+                if submitted:
+                    if not p_name or not p_id:
+                        st.error("Project ID and Project Name are required.")
+                    else:
+                        new_record = {
+                            "id": p_id,
+                            "name": p_name,
+                            "client": p_client,
+                            "category": p_category,
+                            "budget": float(p_budget),
+                            "budget_eur": float(p_budget) * 1_000_000.0,
+                            "status": p_status,
+                            "progress_pct": 0.0,
+                            "location": p_location,
+                        }
+                        ProjectService.create_project(new_record)
+                        st.success(f"Project `{p_name}` ({p_id}) created successfully!")
+                        st.rerun()
+
+        # TAB 3: MANAGE & EDIT
+        with tab_manage:
+            st.subheader("Edit or Delete Existing Record")
+            if not projects:
+                st.info("No projects available to manage.")
+            else:
+                target_id = st.selectbox("Select Project to Modify", [p["id"] for p in projects])
+                selected_proj = ProjectService.get_project_by_id(target_id)
+
+                if selected_proj:
+                    with st.form("edit_project_form"):
+                        ec1, ec2 = st.columns(2)
+                        e_name = ec1.text_input("Project Name", value=selected_proj.get("name", ""))
+                        e_client = ec2.text_input("Client Name", value=selected_proj.get("client", ""))
+
+                        ec3, ec4 = st.columns(2)
+                        e_budget = ec3.number_input("Budget ($M)", value=float(selected_proj.get("budget", 1.0)))
+                        e_progress = ec4.slider("Progress %", 0.0, 100.0, value=float(selected_proj.get("progress_pct", 0.0)))
+
+                        save_btn = st.form_submit_button("Save Changes")
+                        if save_btn:
+                            ProjectService.update_project(
+                                target_id,
+                                {
+                                    "name": e_name,
+                                    "client": e_client,
+                                    "budget": float(e_budget),
+                                    "progress_pct": float(e_progress),
+                                },
+                            )
+                            st.success(f"Updated `{target_id}` successfully!")
+                            st.rerun()
+
+                    st.divider()
+                    if st.button(f"🗑️ Delete Project {target_id}", type="secondary"):
+                        ProjectService.delete_project(target_id)
+                        st.warning(f"Deleted `{target_id}`.")
+                        st.rerun()
