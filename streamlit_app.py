@@ -8,11 +8,13 @@ Responsibilities:
 - Application configuration
 - Session-state initialization
 - Enterprise sidebar navigation
-- Interactive module selection
+- Interactive domain and module navigation
+- Quick navigation
 - Lazy module loading
 - Renderer dispatch
 - Isolated module failures
 - System health diagnostics
+- Responsive application layout
 
 The application shell deliberately avoids eager imports of database,
 service, schema, and model modules. Individual modules are loaded only
@@ -59,32 +61,34 @@ def inject_styles() -> None:
     st.markdown(
         """
         <style>
-        /* -------------------------------------------------------------
-           Global
-        ------------------------------------------------------------- */
+        /* =============================================================
+           GLOBAL
+        ============================================================= */
 
         .stApp {
-            background: #f6f8fb;
+            background: #f5f7fa;
         }
 
         .block-container {
-            padding-top: 2rem;
+            max-width: 1550px;
+            padding-top: 1.6rem;
             padding-bottom: 3rem;
-            max-width: 1500px;
+            padding-left: 2rem;
+            padding-right: 2rem;
         }
 
-        /* -------------------------------------------------------------
-           Sidebar
-        ------------------------------------------------------------- */
+        /* =============================================================
+           SIDEBAR
+        ============================================================= */
 
         section[data-testid="stSidebar"] {
-            width: 310px !important;
-            border-right: 1px solid #dfe4ea;
+            width: 320px !important;
             background: #ffffff;
+            border-right: 1px solid #dfe4ea;
         }
 
         section[data-testid="stSidebar"] > div {
-            padding-top: 1.25rem;
+            padding-top: 1rem;
         }
 
         section[data-testid="stSidebar"] .block-container {
@@ -93,169 +97,177 @@ def inject_styles() -> None:
         }
 
         .imagine-sidebar-brand {
-            padding: 0.35rem 0.25rem 1.1rem 0.25rem;
+            padding: 0.4rem 0.25rem 0.9rem 0.25rem;
         }
 
         .imagine-sidebar-brand-title {
-            font-size: 1.45rem;
-            font-weight: 750;
-            letter-spacing: -0.02em;
-            color: #172033;
+            font-size: 1.55rem;
+            font-weight: 800;
+            letter-spacing: -0.035em;
+            color: #162033;
         }
 
         .imagine-sidebar-brand-subtitle {
-            margin-top: 0.25rem;
-            font-size: 0.76rem;
-            line-height: 1.35;
+            margin-top: 0.3rem;
             color: #687386;
+            font-size: 0.76rem;
+            line-height: 1.45;
         }
 
-        .imagine-sidebar-section {
-            margin-top: 0.7rem;
-            margin-bottom: 0.3rem;
-            padding: 0.45rem 0.65rem;
-            border-radius: 7px;
-            background: #f1f4f8;
-            color: #4c596b;
-            font-size: 0.72rem;
+        .imagine-sidebar-label {
+            margin-top: 0.8rem;
+            margin-bottom: 0.35rem;
+            color: #697587;
+            font-size: 0.68rem;
             font-weight: 750;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
         }
 
         .imagine-sidebar-status {
             margin-top: 1rem;
             padding: 0.8rem;
             border: 1px solid #dfe4ea;
-            border-radius: 8px;
+            border-radius: 9px;
             background: #f8fafc;
         }
 
         .imagine-sidebar-status-title {
-            font-size: 0.72rem;
-            font-weight: 700;
-            color: #596579;
+            color: #687386;
+            font-size: 0.68rem;
+            font-weight: 750;
+            letter-spacing: 0.08em;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
         }
 
         .imagine-sidebar-status-value {
-            margin-top: 0.2rem;
-            font-size: 0.85rem;
-            color: #1c2738;
-            font-weight: 650;
+            margin-top: 0.25rem;
+            color: #172033;
+            font-size: 0.84rem;
+            font-weight: 700;
         }
 
-        /* -------------------------------------------------------------
-           Header
-        ------------------------------------------------------------- */
+        /* =============================================================
+           MAIN HEADER
+        ============================================================= */
 
         .imagine-header {
-            padding: 0.3rem 0 1.25rem 0;
+            margin-bottom: 1.2rem;
         }
 
         .imagine-header-title {
             margin: 0;
-            font-size: 2rem;
-            line-height: 1.15;
-            font-weight: 780;
-            letter-spacing: -0.035em;
             color: #172033;
+            font-size: 2.15rem;
+            line-height: 1.1;
+            font-weight: 800;
+            letter-spacing: -0.04em;
         }
 
         .imagine-header-subtitle {
-            margin-top: 0.35rem;
+            margin-top: 0.4rem;
             color: #687386;
-            font-size: 0.9rem;
+            font-size: 0.92rem;
+            line-height: 1.45;
         }
 
         .imagine-breadcrumb {
             display: inline-block;
-            margin-top: 0.8rem;
-            padding: 0.35rem 0.65rem;
-            border-radius: 6px;
+            margin-top: 0.85rem;
+            padding: 0.38rem 0.7rem;
+            border: 1px solid #dfe4ea;
+            border-radius: 7px;
             background: #eef2f6;
             color: #566276;
-            font-size: 0.76rem;
+            font-size: 0.75rem;
         }
 
-        /* -------------------------------------------------------------
-           Dashboard cards
-        ------------------------------------------------------------- */
+        /* =============================================================
+           KPI CARDS
+        ============================================================= */
 
         .imagine-card {
-            padding: 1.1rem;
+            min-height: 118px;
+            padding: 1.05rem;
             border: 1px solid #dfe4ea;
             border-radius: 10px;
             background: #ffffff;
-            min-height: 115px;
         }
 
         .imagine-card-title {
-            font-size: 0.76rem;
-            font-weight: 700;
             color: #687386;
+            font-size: 0.7rem;
+            font-weight: 750;
+            letter-spacing: 0.07em;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
         }
 
         .imagine-card-value {
-            margin-top: 0.4rem;
-            font-size: 1.65rem;
-            font-weight: 760;
+            margin-top: 0.45rem;
             color: #172033;
+            font-size: 1.65rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
         }
 
         .imagine-card-description {
             margin-top: 0.25rem;
-            color: #788397;
-            font-size: 0.76rem;
+            color: #7b8798;
+            font-size: 0.75rem;
         }
 
-        /* -------------------------------------------------------------
-           Module panels
-        ------------------------------------------------------------- */
+        /* =============================================================
+           MODULE PANEL
+        ============================================================= */
 
         .imagine-module-panel {
-            padding: 1.2rem 1.3rem;
+            margin-bottom: 1rem;
+            padding: 1.25rem 1.35rem;
             border: 1px solid #dfe4ea;
             border-radius: 10px;
             background: #ffffff;
-            margin-bottom: 1rem;
         }
 
         .imagine-module-title {
-            font-size: 1.25rem;
-            font-weight: 720;
             color: #172033;
+            font-size: 1.3rem;
+            font-weight: 760;
+            letter-spacing: -0.02em;
         }
 
         .imagine-module-description {
-            margin-top: 0.25rem;
+            margin-top: 0.35rem;
             color: #687386;
             font-size: 0.86rem;
+            line-height: 1.5;
         }
 
-        /* -------------------------------------------------------------
-           Buttons
-        ------------------------------------------------------------- */
+        /* =============================================================
+           NAVIGATION
+        ============================================================= */
 
         div.stButton > button {
+            min-height: 2.35rem;
             border-radius: 7px;
-            font-weight: 600;
+            font-weight: 650;
         }
 
-        /* -------------------------------------------------------------
-           Expanders
-        ------------------------------------------------------------- */
+        div[data-testid="stRadio"] label {
+            font-size: 0.82rem;
+        }
+
+        /* =============================================================
+           EXPANDERS
+        ============================================================= */
 
         div[data-testid="stExpander"] {
             border-color: #dfe4ea;
             border-radius: 8px;
         }
 
-        /* -------------------------------------------------------------
-           Footer
-        ------------------------------------------------------------- */
+        /* =============================================================
+           FOOTER
+        ============================================================= */
 
         .imagine-footer {
             margin-top: 3rem;
@@ -265,18 +277,19 @@ def inject_styles() -> None:
             font-size: 0.72rem;
         }
 
-        /* -------------------------------------------------------------
-           Dark mode compatibility
-        ------------------------------------------------------------- */
+        /* =============================================================
+           DARK MODE
+        ============================================================= */
 
         @media (prefers-color-scheme: dark) {
+
             .stApp {
-                background: #0e131b;
+                background: #0d131b;
             }
 
             section[data-testid="stSidebar"] {
-                background: #111822;
-                border-right-color: #273241;
+                background: #111821;
+                border-right-color: #293441;
             }
 
             .imagine-sidebar-brand-title,
@@ -291,30 +304,34 @@ def inject_styles() -> None:
             .imagine-header-subtitle,
             .imagine-module-description,
             .imagine-card-description {
-                color: #a7b0be;
+                color: #a5afbd;
             }
 
-            .imagine-sidebar-section,
+            .imagine-sidebar-status {
+                background: #151d27;
+                border-color: #2b3745;
+            }
+
+            .imagine-sidebar-status-title,
+            .imagine-card-title {
+                color: #a5afbd;
+            }
+
             .imagine-breadcrumb {
                 background: #1a2330;
+                border-color: #2b3745;
                 color: #b8c1ce;
             }
 
-            .imagine-sidebar-status,
             .imagine-card,
             .imagine-module-panel {
-                background: #141b25;
-                border-color: #293544;
-            }
-
-            .imagine-card-title,
-            .imagine-sidebar-status-title {
-                color: #a7b0be;
+                background: #141b24;
+                border-color: #2b3745;
             }
 
             .imagine-footer {
-                border-top-color: #293544;
-                color: #7e8999;
+                border-top-color: #2b3745;
+                color: #7e8998;
             }
         }
         </style>
@@ -335,7 +352,6 @@ def init_session_state() -> None:
         "active_domain": "Overview",
         "active_module": "Overview",
 
-        # Legacy/demo state retained for modules that still use it.
         "projects_data": [
             {
                 "id": 1,
@@ -359,6 +375,7 @@ def init_session_state() -> None:
                 "progress": 100,
             },
         ],
+
         "buildings_data": [
             {
                 "id": 1,
@@ -407,14 +424,6 @@ def init_session_state() -> None:
 # =============================================================================
 # NAVIGATION CATALOG
 # =============================================================================
-
-# Each entry:
-#
-#     "Display Name": ("python.module.path", "renderer_function")
-#
-# None means the navigation item is registered but does not yet have a
-# dedicated renderer. It remains visible in the application without causing
-# an import failure.
 
 NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
 
@@ -484,34 +493,13 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.structural.eurocode",
             "render",
         ),
-        "EN 1990": (
-            None,
-            None,
-        ),
-        "EN 1991": (
-            None,
-            None,
-        ),
-        "EN 1992": (
-            None,
-            None,
-        ),
-        "EN 1993": (
-            None,
-            None,
-        ),
-        "EN 1995": (
-            None,
-            None,
-        ),
-        "EN 1997": (
-            None,
-            None,
-        ),
-        "EN 1998": (
-            None,
-            None,
-        ),
+        "EN 1990": (None, None),
+        "EN 1991": (None, None),
+        "EN 1992": (None, None),
+        "EN 1993": (None, None),
+        "EN 1995": (None, None),
+        "EN 1997": (None, None),
+        "EN 1998": (None, None),
         "Beam Design": (
             "modules.structural.beam_design",
             "render",
@@ -536,10 +524,7 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.structural.steel_connections",
             "render",
         ),
-        "Finite Element Analysis": (
-            None,
-            None,
-        ),
+        "Finite Element Analysis": (None, None),
     },
 
     "BIM": {
@@ -555,22 +540,13 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.bim.spaces",
             "render",
         ),
-        "Elements": (
-            None,
-            None,
-        ),
+        "Elements": (None, None),
         "IFC": (
             "modules.bim.ifc_export",
             "render",
         ),
-        "COBie": (
-            None,
-            None,
-        ),
-        "BIM Digital Twin": (
-            None,
-            None,
-        ),
+        "COBie": (None, None),
+        "BIM Digital Twin": (None, None),
     },
 
     "MEP": {
@@ -598,22 +574,10 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.mep.electrical",
             "render",
         ),
-        "Transformers": (
-            None,
-            None,
-        ),
-        "Generators": (
-            None,
-            None,
-        ),
-        "Cable Sizing": (
-            None,
-            None,
-        ),
-        "Solar PV": (
-            None,
-            None,
-        ),
+        "Transformers": (None, None),
+        "Generators": (None, None),
+        "Cable Sizing": (None, None),
+        "Solar PV": (None, None),
         "Water Supply": (
             "modules.mep.plumbing",
             "render",
@@ -622,18 +586,9 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.mep.plumbing",
             "render",
         ),
-        "Stormwater": (
-            None,
-            None,
-        ),
-        "Sewer Networks": (
-            None,
-            None,
-        ),
-        "Firefighting": (
-            None,
-            None,
-        ),
+        "Stormwater": (None, None),
+        "Sewer Networks": (None, None),
+        "Firefighting": (None, None),
     },
 
     "COSTING": {
@@ -661,10 +616,7 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.costing.risk_analysis",
             "render",
         ),
-        "Cashflow": (
-            None,
-            None,
-        ),
+        "Cashflow": (None, None),
     },
 
     "CONSTRUCTION": {
@@ -719,10 +671,7 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.documents.documents",
             "render",
         ),
-        "Reports": (
-            None,
-            None,
-        ),
+        "Reports": (None, None),
         "Revision History": (
             "modules.documents.revisions",
             "render",
@@ -731,10 +680,7 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.documents.transmittals",
             "render",
         ),
-        "Archives": (
-            None,
-            None,
-        ),
+        "Archives": (None, None),
     },
 
     "AI": {
@@ -758,18 +704,9 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.ai.project_manager",
             "render",
         ),
-        "Vector Store": (
-            None,
-            None,
-        ),
-        "RAG": (
-            None,
-            None,
-        ),
-        "Prompt Library": (
-            None,
-            None,
-        ),
+        "Vector Store": (None, None),
+        "RAG": (None, None),
+        "Prompt Library": (None, None),
     },
 
     "ANALYTICS": {
@@ -796,73 +733,25 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
     },
 
     "REGIONAL": {
-        "Uganda": (
-            None,
-            None,
-        ),
-        "Kenya": (
-            None,
-            None,
-        ),
-        "Tanzania": (
-            None,
-            None,
-        ),
-        "Rwanda": (
-            None,
-            None,
-        ),
-        "South Sudan": (
-            None,
-            None,
-        ),
-        "Codes": (
-            None,
-            None,
-        ),
-        "Zoning Laws": (
-            None,
-            None,
-        ),
+        "Uganda": (None, None),
+        "Kenya": (None, None),
+        "Tanzania": (None, None),
+        "Rwanda": (None, None),
+        "South Sudan": (None, None),
+        "Codes": (None, None),
+        "Zoning Laws": (None, None),
     },
 
     "INTEGRATIONS": {
-        "Microsoft": (
-            None,
-            None,
-        ),
-        "AutoCAD": (
-            None,
-            None,
-        ),
-        "Revit": (
-            None,
-            None,
-        ),
-        "Archicad": (
-            None,
-            None,
-        ),
-        "Tekla": (
-            None,
-            None,
-        ),
-        "IfcOpenShell": (
-            None,
-            None,
-        ),
-        "ArcGIS": (
-            None,
-            None,
-        ),
-        "Azure": (
-            None,
-            None,
-        ),
-        "Mapbox": (
-            None,
-            None,
-        ),
+        "Microsoft": (None, None),
+        "AutoCAD": (None, None),
+        "Revit": (None, None),
+        "Archicad": (None, None),
+        "Tekla": (None, None),
+        "IfcOpenShell": (None, None),
+        "ArcGIS": (None, None),
+        "Azure": (None, None),
+        "Mapbox": (None, None),
     },
 
     "DIGITAL TWIN": {
@@ -878,10 +767,7 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
             "modules.digital_twin.telemetry",
             "render",
         ),
-        "Energy": (
-            None,
-            None,
-        ),
+        "Energy": (None, None),
         "Maintenance": (
             "modules.digital_twin.maintenance",
             "render",
@@ -906,6 +792,83 @@ NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
 
 
 # =============================================================================
+# DOMAIN DESCRIPTIONS
+# =============================================================================
+
+DOMAIN_DESCRIPTIONS = {
+    "Overview": (
+        "Enterprise workspace, portfolio summary and system diagnostics."
+    ),
+    "PROJECTS": (
+        "Project lifecycle, approvals, revisions, workflows and governance."
+    ),
+    "ARCHITECTURE": (
+        "Zoning, site planning, floor planning, room programming, "
+        "compliance and generative design."
+    ),
+    "STRUCTURAL": (
+        "Structural engineering workflows and Eurocode design."
+    ),
+    "BIM": (
+        "Buildings, storeys, spaces, elements and OpenBIM."
+    ),
+    "MEP": (
+        "Mechanical, electrical and plumbing engineering."
+    ),
+    "COSTING": (
+        "BOQ, quantity takeoff, procurement and financial analysis."
+    ),
+    "CONSTRUCTION": (
+        "Planning, scheduling, RFIs, submittals and site management."
+    ),
+    "DOCUMENTS": (
+        "Drawing, document, specification, contract and revision control."
+    ),
+    "AI": (
+        "Architecture, engineering, MEP, QS and project management AI."
+    ),
+    "ANALYTICS": (
+        "Portfolio analytics, KPIs, forecasting and reporting."
+    ),
+    "REGIONAL": (
+        "Regional codes, regulations and zoning requirements."
+    ),
+    "INTEGRATIONS": (
+        "AEC software, GIS, cloud and interoperability integrations."
+    ),
+    "DIGITAL TWIN": (
+        "Assets, sensors, telemetry, maintenance and predictive AI."
+    ),
+    "GOVERNANCE": (
+        "Enterprise governance, approvals and system controls."
+    ),
+}
+
+
+# =============================================================================
+# NAVIGATION HELPERS
+# =============================================================================
+
+def set_navigation(domain: str, module: str) -> None:
+    """Persist navigation state."""
+
+    if domain not in NAVIGATION:
+        return
+
+    if module not in NAVIGATION[domain]:
+        return
+
+    st.session_state.active_domain = domain
+    st.session_state.active_module = module
+
+
+def navigation_callback(domain: str, module: str) -> None:
+    """Callback used by interactive navigation controls."""
+
+    set_navigation(domain, module)
+
+
+# =============================================================================
 # BUILT-IN OVERVIEW
 # =============================================================================
 
@@ -921,21 +884,13 @@ def render_overview() -> None:
             <div class="imagine-header-subtitle">
                 Integrated Architecture, Engineering & Construction Engine
             </div>
+            <div class="imagine-breadcrumb">
+                Overview / Enterprise Workspace
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-
-    st.markdown(
-        """
-        <div class="imagine-breadcrumb">
-            Overview / Enterprise Workspace
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
 
     projects = st.session_state.get("projects_data", [])
     buildings = st.session_state.get("buildings_data", [])
@@ -952,14 +907,13 @@ def render_overview() -> None:
         if str(project.get("status", "")).lower() == "completed"
     )
 
-    average_progress = 0.0
-
     if projects:
-        values = [
+        average_progress = sum(
             float(project.get("progress", 0) or 0)
             for project in projects
-        ]
-        average_progress = sum(values) / len(values)
+        ) / len(projects)
+    else:
+        average_progress = 0.0
 
     c1, c2, c3, c4 = st.columns(4)
 
@@ -1026,6 +980,7 @@ def render_overview() -> None:
     left, right = st.columns([1.25, 1])
 
     with left:
+
         st.markdown(
             """
             <div class="imagine-module-panel">
@@ -1033,19 +988,20 @@ def render_overview() -> None:
                     Enterprise Workspace
                 </div>
                 <div class="imagine-module-description">
-                    Select a domain from the navigation panel to access
-                    project management, architectural design, structural
-                    engineering, BIM, MEP, costing, construction,
-                    documentation, analytics, AI and digital twin services.
+                    Use the navigation panel to move between project
+                    management, architecture, structural engineering,
+                    BIM, MEP, costing, construction, documents,
+                    analytics, AI, regional services, integrations
+                    and digital twin capabilities.
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        if projects:
-            st.markdown("### Project Portfolio")
+        st.markdown("### Project Portfolio")
 
+        if projects:
             for project in projects:
                 name = project.get("name", "Unnamed Project")
                 status = project.get("status", "Unknown")
@@ -1055,28 +1011,15 @@ def render_overview() -> None:
                     f"**{name}**  \n"
                     f"Status: {status} | Progress: {progress}%"
                 )
+        else:
+            st.info("No project records are currently available.")
 
     with right:
+
         st.markdown("### Workspace Domains")
 
-        domain_descriptions = {
-            "PROJECTS": "Project lifecycle, approvals, revisions, workflows and governance.",
-            "ARCHITECTURE": "Zoning, site planning, floor planning, room programming and generative design.",
-            "STRUCTURAL": "Eurocodes and structural design workflows.",
-            "BIM": "Buildings, storeys, spaces, elements and OpenBIM.",
-            "MEP": "Mechanical, electrical and plumbing engineering.",
-            "COSTING": "BOQ, procurement, quantity takeoff and financial analysis.",
-            "CONSTRUCTION": "Construction planning, RFIs, submittals and site management.",
-            "DOCUMENTS": "Drawing, specification, contract and document control.",
-            "AI": "Architecture, engineering, MEP, QS and project management copilots.",
-            "ANALYTICS": "Portfolio analytics, KPIs, forecasting and reporting.",
-            "REGIONAL": "Regional codes, regulations and zoning requirements.",
-            "INTEGRATIONS": "AEC software, GIS and cloud integrations.",
-            "DIGITAL TWIN": "Assets, sensors, telemetry and predictive maintenance.",
-            "GOVERNANCE": "Enterprise governance and system controls.",
-        }
+        for domain, description in DOMAIN_DESCRIPTIONS.items():
 
-        for domain, description in domain_descriptions.items():
             st.markdown(
                 f"**{domain}**  \n"
                 f"{description}"
@@ -1098,6 +1041,9 @@ def render_system_health() -> None:
             </div>
             <div class="imagine-header-subtitle">
                 IMAGINE module availability and import diagnostics
+            </div>
+            <div class="imagine-breadcrumb">
+                Overview / System Health
             </div>
         </div>
         """,
@@ -1165,12 +1111,22 @@ def render_system_health() -> None:
     results: list[dict[str, object]] = []
 
     for label, module_path, renderer_name in health_modules:
+
         try:
             module = importlib.import_module(module_path)
-            renderer = getattr(module, renderer_name, None)
+
+            renderer = getattr(
+                module,
+                renderer_name,
+                None,
+            )
 
             if renderer is None:
-                renderer = getattr(module, "render", None)
+                renderer = getattr(
+                    module,
+                    "render",
+                    None,
+                )
 
             if not callable(renderer):
                 raise TypeError(
@@ -1188,6 +1144,7 @@ def render_system_health() -> None:
             )
 
         except Exception as exc:
+
             results.append(
                 {
                     "label": label,
@@ -1209,27 +1166,42 @@ def render_system_health() -> None:
     a, b, c = st.columns(3)
 
     with a:
-        st.metric("Modules Checked", len(results))
+        st.metric(
+            "Modules Checked",
+            len(results),
+        )
 
     with b:
-        st.metric("Healthy", healthy)
+        st.metric(
+            "Healthy",
+            healthy,
+        )
 
     with c:
-        st.metric("Failed", failed)
+        st.metric(
+            "Failed",
+            failed,
+        )
 
     st.divider()
 
     for result in results:
+
         if result["status"] == "Healthy":
+
             st.success(
                 f"{result['label']} — renderer available"
             )
+
         else:
+
             st.error(
                 f"{result['label']} — renderer unavailable"
             )
 
-            with st.expander("Diagnostic details"):
+            with st.expander(
+                f"Diagnostic details: {result['label']}"
+            ):
                 st.code(
                     f"Module: {result['module']}\n"
                     f"Error: {result['error']}"
@@ -1255,14 +1227,28 @@ def render_placeholder(
             <div class="imagine-header-subtitle">
                 {domain}
             </div>
+            <div class="imagine-breadcrumb">
+                {domain} / {module_name}
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    st.info(
-        f"{module_name} is registered in the IMAGINE navigation, "
-        "but its dedicated Streamlit renderer has not been connected yet."
+    st.markdown(
+        """
+        <div class="imagine-module-panel">
+            <div class="imagine-module-title">
+                Module Registered
+            </div>
+            <div class="imagine-module-description">
+                This module is registered in the IMAGINE navigation
+                system, but its dedicated Streamlit renderer has not
+                yet been connected.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -1277,16 +1263,24 @@ def load_renderer(
     """
     Lazily import a module and return its renderer.
 
-    The loader first checks the configured renderer name and then falls
-    back to a conventional render() function.
+    The configured renderer is checked first. The conventional
+    render() function is then used as a fallback.
     """
 
     module = importlib.import_module(module_path)
 
-    renderer = getattr(module, target_symbol, None)
+    renderer = getattr(
+        module,
+        target_symbol,
+        None,
+    )
 
     if renderer is None:
-        renderer = getattr(module, "render", None)
+        renderer = getattr(
+            module,
+            "render",
+            None,
+        )
 
     if renderer is None:
         raise AttributeError(
@@ -1334,6 +1328,11 @@ def render_sidebar() -> tuple[str, str]:
 
         st.divider()
 
+        st.markdown(
+            '<div class="imagine-sidebar-label">Domain</div>',
+            unsafe_allow_html=True,
+        )
+
         domains = list(NAVIGATION)
 
         current_domain = st.session_state.get(
@@ -1344,14 +1343,42 @@ def render_sidebar() -> tuple[str, str]:
         if current_domain not in domains:
             current_domain = "Overview"
 
+        domain_index = domains.index(current_domain)
+
         domain = st.selectbox(
             "Domain",
             options=domains,
-            index=domains.index(current_domain),
+            index=domain_index,
             key="imagine_domain_selector",
+            label_visibility="collapsed",
         )
 
-        module_names = list(NAVIGATION[domain])
+        if domain != st.session_state.active_domain:
+
+            module_names = list(NAVIGATION[domain])
+
+            set_navigation(
+                domain,
+                module_names[0],
+            )
+
+            st.rerun()
+
+        st.caption(
+            DOMAIN_DESCRIPTIONS.get(
+                domain,
+                "IMAGINE enterprise module domain.",
+            )
+        )
+
+        st.markdown(
+            '<div class="imagine-sidebar-label">Module</div>',
+            unsafe_allow_html=True,
+        )
+
+        module_names = list(
+            NAVIGATION[domain]
+        )
 
         current_module = st.session_state.get(
             "active_module",
@@ -1366,25 +1393,94 @@ def render_sidebar() -> tuple[str, str]:
             options=module_names,
             index=module_names.index(current_module),
             key=f"imagine_module_selector_{domain}",
+            label_visibility="collapsed",
         )
 
-        st.session_state.active_domain = domain
-        st.session_state.active_module = module
-
-        module_path, target_symbol = NAVIGATION[domain][module]
+        set_navigation(
+            domain,
+            module,
+        )
 
         st.divider()
 
+        st.markdown(
+            '<div class="imagine-sidebar-label">Quick Navigation</div>',
+            unsafe_allow_html=True,
+        )
+
+        quick_targets = [
+            ("Overview", "Overview"),
+            ("Projects", "PROJECTS"),
+            ("Architecture", "ARCHITECTURE"),
+            ("Structural", "STRUCTURAL"),
+            ("BIM", "BIM"),
+            ("MEP", "MEP"),
+            ("Costing", "COSTING"),
+            ("Construction", "CONSTRUCTION"),
+            ("Documents", "DOCUMENTS"),
+            ("AI", "AI"),
+            ("Analytics", "ANALYTICS"),
+            ("Digital Twin", "DIGITAL TWIN"),
+        ]
+
+        for label, target_domain in quick_targets:
+
+            if target_domain not in NAVIGATION:
+                continue
+
+            first_module = next(
+                iter(NAVIGATION[target_domain])
+            )
+
+            selected = (
+                st.session_state.active_domain
+                == target_domain
+            )
+
+            button_label = (
+                f"Current: {label}"
+                if selected
+                else label
+            )
+
+            if st.button(
+                button_label,
+                key=f"quick_nav_{target_domain}",
+                use_container_width=True,
+                disabled=selected,
+            ):
+                set_navigation(
+                    target_domain,
+                    first_module,
+                )
+                st.rerun()
+
+        st.divider()
+
+        module_path, target_symbol = NAVIGATION[
+            domain
+        ][module]
+
         if module_path is None:
+
             navigation_status = "Registered module"
             renderer_reference = "Renderer pending"
 
-        elif module_path.startswith("__builtin_"):
-            navigation_status = "Built-in application view"
-            renderer_reference = target_symbol or "Built-in renderer"
+        elif module_path.startswith(
+            "__builtin_"
+        ):
+
+            navigation_status = "Built-in view"
+
+            renderer_reference = (
+                target_symbol
+                or "Built-in renderer"
+            )
 
         else:
+
             navigation_status = "Connected module"
+
             renderer_reference = (
                 f"{module_path}.{target_symbol}"
             )
@@ -1407,14 +1503,50 @@ def render_sidebar() -> tuple[str, str]:
 
         st.divider()
 
-        st.caption("IMAGINE AEC Engine")
-        st.caption("Enterprise Architecture & Civil Engineering Platform")
+        st.caption(
+            "IMAGINE AEC Engine"
+        )
+
+        st.caption(
+            "Enterprise Architecture & Civil Engineering Platform"
+        )
 
     return domain, module
 
 
 # =============================================================================
-# MODULE DISPATCH
+# MAIN CONTENT HEADER
+# =============================================================================
+
+def render_navigation_header(
+    domain: str,
+    module_name: str,
+) -> None:
+    """Render a consistent header above external modules."""
+
+    if domain == "Overview":
+        return
+
+    st.markdown(
+        f"""
+        <div class="imagine-header">
+            <div class="imagine-header-title">
+                {module_name}
+            </div>
+            <div class="imagine-header-subtitle">
+                IMAGINE {domain.title()} Workspace
+            </div>
+            <div class="imagine-breadcrumb">
+                {domain} / {module_name}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =============================================================================
+# MAIN MODULE DISPATCH
 # =============================================================================
 
 def render_selected_module(
@@ -1423,17 +1555,25 @@ def render_selected_module(
 ) -> None:
     """Dispatch the selected navigation item."""
 
-    module_path, target_symbol = NAVIGATION[domain][module_name]
+    module_path, target_symbol = NAVIGATION[
+        domain
+    ][module_name]
 
     # -------------------------------------------------------------------------
-    # Built-in views
+    # Built-in overview
     # -------------------------------------------------------------------------
 
     if module_path == "__builtin_overview__":
+
         render_overview()
         return
 
+    # -------------------------------------------------------------------------
+    # Built-in health
+    # -------------------------------------------------------------------------
+
     if module_path == "__builtin_health__":
+
         render_system_health()
         return
 
@@ -1441,15 +1581,28 @@ def render_selected_module(
     # Registered but not implemented
     # -------------------------------------------------------------------------
 
-    if module_path is None or target_symbol is None:
-        render_placeholder(domain, module_name)
+    if (
+        module_path is None
+        or target_symbol is None
+    ):
+
+        render_placeholder(
+            domain,
+            module_name,
+        )
         return
 
     # -------------------------------------------------------------------------
-    # External module renderer
+    # External renderer
     # -------------------------------------------------------------------------
 
+    render_navigation_header(
+        domain,
+        module_name,
+    )
+
     try:
+
         renderer = load_renderer(
             module_path,
             target_symbol,
@@ -1458,6 +1611,7 @@ def render_selected_module(
         renderer()
 
     except ModuleNotFoundError as exc:
+
         st.warning(
             f"{module_name} is not currently available."
         )
@@ -1466,13 +1620,16 @@ def render_selected_module(
             "Module import details",
             expanded=True,
         ):
+
             st.code(
                 f"Module: {module_path}\n"
                 f"Renderer: {target_symbol}"
             )
+
             st.exception(exc)
 
     except AttributeError as exc:
+
         st.error(
             f"{module_name} does not expose its expected renderer."
         )
@@ -1481,12 +1638,16 @@ def render_selected_module(
             "Renderer details",
             expanded=True,
         ):
+
             st.code(
-                f"Expected: {module_path}.{target_symbol}"
+                f"Expected: "
+                f"{module_path}.{target_symbol}"
             )
+
             st.exception(exc)
 
     except ImportError as exc:
+
         st.error(
             f"{module_name} could not be imported."
         )
@@ -1495,13 +1656,16 @@ def render_selected_module(
             "Import error",
             expanded=True,
         ):
+
             st.code(
                 f"Module: {module_path}\n"
                 f"Renderer: {target_symbol}"
             )
+
             st.exception(exc)
 
     except Exception as exc:
+
         st.error(
             f"{module_name} encountered a runtime error."
         )
@@ -1510,12 +1674,14 @@ def render_selected_module(
             "Complete module error",
             expanded=True,
         ):
+
             st.code(
                 f"Domain: {domain}\n"
                 f"Module: {module_name}\n"
                 f"Python module: {module_path}\n"
                 f"Renderer: {target_symbol}"
             )
+
             st.exception(exc)
 
 
@@ -1524,11 +1690,12 @@ def render_selected_module(
 # =============================================================================
 
 def render_footer() -> None:
+
     st.markdown(
         """
         <div class="imagine-footer">
-            IMAGINE AEC Engine | Integrated Architecture, Engineering
-            & Construction Platform
+            IMAGINE AEC Engine |
+            Integrated Architecture, Engineering & Construction Platform
         </div>
         """,
         unsafe_allow_html=True,
@@ -1543,17 +1710,16 @@ def main() -> None:
     """
     Main Streamlit application entry point.
 
-    The sidebar is deliberately constructed here so navigation is part of
-    the application shell and is always available.
+    The sidebar is explicitly constructed here so navigation remains
+    part of the application shell on every rerun.
     """
 
     inject_styles()
+
     init_session_state()
 
-    # Explicit sidebar construction.
     domain, module_name = render_sidebar()
 
-    # Main content dispatch.
     render_selected_module(
         domain,
         module_name,
