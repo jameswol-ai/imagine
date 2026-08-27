@@ -611,3 +611,9 @@ modules/structural/
 ├── slab_design.py
 ├── foundation_design.py
 └── retaining_walls.py
+
+modules/mep/
+├── hvac.py
+├── electrical.py
+├── plumbing.py
+└── energy_simulation.py
