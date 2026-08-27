@@ -6,16 +6,17 @@ Main Streamlit application shell.
 
 Responsibilities:
 - Application configuration
-- Safe session-state initialization
-- Complete sidebar navigation
+- Session-state initialization
+- Enterprise sidebar navigation
+- Interactive module selection
 - Lazy module loading
 - Renderer dispatch
 - Isolated module failures
-- System health view
+- System health diagnostics
 
-The application shell deliberately does not eagerly import database,
-service, schema, or model modules. This prevents one broken module from
-preventing the rest of IMAGINE from starting.
+The application shell deliberately avoids eager imports of database,
+service, schema, and model modules. Individual modules are loaded only
+when selected from the navigation.
 """
 
 from __future__ import annotations
@@ -28,9 +29,9 @@ from typing import Callable
 import streamlit as st
 
 
-# ============================================================
+# =============================================================================
 # APPLICATION PATH
-# ============================================================
+# =============================================================================
 
 ROOT_DIR = Path(__file__).resolve().parent
 
@@ -38,34 +39,303 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 
-# ============================================================
+# =============================================================================
 # PAGE CONFIGURATION
-# ============================================================
+# =============================================================================
 
 st.set_page_config(
     page_title="IMAGINE | Integrated AEC Engine",
-    page_icon="🏗️",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 
-# ============================================================
+# =============================================================================
+# APPLICATION CSS
+# =============================================================================
+
+def inject_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        /* -------------------------------------------------------------
+           Global
+        ------------------------------------------------------------- */
+
+        .stApp {
+            background: #f6f8fb;
+        }
+
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 3rem;
+            max-width: 1500px;
+        }
+
+        /* -------------------------------------------------------------
+           Sidebar
+        ------------------------------------------------------------- */
+
+        section[data-testid="stSidebar"] {
+            width: 310px !important;
+            border-right: 1px solid #dfe4ea;
+            background: #ffffff;
+        }
+
+        section[data-testid="stSidebar"] > div {
+            padding-top: 1.25rem;
+        }
+
+        section[data-testid="stSidebar"] .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        .imagine-sidebar-brand {
+            padding: 0.35rem 0.25rem 1.1rem 0.25rem;
+        }
+
+        .imagine-sidebar-brand-title {
+            font-size: 1.45rem;
+            font-weight: 750;
+            letter-spacing: -0.02em;
+            color: #172033;
+        }
+
+        .imagine-sidebar-brand-subtitle {
+            margin-top: 0.25rem;
+            font-size: 0.76rem;
+            line-height: 1.35;
+            color: #687386;
+        }
+
+        .imagine-sidebar-section {
+            margin-top: 0.7rem;
+            margin-bottom: 0.3rem;
+            padding: 0.45rem 0.65rem;
+            border-radius: 7px;
+            background: #f1f4f8;
+            color: #4c596b;
+            font-size: 0.72rem;
+            font-weight: 750;
+            letter-spacing: 0.08em;
+        }
+
+        .imagine-sidebar-status {
+            margin-top: 1rem;
+            padding: 0.8rem;
+            border: 1px solid #dfe4ea;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        .imagine-sidebar-status-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #596579;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .imagine-sidebar-status-value {
+            margin-top: 0.2rem;
+            font-size: 0.85rem;
+            color: #1c2738;
+            font-weight: 650;
+        }
+
+        /* -------------------------------------------------------------
+           Header
+        ------------------------------------------------------------- */
+
+        .imagine-header {
+            padding: 0.3rem 0 1.25rem 0;
+        }
+
+        .imagine-header-title {
+            margin: 0;
+            font-size: 2rem;
+            line-height: 1.15;
+            font-weight: 780;
+            letter-spacing: -0.035em;
+            color: #172033;
+        }
+
+        .imagine-header-subtitle {
+            margin-top: 0.35rem;
+            color: #687386;
+            font-size: 0.9rem;
+        }
+
+        .imagine-breadcrumb {
+            display: inline-block;
+            margin-top: 0.8rem;
+            padding: 0.35rem 0.65rem;
+            border-radius: 6px;
+            background: #eef2f6;
+            color: #566276;
+            font-size: 0.76rem;
+        }
+
+        /* -------------------------------------------------------------
+           Dashboard cards
+        ------------------------------------------------------------- */
+
+        .imagine-card {
+            padding: 1.1rem;
+            border: 1px solid #dfe4ea;
+            border-radius: 10px;
+            background: #ffffff;
+            min-height: 115px;
+        }
+
+        .imagine-card-title {
+            font-size: 0.76rem;
+            font-weight: 700;
+            color: #687386;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .imagine-card-value {
+            margin-top: 0.4rem;
+            font-size: 1.65rem;
+            font-weight: 760;
+            color: #172033;
+        }
+
+        .imagine-card-description {
+            margin-top: 0.25rem;
+            color: #788397;
+            font-size: 0.76rem;
+        }
+
+        /* -------------------------------------------------------------
+           Module panels
+        ------------------------------------------------------------- */
+
+        .imagine-module-panel {
+            padding: 1.2rem 1.3rem;
+            border: 1px solid #dfe4ea;
+            border-radius: 10px;
+            background: #ffffff;
+            margin-bottom: 1rem;
+        }
+
+        .imagine-module-title {
+            font-size: 1.25rem;
+            font-weight: 720;
+            color: #172033;
+        }
+
+        .imagine-module-description {
+            margin-top: 0.25rem;
+            color: #687386;
+            font-size: 0.86rem;
+        }
+
+        /* -------------------------------------------------------------
+           Buttons
+        ------------------------------------------------------------- */
+
+        div.stButton > button {
+            border-radius: 7px;
+            font-weight: 600;
+        }
+
+        /* -------------------------------------------------------------
+           Expanders
+        ------------------------------------------------------------- */
+
+        div[data-testid="stExpander"] {
+            border-color: #dfe4ea;
+            border-radius: 8px;
+        }
+
+        /* -------------------------------------------------------------
+           Footer
+        ------------------------------------------------------------- */
+
+        .imagine-footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid #dfe4ea;
+            color: #8791a0;
+            font-size: 0.72rem;
+        }
+
+        /* -------------------------------------------------------------
+           Dark mode compatibility
+        ------------------------------------------------------------- */
+
+        @media (prefers-color-scheme: dark) {
+            .stApp {
+                background: #0e131b;
+            }
+
+            section[data-testid="stSidebar"] {
+                background: #111822;
+                border-right-color: #273241;
+            }
+
+            .imagine-sidebar-brand-title,
+            .imagine-header-title,
+            .imagine-card-value,
+            .imagine-module-title,
+            .imagine-sidebar-status-value {
+                color: #f1f4f8;
+            }
+
+            .imagine-sidebar-brand-subtitle,
+            .imagine-header-subtitle,
+            .imagine-module-description,
+            .imagine-card-description {
+                color: #a7b0be;
+            }
+
+            .imagine-sidebar-section,
+            .imagine-breadcrumb {
+                background: #1a2330;
+                color: #b8c1ce;
+            }
+
+            .imagine-sidebar-status,
+            .imagine-card,
+            .imagine-module-panel {
+                background: #141b25;
+                border-color: #293544;
+            }
+
+            .imagine-card-title,
+            .imagine-sidebar-status-title {
+                color: #a7b0be;
+            }
+
+            .imagine-footer {
+                border-top-color: #293544;
+                color: #7e8999;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =============================================================================
 # SESSION STATE
-# ============================================================
+# =============================================================================
 
 def init_session_state() -> None:
-    """
-    Initialize application-level session state.
-
-    Module-specific state remains owned by the individual module.
-    """
+    """Initialize application-wide session state."""
 
     defaults = {
         "imagine_initialized": True,
         "active_domain": "Overview",
         "active_module": "Overview",
 
+        # Legacy/demo state retained for modules that still use it.
         "projects_data": [
             {
                 "id": 1,
@@ -89,7 +359,6 @@ def init_session_state() -> None:
                 "progress": 100,
             },
         ],
-
         "buildings_data": [
             {
                 "id": 1,
@@ -135,30 +404,30 @@ def init_session_state() -> None:
             st.session_state[key] = value
 
 
-init_session_state()
-
-
-# ============================================================
+# =============================================================================
 # NAVIGATION CATALOG
-# ============================================================
+# =============================================================================
 
-# Each entry is:
+# Each entry:
 #
 #     "Display Name": ("python.module.path", "renderer_function")
 #
-# Renderers are imported only after the user selects them.
+# None means the navigation item is registered but does not yet have a
+# dedicated renderer. It remains visible in the application without causing
+# an import failure.
 
-NAVIGATION = {
+NAVIGATION: dict[str, dict[str, tuple[str | None, str | None]]] = {
+
     "Overview": {
         "Overview": (
-            "modules.dashboard.dashboard",
-            "render",
+            "__builtin_overview__",
+            "render_overview",
+        ),
+        "System Health": (
+            "__builtin_health__",
+            "render_system_health",
         ),
     },
-
-    # --------------------------------------------------------
-    # PROJECTS
-    # --------------------------------------------------------
 
     "PROJECTS": {
         "Projects": (
@@ -183,15 +452,7 @@ NAVIGATION = {
         ),
     },
 
-    # --------------------------------------------------------
-    # ARCHITECTURE
-    # --------------------------------------------------------
-
     "ARCHITECTURE": {
-        "Architecture Workspace": (
-            "architecture.ui",
-            "render_architecture",
-        ),
         "Zoning": (
             "architecture.zoning.ui",
             "render_zoning",
@@ -218,37 +479,38 @@ NAVIGATION = {
         ),
     },
 
-    # --------------------------------------------------------
-    # BIM
-    # --------------------------------------------------------
-
-    "BIM": {
-        "Buildings": (
-            "modules.bim.buildings",
-            "render",
-        ),
-        "Storeys": (
-            "modules.bim.storeys",
-            "render",
-        ),
-        "Spaces": (
-            "modules.bim.spaces",
-            "render",
-        ),
-        "IFC OpenBIM": (
-            "modules.bim.ifc_export",
-            "render",
-        ),
-    },
-
-    # --------------------------------------------------------
-    # STRUCTURAL
-    # --------------------------------------------------------
-
     "STRUCTURAL": {
         "Eurocode Suite": (
             "modules.structural.eurocode",
             "render",
+        ),
+        "EN 1990": (
+            None,
+            None,
+        ),
+        "EN 1991": (
+            None,
+            None,
+        ),
+        "EN 1992": (
+            None,
+            None,
+        ),
+        "EN 1993": (
+            None,
+            None,
+        ),
+        "EN 1995": (
+            None,
+            None,
+        ),
+        "EN 1997": (
+            None,
+            None,
+        ),
+        "EN 1998": (
+            None,
+            None,
         ),
         "Beam Design": (
             "modules.structural.beam_design",
@@ -274,11 +536,42 @@ NAVIGATION = {
             "modules.structural.steel_connections",
             "render",
         ),
+        "Finite Element Analysis": (
+            None,
+            None,
+        ),
     },
 
-    # --------------------------------------------------------
-    # MEP
-    # --------------------------------------------------------
+    "BIM": {
+        "Buildings": (
+            "modules.bim.buildings",
+            "render",
+        ),
+        "Storeys": (
+            "modules.bim.storeys",
+            "render",
+        ),
+        "Spaces": (
+            "modules.bim.spaces",
+            "render",
+        ),
+        "Elements": (
+            None,
+            None,
+        ),
+        "IFC": (
+            "modules.bim.ifc_export",
+            "render",
+        ),
+        "COBie": (
+            None,
+            None,
+        ),
+        "BIM Digital Twin": (
+            None,
+            None,
+        ),
+    },
 
     "MEP": {
         "Integrated MEP Analysis": (
@@ -301,22 +594,54 @@ NAVIGATION = {
             "modules.mep.energy_simulation",
             "render",
         ),
-        "Electrical": (
+        "Electrical Load Analysis": (
             "modules.mep.electrical",
             "render",
         ),
-        "Plumbing": (
+        "Transformers": (
+            None,
+            None,
+        ),
+        "Generators": (
+            None,
+            None,
+        ),
+        "Cable Sizing": (
+            None,
+            None,
+        ),
+        "Solar PV": (
+            None,
+            None,
+        ),
+        "Water Supply": (
             "modules.mep.plumbing",
             "render",
         ),
+        "Drainage": (
+            "modules.mep.plumbing",
+            "render",
+        ),
+        "Stormwater": (
+            None,
+            None,
+        ),
+        "Sewer Networks": (
+            None,
+            None,
+        ),
+        "Firefighting": (
+            None,
+            None,
+        ),
     },
-
-    # --------------------------------------------------------
-    # COSTING
-    # --------------------------------------------------------
 
     "COSTING": {
         "BOQ": (
+            "modules.costing.boq",
+            "render",
+        ),
+        "Quantity Takeoff": (
             "modules.costing.boq",
             "render",
         ),
@@ -328,7 +653,7 @@ NAVIGATION = {
             "modules.costing.forex",
             "render",
         ),
-        "Cost Escalation": (
+        "Inflation / Escalation": (
             "modules.costing.escalation",
             "render",
         ),
@@ -336,11 +661,11 @@ NAVIGATION = {
             "modules.costing.risk_analysis",
             "render",
         ),
+        "Cashflow": (
+            None,
+            None,
+        ),
     },
-
-    # --------------------------------------------------------
-    # CONSTRUCTION
-    # --------------------------------------------------------
 
     "CONSTRUCTION": {
         "Planning": (
@@ -377,17 +702,13 @@ NAVIGATION = {
         ),
     },
 
-    # --------------------------------------------------------
-    # DOCUMENTS
-    # --------------------------------------------------------
-
     "DOCUMENTS": {
-        "Document Register": (
-            "modules.documents.documents",
-            "render",
-        ),
         "Drawing Management": (
             "modules.documents.drawing_register",
+            "render",
+        ),
+        "Document Register": (
+            "modules.documents.documents",
             "render",
         ),
         "Specifications": (
@@ -398,6 +719,10 @@ NAVIGATION = {
             "modules.documents.documents",
             "render",
         ),
+        "Reports": (
+            None,
+            None,
+        ),
         "Revision History": (
             "modules.documents.revisions",
             "render",
@@ -406,11 +731,11 @@ NAVIGATION = {
             "modules.documents.transmittals",
             "render",
         ),
+        "Archives": (
+            None,
+            None,
+        ),
     },
-
-    # --------------------------------------------------------
-    # AI
-    # --------------------------------------------------------
 
     "AI": {
         "IMAGINE Architect": (
@@ -433,15 +758,27 @@ NAVIGATION = {
             "modules.ai.project_manager",
             "render",
         ),
+        "Vector Store": (
+            None,
+            None,
+        ),
+        "RAG": (
+            None,
+            None,
+        ),
+        "Prompt Library": (
+            None,
+            None,
+        ),
     },
-
-    # --------------------------------------------------------
-    # ANALYTICS
-    # --------------------------------------------------------
 
     "ANALYTICS": {
         "Dashboards": (
             "modules.dashboard.dashboard",
+            "render",
+        ),
+        "KPIs": (
+            "modules.analytics.kpis",
             "render",
         ),
         "Portfolio": (
@@ -456,53 +793,7 @@ NAVIGATION = {
             "modules.analytics.reporting",
             "render",
         ),
-        "KPIs": (
-            "modules.analytics.kpis",
-            "render",
-        ),
     },
-
-    # --------------------------------------------------------
-    # DIGITAL TWIN
-    # --------------------------------------------------------
-
-    "DIGITAL TWIN": {
-        "Assets": (
-            "modules.digital_twin.assets",
-            "render",
-        ),
-        "Sensors": (
-            "modules.digital_twin.sensors",
-            "render",
-        ),
-        "Telemetry": (
-            "modules.digital_twin.telemetry",
-            "render",
-        ),
-        "Maintenance": (
-            "modules.digital_twin.maintenance",
-            "render",
-        ),
-        "Predictive AI": (
-            "modules.digital_twin.predictive_ai",
-            "render",
-        ),
-    },
-
-    # --------------------------------------------------------
-    # GOVERNANCE
-    # --------------------------------------------------------
-
-    "GOVERNANCE": {
-        "Approvals": (
-            "modules.governance.approvals",
-            "render",
-        ),
-    },
-
-    # --------------------------------------------------------
-    # REGIONAL
-    # --------------------------------------------------------
 
     "REGIONAL": {
         "Uganda": (
@@ -534,10 +825,6 @@ NAVIGATION = {
             None,
         ),
     },
-
-    # --------------------------------------------------------
-    # INTEGRATIONS
-    # --------------------------------------------------------
 
     "INTEGRATIONS": {
         "Microsoft": (
@@ -577,191 +864,429 @@ NAVIGATION = {
             None,
         ),
     },
+
+    "DIGITAL TWIN": {
+        "Assets": (
+            "modules.digital_twin.assets",
+            "render",
+        ),
+        "Sensors": (
+            "modules.digital_twin.sensors",
+            "render",
+        ),
+        "Telemetry": (
+            "modules.digital_twin.telemetry",
+            "render",
+        ),
+        "Energy": (
+            None,
+            None,
+        ),
+        "Maintenance": (
+            "modules.digital_twin.maintenance",
+            "render",
+        ),
+        "Predictive AI": (
+            "modules.digital_twin.predictive_ai",
+            "render",
+        ),
+    },
+
+    "GOVERNANCE": {
+        "Approvals": (
+            "modules.governance.approvals",
+            "render",
+        ),
+        "System Health": (
+            "__builtin_health__",
+            "render_system_health",
+        ),
+    },
 }
 
 
-# ============================================================
-# SYSTEM HEALTH
-# ============================================================
+# =============================================================================
+# BUILT-IN OVERVIEW
+# =============================================================================
 
-def render_system_health() -> None:
-    """
-    Render the existing IMAGINE health checks without allowing
-    an individual health-check import to crash the application.
-    """
+def render_overview() -> None:
+    """Render the main IMAGINE overview."""
 
-    st.title("System Health")
-    st.caption(
-        "Application dependency and module health diagnostics."
+    st.markdown(
+        """
+        <div class="imagine-header">
+            <div class="imagine-header-title">
+                IMAGINE
+            </div>
+            <div class="imagine-header-subtitle">
+                Integrated Architecture, Engineering & Construction Engine
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    try:
-        from architecture.health import (
-            check_module,
-            health_summary,
-        )
-    except Exception as exc:
-        st.error(
-            "System health module could not be loaded."
-        )
-
-        with st.expander(
-            "Complete health-module error",
-            expanded=True,
-        ):
-            st.exception(exc)
-
-        return
-
-    modules = [
-        "projects.projects.ui",
-        "projects.approvals.ui",
-        "projects.revisions.ui",
-        "projects.workflows.ui",
-        "projects.governance.ui",
-        "architecture.ui",
-        "architecture.zoning.ui",
-        "architecture.site_planning.ui",
-        "architecture.floor_planning.ui",
-        "architecture.room_programming.ui",
-        "architecture.compliance.ui",
-        "architecture.generative_design.ui",
-    ]
-
-    results = [
-        check_module(module_name)
-        for module_name in modules
-    ]
-
-    summary = health_summary(results)
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric(
-        "Modules Checked",
-        summary["total"],
-    )
-
-    col2.metric(
-        "Healthy",
-        summary["healthy"],
-    )
-
-    col3.metric(
-        "Failed",
-        summary["failed"],
-    )
-
-    col4.metric(
-        "Overall Status",
-        summary["status"].upper(),
+    st.markdown(
+        """
+        <div class="imagine-breadcrumb">
+            Overview / Enterprise Workspace
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.divider()
 
-    for result in results:
+    projects = st.session_state.get("projects_data", [])
+    buildings = st.session_state.get("buildings_data", [])
 
-        if result.status == "ok":
-            st.success(
-                f"{result.name} — OK"
+    active_projects = sum(
+        1
+        for project in projects
+        if str(project.get("status", "")).lower() == "active"
+    )
+
+    completed_projects = sum(
+        1
+        for project in projects
+        if str(project.get("status", "")).lower() == "completed"
+    )
+
+    average_progress = 0.0
+
+    if projects:
+        values = [
+            float(project.get("progress", 0) or 0)
+            for project in projects
+        ]
+        average_progress = sum(values) / len(values)
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.markdown(
+            f"""
+            <div class="imagine-card">
+                <div class="imagine-card-title">Projects</div>
+                <div class="imagine-card-value">{len(projects)}</div>
+                <div class="imagine-card-description">
+                    Registered projects
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with c2:
+        st.markdown(
+            f"""
+            <div class="imagine-card">
+                <div class="imagine-card-title">Active Projects</div>
+                <div class="imagine-card-value">{active_projects}</div>
+                <div class="imagine-card-description">
+                    Currently active
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with c3:
+        st.markdown(
+            f"""
+            <div class="imagine-card">
+                <div class="imagine-card-title">Buildings</div>
+                <div class="imagine-card-value">{len(buildings)}</div>
+                <div class="imagine-card-description">
+                    BIM building records
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with c4:
+        st.markdown(
+            f"""
+            <div class="imagine-card">
+                <div class="imagine-card-title">Average Progress</div>
+                <div class="imagine-card-value">
+                    {average_progress:.0f}%
+                </div>
+                <div class="imagine-card-description">
+                    Across registered projects
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.write("")
+
+    left, right = st.columns([1.25, 1])
+
+    with left:
+        st.markdown(
+            """
+            <div class="imagine-module-panel">
+                <div class="imagine-module-title">
+                    Enterprise Workspace
+                </div>
+                <div class="imagine-module-description">
+                    Select a domain from the navigation panel to access
+                    project management, architectural design, structural
+                    engineering, BIM, MEP, costing, construction,
+                    documentation, analytics, AI and digital twin services.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if projects:
+            st.markdown("### Project Portfolio")
+
+            for project in projects:
+                name = project.get("name", "Unnamed Project")
+                status = project.get("status", "Unknown")
+                progress = project.get("progress", 0)
+
+                st.write(
+                    f"**{name}**  \n"
+                    f"Status: {status} | Progress: {progress}%"
+                )
+
+    with right:
+        st.markdown("### Workspace Domains")
+
+        domain_descriptions = {
+            "PROJECTS": "Project lifecycle, approvals, revisions, workflows and governance.",
+            "ARCHITECTURE": "Zoning, site planning, floor planning, room programming and generative design.",
+            "STRUCTURAL": "Eurocodes and structural design workflows.",
+            "BIM": "Buildings, storeys, spaces, elements and OpenBIM.",
+            "MEP": "Mechanical, electrical and plumbing engineering.",
+            "COSTING": "BOQ, procurement, quantity takeoff and financial analysis.",
+            "CONSTRUCTION": "Construction planning, RFIs, submittals and site management.",
+            "DOCUMENTS": "Drawing, specification, contract and document control.",
+            "AI": "Architecture, engineering, MEP, QS and project management copilots.",
+            "ANALYTICS": "Portfolio analytics, KPIs, forecasting and reporting.",
+            "REGIONAL": "Regional codes, regulations and zoning requirements.",
+            "INTEGRATIONS": "AEC software, GIS and cloud integrations.",
+            "DIGITAL TWIN": "Assets, sensors, telemetry and predictive maintenance.",
+            "GOVERNANCE": "Enterprise governance and system controls.",
+        }
+
+        for domain, description in domain_descriptions.items():
+            st.markdown(
+                f"**{domain}**  \n"
+                f"{description}"
             )
 
+
+# =============================================================================
+# SYSTEM HEALTH
+# =============================================================================
+
+def render_system_health() -> None:
+    """Render module import diagnostics."""
+
+    st.markdown(
+        """
+        <div class="imagine-header">
+            <div class="imagine-header-title">
+                System Health
+            </div>
+            <div class="imagine-header-subtitle">
+                IMAGINE module availability and import diagnostics
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    health_modules = [
+        (
+            "Projects",
+            "projects.projects.ui",
+            "render_projects",
+        ),
+        (
+            "Approvals",
+            "projects.approvals.ui",
+            "render_approvals",
+        ),
+        (
+            "Revisions",
+            "projects.revisions.ui",
+            "render_revisions",
+        ),
+        (
+            "Workflows",
+            "projects.workflows.ui",
+            "render_workflows",
+        ),
+        (
+            "Governance",
+            "projects.governance.ui",
+            "render_governance",
+        ),
+        (
+            "Zoning",
+            "architecture.zoning.ui",
+            "render_zoning",
+        ),
+        (
+            "Site Planning",
+            "architecture.site_planning.ui",
+            "render_site_planning",
+        ),
+        (
+            "Floor Planning",
+            "architecture.floor_planning.ui",
+            "render_floor_planning",
+        ),
+        (
+            "Room Programming",
+            "architecture.room_programming.ui",
+            "render_room_programming",
+        ),
+        (
+            "Compliance",
+            "architecture.compliance.ui",
+            "render_compliance",
+        ),
+        (
+            "Generative Design",
+            "architecture.generative_design.ui",
+            "render_generative_design",
+        ),
+    ]
+
+    results: list[dict[str, object]] = []
+
+    for label, module_path, renderer_name in health_modules:
+        try:
+            module = importlib.import_module(module_path)
+            renderer = getattr(module, renderer_name, None)
+
+            if renderer is None:
+                renderer = getattr(module, "render", None)
+
+            if not callable(renderer):
+                raise TypeError(
+                    f"Expected renderer '{renderer_name}' "
+                    f"was not found."
+                )
+
+            results.append(
+                {
+                    "label": label,
+                    "module": module_path,
+                    "status": "Healthy",
+                    "error": "",
+                }
+            )
+
+        except Exception as exc:
+            results.append(
+                {
+                    "label": label,
+                    "module": module_path,
+                    "status": "Failed",
+                    "error": (
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                }
+            )
+
+    healthy = sum(
+        result["status"] == "Healthy"
+        for result in results
+    )
+
+    failed = len(results) - healthy
+
+    a, b, c = st.columns(3)
+
+    with a:
+        st.metric("Modules Checked", len(results))
+
+    with b:
+        st.metric("Healthy", healthy)
+
+    with c:
+        st.metric("Failed", failed)
+
+    st.divider()
+
+    for result in results:
+        if result["status"] == "Healthy":
+            st.success(
+                f"{result['label']} — renderer available"
+            )
         else:
             st.error(
-                f"{result.name} — FAILED"
+                f"{result['label']} — renderer unavailable"
             )
 
-            if result.error:
-
-                with st.expander(
-                    f"Error details: {result.name}"
-                ):
-                    st.code(
-                        result.error
-                    )
-
-                    if result.traceback_text:
-                        st.code(
-                            result.traceback_text
-                        )
+            with st.expander("Diagnostic details"):
+                st.code(
+                    f"Module: {result['module']}\n"
+                    f"Error: {result['error']}"
+                )
 
 
-# ============================================================
+# =============================================================================
 # PLACEHOLDER
-# ============================================================
+# =============================================================================
 
 def render_placeholder(
     domain: str,
     module_name: str,
 ) -> None:
-    """
-    Render a clean placeholder for navigation entries whose
-    backend/UI implementation does not yet exist.
-    """
+    """Render a controlled placeholder for future modules."""
 
-    st.title(module_name)
-
-    st.caption(
-        f"{domain} module"
+    st.markdown(
+        f"""
+        <div class="imagine-header">
+            <div class="imagine-header-title">
+                {module_name}
+            </div>
+            <div class="imagine-header-subtitle">
+                {domain}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     st.info(
-        f"{module_name} is registered in IMAGINE, "
-        "but its interactive Streamlit renderer is not "
-        "implemented yet."
-    )
-
-    st.markdown(
-        """
-        ### Module Status
-
-        The navigation entry is intentionally preserved so the
-        IMAGINE information architecture remains complete.
-
-        The renderer can be connected later without changing
-        the sidebar structure.
-        """
+        f"{module_name} is registered in the IMAGINE navigation, "
+        "but its dedicated Streamlit renderer has not been connected yet."
     )
 
 
-# ============================================================
-# MODULE LOADER
-# ============================================================
+# =============================================================================
+# RENDERER LOADER
+# =============================================================================
 
 def load_renderer(
-    module_path: str | None,
-    target_symbol: str | None,
-) -> Callable[[], object] | None:
+    module_path: str,
+    target_symbol: str,
+) -> Callable[[], object]:
     """
-    Lazily import and resolve a renderer.
+    Lazily import a module and return its renderer.
 
-    Returns None when the module or renderer cannot be loaded.
+    The loader first checks the configured renderer name and then falls
+    back to a conventional render() function.
     """
 
-    if not module_path or not target_symbol:
-        return None
+    module = importlib.import_module(module_path)
 
-    try:
-        module = importlib.import_module(
-            module_path
-        )
-    except ModuleNotFoundError:
-        raise
-    except Exception:
-        raise
-
-    renderer = getattr(
-        module,
-        target_symbol,
-        None,
-    )
+    renderer = getattr(module, target_symbol, None)
 
     if renderer is None:
-        renderer = getattr(
-            module,
-            "render",
-            None,
-        )
+        renderer = getattr(module, "render", None)
 
     if renderer is None:
         raise AttributeError(
@@ -778,30 +1303,38 @@ def load_renderer(
     return renderer
 
 
-# ============================================================
-# SIDEBAR
-# ============================================================
+# =============================================================================
+# SIDEBAR NAVIGATION
+# =============================================================================
 
 def render_sidebar() -> tuple[str, str]:
     """
-    Build the complete IMAGINE sidebar and return the selected
-    domain and module.
+    Build the complete interactive sidebar.
+
+    Navigation state is persisted in session_state so Streamlit reruns
+    do not unexpectedly reset the selected module.
     """
 
     with st.sidebar:
 
-        st.title("IMAGINE")
-
-        st.caption(
-            "Integrated Architecture, Engineering & "
-            "Construction Engine"
+        st.markdown(
+            """
+            <div class="imagine-sidebar-brand">
+                <div class="imagine-sidebar-brand-title">
+                    IMAGINE
+                </div>
+                <div class="imagine-sidebar-brand-subtitle">
+                    Integrated Architecture, Engineering &
+                    Construction Engine
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
         st.divider()
 
-        domains = list(
-            NAVIGATION.keys()
-        )
+        domains = list(NAVIGATION)
 
         current_domain = st.session_state.get(
             "active_domain",
@@ -813,125 +1346,125 @@ def render_sidebar() -> tuple[str, str]:
 
         domain = st.selectbox(
             "Domain",
-            domains,
-            index=domains.index(
-                current_domain
-            ),
+            options=domains,
+            index=domains.index(current_domain),
             key="imagine_domain_selector",
         )
 
-        modules = list(
-            NAVIGATION[domain].keys()
-        )
+        module_names = list(NAVIGATION[domain])
 
         current_module = st.session_state.get(
             "active_module",
-            modules[0],
+            module_names[0],
         )
 
-        if current_module not in modules:
-            current_module = modules[0]
+        if current_module not in module_names:
+            current_module = module_names[0]
 
         module = st.radio(
             "Module",
-            modules,
-            index=modules.index(
-                current_module
-            ),
-            key="imagine_module_selector",
+            options=module_names,
+            index=module_names.index(current_module),
+            key=f"imagine_module_selector_{domain}",
         )
 
         st.session_state.active_domain = domain
         st.session_state.active_module = module
 
+        module_path, target_symbol = NAVIGATION[domain][module]
+
         st.divider()
 
-        st.caption(
-            f"Domain: {domain}"
-        )
+        if module_path is None:
+            navigation_status = "Registered module"
+            renderer_reference = "Renderer pending"
 
-        entry = NAVIGATION[domain][module]
+        elif module_path.startswith("__builtin_"):
+            navigation_status = "Built-in application view"
+            renderer_reference = target_symbol or "Built-in renderer"
 
-        module_path, target_symbol = entry
-
-        if module_path:
-            st.caption(
-                f"`{module_path}.{target_symbol}`"
-            )
         else:
-            st.caption(
-                "Renderer pending"
+            navigation_status = "Connected module"
+            renderer_reference = (
+                f"{module_path}.{target_symbol}"
             )
+
+        st.markdown(
+            f"""
+            <div class="imagine-sidebar-status">
+                <div class="imagine-sidebar-status-title">
+                    Navigation Status
+                </div>
+                <div class="imagine-sidebar-status-value">
+                    {navigation_status}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.caption(renderer_reference)
 
         st.divider()
 
-        st.caption(
-            "IMAGINE AEC Engine"
-        )
-
-        st.caption(
-            "Enterprise Architecture & Civil Engineering "
-            "Platform"
-        )
+        st.caption("IMAGINE AEC Engine")
+        st.caption("Enterprise Architecture & Civil Engineering Platform")
 
     return domain, module
 
 
-# ============================================================
-# RENDER SELECTED MODULE
-# ============================================================
+# =============================================================================
+# MODULE DISPATCH
+# =============================================================================
 
 def render_selected_module(
     domain: str,
     module_name: str,
 ) -> None:
-    """
-    Render the selected navigation target.
-    """
+    """Dispatch the selected navigation item."""
 
-    module_path, target_symbol = (
-        NAVIGATION[domain][module_name]
-    )
+    module_path, target_symbol = NAVIGATION[domain][module_name]
 
-    # --------------------------------------------------------
-    # Placeholder entries
-    # --------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # Built-in views
+    # -------------------------------------------------------------------------
 
-    if not module_path:
-        render_placeholder(
-            domain,
-            module_name,
-        )
+    if module_path == "__builtin_overview__":
+        render_overview()
         return
 
-    # --------------------------------------------------------
-    # Actual renderer
-    # --------------------------------------------------------
+    if module_path == "__builtin_health__":
+        render_system_health()
+        return
+
+    # -------------------------------------------------------------------------
+    # Registered but not implemented
+    # -------------------------------------------------------------------------
+
+    if module_path is None or target_symbol is None:
+        render_placeholder(domain, module_name)
+        return
+
+    # -------------------------------------------------------------------------
+    # External module renderer
+    # -------------------------------------------------------------------------
 
     try:
-
         renderer = load_renderer(
             module_path,
             target_symbol,
         )
 
-        if renderer is None:
-            render_placeholder(
-                domain,
-                module_name,
-            )
-            return
-
         renderer()
 
     except ModuleNotFoundError as exc:
-
         st.warning(
             f"{module_name} is not currently available."
         )
 
         with st.expander(
-            "Module import details"
+            "Module import details",
+            expanded=True,
         ):
             st.code(
                 f"Module: {module_path}\n"
@@ -940,7 +1473,6 @@ def render_selected_module(
             st.exception(exc)
 
     except AttributeError as exc:
-
         st.error(
             f"{module_name} does not expose its expected renderer."
         )
@@ -950,13 +1482,26 @@ def render_selected_module(
             expanded=True,
         ):
             st.code(
-                "Expected:\n"
-                f"{module_path}.{target_symbol}"
+                f"Expected: {module_path}.{target_symbol}"
+            )
+            st.exception(exc)
+
+    except ImportError as exc:
+        st.error(
+            f"{module_name} could not be imported."
+        )
+
+        with st.expander(
+            "Import error",
+            expanded=True,
+        ):
+            st.code(
+                f"Module: {module_path}\n"
+                f"Renderer: {target_symbol}"
             )
             st.exception(exc)
 
     except Exception as exc:
-
         st.error(
             f"{module_name} encountered a runtime error."
         )
@@ -965,139 +1510,61 @@ def render_selected_module(
             "Complete module error",
             expanded=True,
         ):
+            st.code(
+                f"Domain: {domain}\n"
+                f"Module: {module_name}\n"
+                f"Python module: {module_path}\n"
+                f"Renderer: {target_symbol}"
+            )
             st.exception(exc)
 
 
-# ============================================================
+# =============================================================================
+# FOOTER
+# =============================================================================
+
+def render_footer() -> None:
+    st.markdown(
+        """
+        <div class="imagine-footer">
+            IMAGINE AEC Engine | Integrated Architecture, Engineering
+            & Construction Platform
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =============================================================================
 # MAIN
-# ============================================================
+# =============================================================================
 
 def main() -> None:
     """
-    Main IMAGINE application entry point.
+    Main Streamlit application entry point.
+
+    The sidebar is deliberately constructed here so navigation is part of
+    the application shell and is always available.
     """
 
+    inject_styles()
+    init_session_state()
+
+    # Explicit sidebar construction.
     domain, module_name = render_sidebar()
 
-    # --------------------------------------------------------
-    # Overview
-    # --------------------------------------------------------
-
-    if domain == "Overview":
-
-        st.title(
-            "IMAGINE"
-        )
-
-        st.subheader(
-            "Generative Architecture & Civil Engine"
-        )
-
-        st.caption(
-            "Integrated AEC workspace for architecture, "
-            "structural engineering, BIM, MEP, costing, "
-            "construction, documents, analytics and AI."
-        )
-
-        st.divider()
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        col1.metric(
-            "Projects",
-            len(
-                st.session_state.get(
-                    "projects_data",
-                    [],
-                )
-            ),
-        )
-
-        col2.metric(
-            "Buildings",
-            len(
-                st.session_state.get(
-                    "buildings_data",
-                    [],
-                )
-            ),
-        )
-
-        col3.metric(
-            "Active Design",
-            "Architecture",
-        )
-
-        col4.metric(
-            "System",
-            "Online",
-        )
-
-        st.divider()
-
-        st.markdown(
-            "### IMAGINE Workspace"
-        )
-
-        left, right = st.columns(2)
-
-        with left:
-
-            st.markdown(
-                """
-                **PROJECTS**
-
-                Manage projects, approvals, revisions,
-                workflows and governance.
-
-                **ARCHITECTURE**
-
-                Develop zoning, site planning, floor planning,
-                room programming, compliance and generative design.
-                """
-            )
-
-        with right:
-
-            st.markdown(
-                """
-                **ENGINEERING**
-
-                Coordinate structural, BIM and MEP workflows.
-
-                **DELIVERY**
-
-                Connect costing, construction, documents,
-                analytics, AI and digital-twin capabilities.
-                """
-            )
-
-        return
-
-    # --------------------------------------------------------
-    # System Health
-    # --------------------------------------------------------
-
-    if (
-        domain == "GOVERNANCE"
-        and module_name == "System Health"
-    ):
-        render_system_health()
-        return
-
-    # --------------------------------------------------------
-    # Selected module
-    # --------------------------------------------------------
-
+    # Main content dispatch.
     render_selected_module(
         domain,
         module_name,
     )
 
+    render_footer()
 
-# ============================================================
-# APPLICATION ENTRY POINT
-# ============================================================
+
+# =============================================================================
+# ENTRY POINT
+# =============================================================================
 
 if __name__ == "__main__":
     main()
