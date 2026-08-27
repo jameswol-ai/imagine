@@ -1,5 +1,5 @@
 """
-IMAGINE AEC Engine — Full Harness
+IMAGINE AEC Engine — Unified Harness
 Path: streamlit_app.py
 """
 
@@ -23,7 +23,7 @@ try:
     from modules.utils.mock_data import init_session_state
     init_session_state()
 except Exception as e:
-    st.sidebar.warning(f"⚠️ State bootstrapper: {e}")
+    st.sidebar.warning(f"⚠️ State bootstrapper failed: {e}")
 
 # ----------------------------------------------
 # Navigation Catalog
@@ -123,40 +123,45 @@ module_path, target_symbol = sub_modules[selected_submodule]
 st.sidebar.caption(f"📍 `{module_path}`")
 
 # ----------------------------------------------
-# Module Loader
+# Module Loader (robust)
 # ----------------------------------------------
 def render_module(module_path, target_symbol):
     try:
         imported_module = importlib.import_module(module_path)
 
-        # Try exact target
+        # 1. Exact target
         if hasattr(imported_module, target_symbol):
             render_func = getattr(imported_module, target_symbol)
             if callable(render_func):
                 render_func()
                 return True
 
-        # Try class with .render()
+        # 2. Class with .render()
         for attr_name in dir(imported_module):
             attr = getattr(imported_module, attr_name)
             if isinstance(attr, type) and hasattr(attr, "render"):
-                instance = attr()
-                instance.render()
+                try:
+                    instance = attr()
+                    instance.render()
+                except Exception:
+                    # fallback to classmethod/staticmethod
+                    getattr(attr, "render")()
                 return True
 
-        # Fallback: module-level render
+        # 3. Module-level render
         if hasattr(imported_module, "render"):
             render_func = getattr(imported_module, "render")
             if callable(render_func):
                 render_func()
                 return True
 
+        # 4. Fallback stub
         st.warning(f"⚠️ Module `{module_path}` has no `render()`.")
+        st.write("ℹ️ Create a `render()` function or class with `.render()` in this module.")
         return False
 
-    except ModuleNotFoundError as e:
+    except ModuleNotFoundError:
         st.info(f"🚧 **{selected_submodule}** is under development.")
-        st.exception(e)
         return False
     except Exception as e:
         st.error(f"💥 Error loading **{selected_submodule}**")
