@@ -39,7 +39,7 @@ check_authentication()
 # ---------------------------
 def api_get(endpoint, params=None):
     if USE_MOCK:
-        return None  # will fallback to mock data
+        return None
     headers = {"Authorization": f"Bearer {st.session_state.token}"}
     url = f"{API_BASE_URL}/{endpoint}"
     try:
@@ -52,7 +52,7 @@ def api_get(endpoint, params=None):
 
 def api_post(endpoint, data):
     if USE_MOCK:
-        return data  # just echo back
+        return data
     headers = {"Authorization": f"Bearer {st.session_state.token}", "Content-Type": "application/json"}
     url = f"{API_BASE_URL}/{endpoint}"
     try:
@@ -90,7 +90,7 @@ def api_delete(endpoint):
         return False
 
 # ---------------------------
-# Initialise mock data in session state
+# Initialise mock data in session state (FIXED)
 # ---------------------------
 def init_mock_data():
     # Projects
@@ -121,16 +121,23 @@ def init_mock_data():
         # Spaces for each storey (will be stored as nested dict)
         if "spaces_data" not in st.session_state:
             st.session_state.spaces_data = {}
+        space_id_counter = 1
         for b in st.session_state.buildings_data:
             b_id = b["id"]
             storeys = st.session_state.storeys_data.get(b_id, [])
             for s in storeys:
                 key = f"{b_id}_{s['id']}"
                 if key not in st.session_state.spaces_data:
-                    st.session_state.spaces_data[key] = [
-                        {"id": (key*10 + i), "name": f"Space {i}", "space_type": ["Office", "Conference", "Lobby"][i%3], "area": 20 + i*5, "height": 3.0 + (i%2)*0.5}
-                        for i in range(1, 4)
-                    ]
+                    st.session_state.spaces_data[key] = []
+                    for i in range(1, 4):
+                        st.session_state.spaces_data[key].append({
+                            "id": space_id_counter,
+                            "name": f"Space {i}",
+                            "space_type": ["Office", "Conference", "Lobby"][i % 3],
+                            "area": 20 + i * 5,
+                            "height": 3.0 + (i % 2) * 0.5
+                        })
+                        space_id_counter += 1
 
     # Architecture - Zoning
     if "zoning_data" not in st.session_state or not st.session_state.zoning_data:
@@ -307,7 +314,6 @@ def crud_table(data_key, item_name, endpoint, id_field="id", display_fields=None
             if st.button("🗑️", key=f"del_{item_name}_{item[id_field]}"):
                 if st.checkbox(f"Confirm delete?", key=f"confirm_{item_name}_{item[id_field]}"):
                     if USE_MOCK:
-                        # Delete locally
                         new_data = [d for d in data if d[id_field] != item[id_field]]
                         st.session_state[data_key] = new_data
                         st.success(f"{item_name.capitalize()} deleted!")
@@ -334,7 +340,6 @@ def crud_table(data_key, item_name, endpoint, id_field="id", display_fields=None
                             edit_values[field] = st.selectbox(field.capitalize(), item.get('options', []), index=item.get('options', []).index(item.get(field)) if item.get(field) in item.get('options', []) else 0)
                     if st.form_submit_button("Update"):
                         if USE_MOCK:
-                            # Update locally
                             for d in data:
                                 if d[id_field] == item[id_field]:
                                     for k, v in edit_values.items():
@@ -370,7 +375,6 @@ def crud_table(data_key, item_name, endpoint, id_field="id", display_fields=None
                     add_values[field] = st.selectbox(field.capitalize(), item.get('options', []))
             if st.form_submit_button("Create"):
                 if USE_MOCK:
-                    # Generate new ID
                     new_id = max([d[id_field] for d in data]) + 1 if data else 1
                     add_values[id_field] = new_id
                     data.append(add_values)
@@ -534,17 +538,11 @@ def page_bim():
             key="storey_building_select"
         )
         if selected_building_id:
-            # Load storeys for this building from session state (nested)
             if "storeys_data" not in st.session_state:
                 st.session_state.storeys_data = {}
             if selected_building_id not in st.session_state.storeys_data:
                 st.session_state.storeys_data[selected_building_id] = []
             storeys = st.session_state.storeys_data[selected_building_id]
-
-            # Display storeys with inline edit via a custom approach (simplified)
-            # We'll use a mini CRUD for storeys (not using generic crud_table because of nested nature)
-            # For brevity, we'll show a simple list with edit/delete and a form.
-            # (You can extend this later.)
 
             for storey in storeys:
                 col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 1])
@@ -604,10 +602,101 @@ def page_bim():
 
     with tab3:
         st.subheader("Spaces")
-        # Similar pattern to Storeys – would need nested selection.
-        st.info("Spaces management: select a building and storey, then manage spaces. (Mock data available, but UI simplification here)")
-        # We'll just show a message; you can expand later.
-        st.info("Spaces CRUD is available in the code structure; for brevity, this tab is a placeholder.")
+        buildings = st.session_state.buildings_data
+        if not buildings:
+            st.warning("Please create a building first.")
+            return
+        building_names = {b["id"]: b["name"] for b in buildings}
+        selected_building_id = st.selectbox(
+            "Select Building",
+            options=list(building_names.keys()),
+            format_func=lambda x: building_names[x],
+            key="space_building_select"
+        )
+        if selected_building_id:
+            if "storeys_data" not in st.session_state:
+                st.session_state.storeys_data = {}
+            if selected_building_id not in st.session_state.storeys_data:
+                st.session_state.storeys_data[selected_building_id] = []
+            storeys = st.session_state.storeys_data[selected_building_id]
+            if not storeys:
+                st.warning("Please create a storey first.")
+                return
+            storey_options = {s["id"]: s["level"] for s in storeys}
+            selected_storey_id = st.selectbox(
+                "Select Storey",
+                options=list(storey_options.keys()),
+                format_func=lambda x: storey_options[x],
+                key="space_storey_select"
+            )
+            if selected_storey_id:
+                if "spaces_data" not in st.session_state:
+                    st.session_state.spaces_data = {}
+                key = f"{selected_building_id}_{selected_storey_id}"
+                if key not in st.session_state.spaces_data:
+                    st.session_state.spaces_data[key] = []
+                spaces = st.session_state.spaces_data[key]
+
+                for space in spaces:
+                    col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 1, 1, 1, 1])
+                    with col1:
+                        st.write(space.get("name", ""))
+                    with col2:
+                        st.write(space.get("space_type", ""))
+                    with col3:
+                        st.write(space.get("area", 0))
+                    with col4:
+                        st.write(space.get("height", 0))
+                    with col5:
+                        if st.button("✏️", key=f"edit_space_{space['id']}"):
+                            st.session_state[f"editing_space_{key}"] = space
+                    with col6:
+                        if st.button("🗑️", key=f"del_space_{space['id']}"):
+                            if st.checkbox(f"Confirm delete?", key=f"confirm_space_{space['id']}"):
+                                st.session_state.spaces_data[key] = [s for s in spaces if s['id'] != space['id']]
+                                st.success("Space deleted!")
+                                st.rerun()
+
+                    editing_key = f"editing_space_{key}"
+                    if st.session_state.get(editing_key, {}).get("id") == space.get("id"):
+                        with st.expander(f"Edit {space.get('name', '')}", expanded=True):
+                            with st.form(key=f"edit_space_form_{space['id']}"):
+                                new_name = st.text_input("Name", value=space.get('name', ''))
+                                new_type = st.text_input("Space Type", value=space.get('space_type', ''))
+                                new_area = st.number_input("Area (m²)", value=space.get('area', 0.0), step=5.0)
+                                new_height = st.number_input("Height (m)", value=space.get('height', 0.0), step=0.1)
+                                if st.form_submit_button("Update"):
+                                    for s in st.session_state.spaces_data[key]:
+                                        if s['id'] == space['id']:
+                                            s['name'] = new_name
+                                            s['space_type'] = new_type
+                                            s['area'] = new_area
+                                            s['height'] = new_height
+                                            break
+                                    st.success("Space updated!")
+                                    st.session_state[editing_key] = None
+                                    st.rerun()
+                        if st.button("Cancel", key=f"cancel_space_edit_{space['id']}"):
+                            st.session_state[editing_key] = None
+                            st.rerun()
+
+                with st.expander("➕ Add New Space"):
+                    with st.form("new_space_form"):
+                        name = st.text_input("Space Name")
+                        space_type = st.text_input("Space Type (e.g., Office, Conference, Lobby)")
+                        area = st.number_input("Area (m²)", step=5.0, value=20.0)
+                        height = st.number_input("Height (m)", step=0.1, value=3.0)
+                        if st.form_submit_button("Create"):
+                            new_id = max([s['id'] for s in spaces]) + 1 if spaces else 1
+                            st.session_state.spaces_data[key].append({
+                                "id": new_id,
+                                "name": name,
+                                "space_type": space_type,
+                                "area": area,
+                                "height": height
+                            })
+                            st.success("Space created!")
+                            st.rerun()
 
     with tab4:
         st.info("Elements management coming soon.")
