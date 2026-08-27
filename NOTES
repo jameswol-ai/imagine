@@ -813,3 +813,94 @@ modules/
     ├── qs.py
     └── project_manager.py
 
+
+
+
+imagine/
+├── requirements.txt
+├── streamlit_app.py
+└── modules/
+    ├── __init__.py
+    ├── utils/
+    │   ├── __init__.py
+    │   ├── crud.py
+    │   └── mock_data.py
+    ├── dashboard/
+    │   ├── __init__.py
+    │   └── dashboard.py
+    ├── projects/
+    │   ├── __init__.py
+    │   └── project_page.py
+    ├── architecture/
+    │   ├── __init__.py
+    │   ├── synthesis.py
+    │   ├── zoning.py
+    │   └── room_programming.py
+    ├── bim/
+    │   ├── __init__.py
+    │   ├── buildings.py
+    │   ├── storeys.py
+    │   ├── spaces.py
+    │   └── ifc_export.py
+    ├── structural/
+    │   ├── __init__.py
+    │   ├── eurocode.py
+    │   ├── beam_design.py
+    │   ├── column_design.py
+    │   ├── slab_design.py
+    │   ├── foundation_design.py
+    │   ├── retaining_walls.py
+    │   └── steel_connections.py
+    ├── mep/
+    │   ├── __init__.py
+    │   ├── analysis.py
+    │   ├── hvac.py
+    │   ├── electrical.py
+    │   ├── plumbing.py
+    │   └── energy_simulation.py
+    ├── costing/
+    │   ├── __init__.py
+    │   ├── boq.py
+    │   ├── procurement.py
+    │   ├── forex.py
+    │   ├── escalation.py
+    │   └── risk_analysis.py
+    ├── governance/
+    │   ├── __init__.py
+    │   └── approvals.py
+    ├── construction/
+    │   ├── __init__.py
+    │   ├── rfis.py
+    │   ├── submittals.py
+    │   ├── site_diary.py
+    │   ├── progress_tracking.py
+    │   └── snagging.py
+    ├── documents/
+    │   ├── __init__.py
+    │   ├── documents.py
+    │   ├── revisions.py
+    │   ├── drawing_register.py
+    │   ├── specifications.py
+    │   └── transmittals.py
+    ├── analytics/
+    │   ├── __init__.py
+    │   ├── portfolio.py
+    │   ├── reporting.py
+    │   ├── forecasting.py
+    │   └── kpis.py
+    ├── digital_twin/
+    │   ├── __init__.py
+    │   ├── assets.py
+    │   ├── sensors.py
+    │   ├── telemetry.py
+    │   ├── maintenance.py
+    │   └── predictive_ai.py
+    └── ai/
+        ├── __init__.py
+        ├── architect.py
+        ├── engineer.py
+        ├── mep.py
+        ├── qs.py
+        └── project_manager.py
+
+
