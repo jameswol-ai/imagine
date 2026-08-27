@@ -92,3 +92,4 @@ class ArchitectureSynthesisEngine:
             curr_y += zone_length
 
         return boxes
+
