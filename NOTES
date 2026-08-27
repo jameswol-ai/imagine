@@ -904,3 +904,137 @@ imagine/
         └── project_manager.py
 
 
+
+streamlit_app.py
+│
+├── Overview
+│
+├── PROJECTS
+│   ├── Projects          → modules.projects.project_page
+│   ├── Approvals         → projects.approvals.ui
+│   ├── Revisions         → projects.revisions.ui
+│   ├── Workflows         → projects.workflows.ui
+│   └── Governance        → projects.governance.ui
+│
+├── ARCHITECTURE
+│   ├── Zoning            → architecture.zoning.ui
+│   ├── Site Planning     → architecture.site_planning.ui
+│   ├── Floor Planning    → architecture.floor_planning.ui
+│   ├── Room Programming  → architecture.room_programming.ui
+│   ├── Compliance        → architecture.compliance.ui
+│   └── Generative Design → architecture.generative_design.ui
+│
+├── STRUCTURAL
+│   ├── EN 1990
+│   ├── EN 1991
+│   ├── EN 1992
+│   ├── EN 1993
+│   ├── EN 1995
+│   ├── EN 1997
+│   ├── EN 1998
+│   ├── Beam Design
+│   ├── Column Design
+│   ├── Slab Design
+│   ├── Foundation Design
+│   ├── Retaining Walls
+│   ├── Steel Connections
+│   └── Finite Element Analysis
+│
+├── BIM
+│   ├── Buildings
+│   ├── Storeys
+│   ├── Spaces
+│   ├── Elements
+│   ├── IFC
+│   ├── COBie
+│   └── Digital Twin
+│
+├── MEP
+│   ├── HVAC
+│   ├── Ventilation
+│   ├── Chilled Water
+│   ├── Energy Simulation
+│   ├── Electrical Load Analysis
+│   ├── Transformers
+│   ├── Generators
+│   ├── Cable Sizing
+│   ├── Solar PV
+│   ├── Water Supply
+│   ├── Drainage
+│   ├── Stormwater
+│   ├── Sewer Networks
+│   └── Firefighting
+│
+├── COSTING
+│   ├── BOQ
+│   ├── Quantity Takeoff
+│   ├── Procurement
+│   ├── Forex
+│   ├── Inflation
+│   ├── Risk Analysis
+│   └── Cashflow
+│
+├── CONSTRUCTION
+│   ├── Planning
+│   ├── Scheduling
+│   ├── RFIs
+│   ├── Submittals
+│   ├── Variations
+│   ├── Snagging
+│   ├── Progress Tracking
+│   └── Site Diaries
+│
+├── DOCUMENTS
+│   ├── Drawing Management
+│   ├── Specifications
+│   ├── Contracts
+│   ├── Reports
+│   ├── Version Control
+│   └── Archives
+│
+├── AI
+│   ├── IMAGINE Architect
+│   ├── IMAGINE Engineer
+│   ├── IMAGINE MEP
+│   ├── IMAGINE QS
+│   ├── IMAGINE PM
+│   ├── Vector Store
+│   ├── RAG
+│   └── Prompt Library
+│
+├── ANALYTICS
+│   ├── Dashboards
+│   ├── KPIs
+│   ├── Portfolio
+│   ├── Forecasting
+│   └── Reporting
+│
+├── REGIONAL
+│   ├── Uganda
+│   ├── Kenya
+│   ├── Tanzania
+│   ├── Rwanda
+│   ├── South Sudan
+│   ├── Codes
+│   └── Zoning Laws
+│
+├── INTEGRATIONS
+│   ├── Microsoft
+│   ├── AutoCAD
+│   ├── Revit
+│   ├── Archicad
+│   ├── Tekla
+│   ├── IfcOpenShell
+│   ├── ArcGIS
+│   ├── Azure
+│   └── Mapbox
+│
+├── DIGITAL TWIN
+│   ├── Assets
+│   ├── Sensors
+│   ├── Telemetry
+│   ├── Energy
+│   ├── Maintenance
+│   └── Predictive AI
+│
+└── System Health
