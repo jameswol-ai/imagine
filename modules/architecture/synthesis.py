@@ -6,7 +6,7 @@ App: imagine
 
 from typing import Any, Dict, List
 
-# Top-level constant export
+# Explicit top-level constant export
 STATE_KEY: str = "architecture_layouts"
 
 
