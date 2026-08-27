@@ -10,6 +10,7 @@ relationship targets such as "Approval" and "Revision".
 
 from __future__ import annotations
 
+
 # ============================================================
 # CORE DATABASE MODELS
 # ============================================================
@@ -17,11 +18,12 @@ from __future__ import annotations
 from database.models.organization import Organization  # noqa: F401
 from database.models.user import User  # noqa: F401
 
+
 # ============================================================
 # PROJECT DOMAIN MODELS
 # ============================================================
 
-# Import relationship targets before Project.
+# Relationship targets must be imported before Project.
 from projects.approvals.models import Approval  # noqa: F401
 from projects.revisions.models import Revision  # noqa: F401
 
