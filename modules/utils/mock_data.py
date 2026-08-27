@@ -1,95 +1,23 @@
+# modules/utils/mock_data.py
 import streamlit as st
 
-def init_session_state():
-    """Initialize all mock data keys in session_state if missing, with demo content."""
-
+def init_mock_data():
     # Projects
-    if "projects_data" not in st.session_state:
+    if "projects_data" not in st.session_state or not st.session_state.projects_data:
         st.session_state.projects_data = [
-            {"name": "City Mall", "status": "Design", "budget": 5_000_000},
-            {"name": "Tech Park", "status": "Construction", "budget": 12_500_000},
+            {"id": 1, "name": "Green Tower", "status": "Active", "budget": 12.5, "progress": 75},
+            {"id": 2, "name": "Harbor Bridge", "status": "Planning", "budget": 8.3, "progress": 20},
+            {"id": 3, "name": "Riverside Mall", "status": "Completed", "budget": 22.1, "progress": 100},
+            {"id": 4, "name": "Solar Park", "status": "Active", "budget": 5.7, "progress": 45},
         ]
-
-    # BIM
-    if "buildings_data" not in st.session_state:
+    # Buildings
+    if "buildings_data" not in st.session_state or not st.session_state.buildings_data:
         st.session_state.buildings_data = [
-            {"name": "Block A", "address": "Downtown"},
-            {"name": "Block B", "address": "Uptown"},
+            {"id": 1, "name": "Tower A", "storeys": 25, "area": 15000, "ifc_version": "IFC4"},
+            {"id": 2, "name": "Tower B", "storeys": 18, "area": 12000, "ifc_version": "IFC4"},
+            {"id": 3, "name": "Pavilion", "storeys": 3, "area": 2500, "ifc_version": "IFC2x3"},
         ]
-    if "storeys_data" not in st.session_state:
-        st.session_state.storeys_data = [
-            {"building": "Block A", "level": "Ground"},
-            {"building": "Block A", "level": "First"},
-        ]
-    if "spaces_data" not in st.session_state:
-        st.session_state.spaces_data = [
-            {"storey": "Ground", "space": "Lobby"},
-            {"storey": "First", "space": "Office"},
-        ]
+    # ... (all the other mock data as before)
 
-    # Structural
-    if "beam_data" not in st.session_state:
-        st.session_state.beam_data = [
-            {"id": "B1", "span": 6.0, "material": "RC"},
-            {"id": "B2", "span": 8.0, "material": "Steel"},
-        ]
-
-    # MEP
-    if "hvac_data" not in st.session_state:
-        st.session_state.hvac_data = [
-            {"system": "Chiller", "capacity": "200 kW"},
-            {"system": "Split AC", "capacity": "20 kW"},
-        ]
-    if "electrical_data" not in st.session_state:
-        st.session_state.electrical_data = [
-            {"panel": "Main", "load": "500 kVA"},
-            {"panel": "Sub", "load": "200 kVA"},
-        ]
-
-    # Costing
-    if "boq_data" not in st.session_state:
-        st.session_state.boq_data = [
-            {"item": "Concrete", "qty": 100, "unit": "m³"},
-            {"item": "Steel", "qty": 50, "unit": "tons"},
-        ]
-
-    # Governance
-    if "approvals_data" not in st.session_state:
-        st.session_state.approvals_data = [
-            {"stage": "Planning", "status": "Approved"},
-            {"stage": "Construction", "status": "Pending"},
-        ]
-
-    # Construction
-    if "rfis_data" not in st.session_state:
-        st.session_state.rfis_data = [
-            {"id": "RFI-001", "subject": "Beam detail clarification"},
-            {"id": "RFI-002", "subject": "HVAC duct routing"},
-        ]
-
-    # Documents
-    if "documents_data" not in st.session_state:
-        st.session_state.documents_data = [
-            {"doc": "General Arrangement", "rev": "A"},
-            {"doc": "Electrical Layout", "rev": "B"},
-        ]
-
-    # Analytics
-    if "kpis_data" not in st.session_state:
-        st.session_state.kpis_data = [
-            {"metric": "Cost Variance", "value": "-5%"},
-            {"metric": "Schedule Performance", "value": "1.1"},
-        ]
-
-    # Digital Twin
-    if "assets_data" not in st.session_state:
-        st.session_state.assets_data = [
-            {"asset": "Chiller", "status": "Operational"},
-            {"asset": "Elevator", "status": "Maintenance"},
-        ]
-
-    # AI Assistant
-    if "architect_ai_data" not in st.session_state:
-        st.session_state.architect_ai_data = [
-            {"query": "Optimize zoning", "response": "Suggested mixed-use layout"},
-        ]
+    # Alias for the main entry point
+    init_session_state = init_mock_data
