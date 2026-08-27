@@ -642,3 +642,26 @@ modules/documents/
 └── transmittals.py
 
 
+
+modules/analytics/
+├── portfolio.py
+├── reporting.py
+├── forecasting.py
+└── kpis.py
+
+modules/digital_twin/
+├── assets.py
+├── sensors.py
+├── telemetry.py
+├── maintenance.py
+└── predictive_ai.py
+
+modules/ai/
+├── architect.py
+├── engineer.py
+├── mep.py
+├── qs.py
+└── project_manager.py
+
+
+
