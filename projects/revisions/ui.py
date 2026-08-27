@@ -6,6 +6,7 @@ Project Revisions Streamlit UI.
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 import streamlit as st
 
@@ -15,7 +16,6 @@ def _get_attr(
     name: str,
     default: Any = None,
 ) -> Any:
-
     return getattr(
         obj,
         name,
@@ -24,12 +24,21 @@ def _get_attr(
 
 
 def _session():
-
-    from database.connection import (
-        SessionLocal,
-    )
+    from database.connection import SessionLocal
 
     return SessionLocal()
+
+
+def _parse_project_id(value: str) -> UUID | None:
+    value = value.strip()
+
+    if not value:
+        return None
+
+    try:
+        return UUID(value)
+    except ValueError:
+        return None
 
 
 def render_revisions() -> None:
@@ -67,13 +76,21 @@ def render_revisions() -> None:
 
         return
 
-    project_id = st.number_input(
+    project_id_text = st.text_input(
         "Project ID",
-        min_value=1,
-        value=1,
-        step=1,
         key="revisions_project_id",
+        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        help="Enter the UUID of an existing project.",
     )
+
+    project_id = _parse_project_id(
+        project_id_text
+    )
+
+    if project_id_text.strip() and project_id is None:
+        st.error(
+            "Project ID must be a valid UUID."
+        )
 
     st.subheader(
         "Create Revision"
@@ -101,7 +118,13 @@ def render_revisions() -> None:
 
     if submitted:
 
-        if not description.strip():
+        if project_id is None:
+
+            st.error(
+                "A valid Project UUID is required."
+            )
+
+        elif not description.strip():
 
             st.error(
                 "Revision description is required."
@@ -114,9 +137,7 @@ def render_revisions() -> None:
             try:
 
                 payload = RevisionCreate(
-                    project_id=int(
-                        project_id
-                    ),
+                    project_id=project_id,
                     description=description.strip(),
                     created_by=int(
                         created_by
@@ -141,7 +162,6 @@ def render_revisions() -> None:
             except Exception as exc:
 
                 if db is not None:
-
                     db.rollback()
 
                 st.error(
@@ -157,10 +177,17 @@ def render_revisions() -> None:
             finally:
 
                 if db is not None:
-
                     db.close()
 
     st.divider()
+
+    if project_id is None:
+
+        st.info(
+            "Enter a valid Project UUID to load revision records."
+        )
+
+        return
 
     db = None
 
@@ -170,9 +197,7 @@ def render_revisions() -> None:
 
         revisions = list_revisions(
             db=db,
-            project_id=int(
-                project_id
-            ),
+            project_id=project_id,
         )
 
         revisions = list(
@@ -243,5 +268,4 @@ def render_revisions() -> None:
     finally:
 
         if db is not None:
-
             db.close()
