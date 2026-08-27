@@ -1,4 +1,4 @@
-# streamlit_app.py (full)
+# streamlit_app.py
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -58,7 +58,8 @@ def check_authentication():
                     st.session_state.authenticated = True
                     st.session_state.token = token
                     st.session_state.user = username
-                    st.session_state.role = "Project Manager"  # you can fetch from /users/me later
+                    # Optionally fetch user details from /users/me
+                    st.session_state.role = "Project Manager"  # placeholder
                     st.rerun()
         st.stop()
 
@@ -119,6 +120,7 @@ def init_session_state():
         st.session_state.editing_project = None
     if "projects_data" not in st.session_state:
         st.session_state.projects_data = None
+    # Add other state variables as needed
 
 init_session_state()
 
@@ -165,12 +167,16 @@ def page_dashboard():
     col4.metric("Open RFIs", "7", "-3")
 
     st.subheader("Project Health")
-    df_proj = pd.DataFrame(api_get("projects") or [])
-    if not df_proj.empty:
-        fig = px.bar(df_proj, x="name", y="progress", color="status", text="progress")
-        st.plotly_chart(fig, use_container_width=True)
+    projects = api_get("projects")
+    if projects:
+        df = pd.DataFrame(projects)
+        if not df.empty:
+            fig = px.bar(df, x="name", y="progress", color="status", text="progress")
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No projects found.")
     else:
-        st.info("No project data available.")
+        st.warning("Could not fetch projects. Is the backend running?")
 
     st.subheader("Recent Activity")
     activity = pd.DataFrame({
@@ -186,13 +192,11 @@ def page_dashboard():
 def page_projects():
     st.title("📁 Projects")
 
-    # Refresh data from API
     if st.button("🔄 Refresh Projects"):
         st.session_state.projects_data = api_get("projects")
         st.rerun()
 
-    # Load projects from session state or API
-    if "projects_data" not in st.session_state or st.session_state.projects_data is None:
+    if st.session_state.projects_data is None:
         st.session_state.projects_data = api_get("projects")
 
     projects = st.session_state.projects_data
@@ -200,7 +204,6 @@ def page_projects():
         st.warning("No projects found or API error.")
         return
 
-    # Display projects as cards with edit/delete
     for idx, project in enumerate(projects):
         col1, col2, col3, col4, col5, col6 = st.columns([3, 2, 2, 2, 1, 1])
         with col1:
@@ -212,7 +215,6 @@ def page_projects():
         with col4:
             st.write(f"{project.get('progress', 0)}%")
         with col5:
-            # Edit button: opens an expander or a modal (we'll use a form in an expander)
             if st.button("✏️", key=f"edit_{project['id']}"):
                 st.session_state.editing_project = project
         with col6:
@@ -220,12 +222,11 @@ def page_projects():
                 if st.checkbox(f"Confirm delete {project['name']}?", key=f"confirm_{project['id']}"):
                     if api_delete(f"projects/{project['id']}"):
                         st.success("Project deleted!")
-                        # Remove from session state
                         st.session_state.projects_data = [p for p in st.session_state.projects_data if p['id'] != project['id']]
                         st.rerun()
                     else:
                         st.error("Delete failed.")
-        # If this project is being edited, show the edit form
+
         if st.session_state.get("editing_project", {}).get("id") == project.get("id"):
             with st.expander(f"Edit {project['name']}", expanded=True):
                 with st.form(key=f"edit_form_{project['id']}"):
@@ -248,12 +249,10 @@ def page_projects():
                             st.rerun()
                         else:
                             st.error("Update failed.")
-            # Close button to stop editing
             if st.button("Cancel", key=f"cancel_edit_{project['id']}"):
                 st.session_state.editing_project = None
                 st.rerun()
 
-    # Add new project form (existing)
     with st.expander("➕ Add New Project"):
         with st.form("new_project_form"):
             name = st.text_input("Project Name")
@@ -276,47 +275,74 @@ def page_projects():
                     st.error("Creation failed.")
 
 # ---------------------------
-# Placeholder pages (stubs)
+# PAGE: ARCHITECTURE (stub)
 # ---------------------------
 def page_architecture():
     st.title("📐 Architecture")
-    st.info("Architecture pages coming soon.")
+    st.info("Architecture pages coming soon. (Will integrate with generative_design, zoning, etc.)")
 
+# ---------------------------
+# PAGE: BIM (stub)
+# ---------------------------
 def page_bim():
     st.title("🏛️ BIM")
-    st.info("BIM pages coming soon.")
+    st.info("BIM pages coming soon. (Buildings, Storeys, Spaces, Elements, IFC, COBie, Digital Twin)")
 
+# ---------------------------
+# PAGE: STRUCTURAL (stub)
+# ---------------------------
 def page_structural():
     st.title("🔩 Structural Engineering")
-    st.info("Structural pages coming soon.")
+    st.info("Structural pages coming soon. (Eurocode, beams, columns, etc.)")
 
+# ---------------------------
+# PAGE: MEP (stub)
+# ---------------------------
 def page_mep():
     st.title("⚡ MEP")
-    st.info("MEP pages coming soon.")
+    st.info("MEP pages coming soon. (HVAC, electrical, plumbing)")
 
+# ---------------------------
+# PAGE: COSTING (stub)
+# ---------------------------
 def page_costing():
     st.title("💰 Cost Estimation")
-    st.info("Costing pages coming soon.")
+    st.info("Costing pages coming soon. (BOQ, quantity takeoff, etc.)")
 
+# ---------------------------
+# PAGE: CONSTRUCTION (stub)
+# ---------------------------
 def page_construction():
     st.title("🚧 Construction Management")
-    st.info("Construction pages coming soon.")
+    st.info("Construction pages coming soon. (RFIs, progress tracking, site diaries)")
 
+# ---------------------------
+# PAGE: REGIONAL (stub)
+# ---------------------------
 def page_regional():
     st.title("🌍 Regional – East Africa Codes")
-    st.info("Regional pages coming soon.")
+    st.info("Regional pages coming soon. (Uganda, Kenya, Tanzania, etc.)")
 
+# ---------------------------
+# PAGE: DIGITAL TWIN (stub)
+# ---------------------------
 def page_digital_twin():
     st.title("🔄 Digital Twin – Live Monitoring")
-    st.info("Digital Twin pages coming soon.")
+    st.info("Digital Twin pages coming soon. (Sensors, telemetry, predictive AI)")
 
+# ---------------------------
+# PAGE: AI ASSISTANT (stub)
+# ---------------------------
 def page_ai():
     st.title("🤖 AI Assistant - IMAGINE Architect")
-    st.info("AI Assistant coming soon.")
+    st.info("AI Assistant coming soon. (RAG, prompt library, imagine_architect)")
 
+# ---------------------------
+# PAGE: ANALYTICS (stub)
+# ---------------------------
 def page_analytics():
     st.title("📈 Analytics & Reporting")
-    st.info("Analytics pages coming soon.")
+    st.info("Analytics pages coming soon. (KPIs, portfolio, forecasting)")
 
 # ---------------------------
 # Route to selected page
