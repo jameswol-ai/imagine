@@ -1,4 +1,3 @@
-# build_all_modules.py
 import os
 
 BASE = "modules"
@@ -27,7 +26,7 @@ def render():
 # Specialised modules content
 # ------------------------------------------------------------------
 
-# Dashboard (already provided)
+# Dashboard
 DASHBOARD_CODE = '''import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -59,7 +58,7 @@ def render():
     st.dataframe(activity, use_container_width=True)
 '''
 
-# Projects (full CRUD)
+# Projects
 PROJECTS_CODE = '''import streamlit as st
 from modules.utils.crud import crud_table
 
@@ -77,7 +76,7 @@ def render():
     )
 '''
 
-# BIM Buildings (CRUD)
+# BIM Buildings
 BIM_BUILDINGS_CODE = '''import streamlit as st
 from modules.utils.crud import crud_table
 
@@ -95,7 +94,7 @@ def render():
     )
 '''
 
-# BIM Storeys (nested)
+# BIM Storeys
 BIM_STOREYS_CODE = '''import streamlit as st
 
 def render():
@@ -171,7 +170,7 @@ def render():
                     st.rerun()
 '''
 
-# BIM Spaces (nested)
+# BIM Spaces
 BIM_SPACES_CODE = '''import streamlit as st
 
 def render():
@@ -265,7 +264,7 @@ def render():
                         st.rerun()
 '''
 
-# BIM IFC Export (file upload + placeholder)
+# BIM IFC Export
 BIM_IFC_CODE = '''import streamlit as st
 
 def render():
@@ -280,7 +279,7 @@ def render():
         st.success("COBie export placeholder (would generate Excel/XML).")
 '''
 
-# Architecture – Synthesis (Generative Design placeholder)
+# Architecture – Synthesis
 ARCH_SYNTHESIS_CODE = '''import streamlit as st
 import pandas as pd
 
@@ -325,7 +324,7 @@ def render():
     )
 '''
 
-# Architecture – Site Planning (placeholder with form)
+# Architecture – Site Planning
 ARCH_SITE_CODE = '''import streamlit as st
 
 def render():
@@ -342,7 +341,7 @@ def render():
         st.info("Visualization placeholder – would show site plan.")
 '''
 
-# Architecture – Floor Planning (placeholder)
+# Architecture – Floor Planning
 ARCH_FLOOR_CODE = '''import streamlit as st
 
 def render():
@@ -372,7 +371,7 @@ def render():
     )
 '''
 
-# Architecture – Compliance (placeholder)
+# Architecture – Compliance
 ARCH_COMPLIANCE_CODE = '''import streamlit as st
 import pandas as pd
 
@@ -391,7 +390,7 @@ def render():
         st.success("Compliance check complete (mock).")
 '''
 
-# Structural Eurocode (interactive calculator)
+# Structural Eurocode
 STRUCT_EUROCODE_CODE = '''import streamlit as st
 import pandas as pd
 
@@ -417,10 +416,7 @@ def render():
         st.success("Load combinations generated (mock).")
 '''
 
-# Structural Beam, Column, Slab, Foundation, Retaining Walls, Steel Connections – all use generic CRUD
-# We'll generate them with CRUD_TEMPLATE.
-
-# MEP Analysis (placeholder)
+# MEP Analysis
 MEP_ANALYSIS_CODE = '''import streamlit as st
 import pandas as pd
 
@@ -436,7 +432,7 @@ def render():
         st.success("Energy analysis complete (mock).")
 '''
 
-# MEP HVAC (placeholder with inputs)
+# MEP HVAC
 MEP_HVAC_CODE = '''import streamlit as st
 
 def render():
@@ -452,7 +448,7 @@ def render():
         st.success("Duct sizing results (mock) - would show diameters and velocities.")
 '''
 
-# MEP Plumbing (placeholder)
+# MEP Plumbing
 MEP_PLUMBING_CODE = '''import streamlit as st
 
 def render():
@@ -469,7 +465,7 @@ def render():
         st.success("Pipe sizing results (mock) - would show diameters and slopes.")
 '''
 
-# MEP Energy Simulation (placeholder)
+# MEP Energy Simulation
 MEP_ENERGY_CODE = '''import streamlit as st
 import pandas as pd
 
@@ -485,7 +481,7 @@ def render():
         st.success("Energy simulation complete (mock).")
 '''
 
-# Costing – Procurement, Forex, Escalation, Risk Analysis – placeholders with forms
+# Costing – Procurement, Forex, Escalation, Risk Analysis
 COSTING_PROCUREMENT_CODE = '''import streamlit as st
 
 def render():
@@ -544,14 +540,13 @@ def render():
     }))
 '''
 
-# Governance – Approvals (simple CRUD)
+# Governance – Approvals
 GOVERNANCE_APPROVALS_CODE = '''import streamlit as st
 from modules.utils.crud import crud_table
 
 def render():
     st.title("🔒 Governance")
     st.subheader("Approvals")
-    # Use a custom data_key for approvals
     if "approvals_data" not in st.session_state:
         st.session_state.approvals_data = [
             {"id": 1, "project": "Green Tower", "type": "Design Review", "status": "Pending"},
@@ -567,7 +562,7 @@ def render():
     )
 '''
 
-# Construction – Submittals, Site Diary, Progress Tracking, Snagging – placeholders
+# Construction – Submittals, Site Diary, Progress, Snagging
 CONSTRUCTION_SUBMITTALS_CODE = '''import streamlit as st
 from modules.utils.crud import crud_table
 
@@ -635,7 +630,7 @@ def render():
     )
 '''
 
-# Documents – all placeholders with upload/list
+# Documents – Main, Revisions, Drawing Register, Specs, Transmittals
 DOCUMENTS_MAIN_CODE = '''import streamlit as st
 def render():
     st.subheader("Document Management")
@@ -767,7 +762,7 @@ def render():
     st.dataframe(kpis)
 '''
 
-# Digital Twin – Assets (CRUD)
+# Digital Twin – Assets, Sensors, Telemetry, Maintenance, Predictive AI
 DIGITAL_TWIN_ASSETS_CODE = '''import streamlit as st
 from modules.utils.crud import crud_table
 
@@ -788,8 +783,27 @@ def render():
     )
 '''
 
-# Digital Twin – Sensors (CRUD already generated)
-# Digital Twin – Telemetry (placeholder with chart)
+DIGITAL_TWIN_SENSORS_CODE = '''import streamlit as st
+from modules.utils.crud import crud_table
+
+def render():
+    st.subheader("Sensors")
+    if "sensor_data" not in st.session_state:
+        st.session_state.sensor_data = [
+            {"id": 1, "sensor_id": "TEMP-01", "location": "Lobby", "value": 23.5, "unit": "°C"},
+            {"id": 2, "sensor_id": "HUM-01", "location": "Lobby", "value": 42, "unit": "%"},
+            {"id": 3, "sensor_id": "ENERGY-01", "location": "Main", "value": 320, "unit": "kW"},
+        ]
+    crud_table(
+        data_key="sensor_data",
+        item_name="sensor",
+        endpoint="digital_twin/sensors",
+        display_fields=["sensor_id", "location", "value", "unit"],
+        edit_fields={"sensor_id": "text", "location": "text", "value": "number", "unit": "text"},
+        add_fields={"sensor_id": "text", "location": "text", "value": "number", "unit": "text"}
+    )
+'''
+
 DIGITAL_TWIN_TELEMETRY_CODE = '''import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -808,7 +822,6 @@ def render():
     st.success("Live telemetry displayed (mock).")
 '''
 
-# Digital Twin – Maintenance (CRUD)
 DIGITAL_TWIN_MAINTENANCE_CODE = '''import streamlit as st
 from modules.utils.crud import crud_table
 
@@ -828,7 +841,6 @@ def render():
     )
 '''
 
-# Digital Twin – Predictive AI (placeholder)
 DIGITAL_TWIN_PREDICTIVE_AI_CODE = '''import streamlit as st
 
 def render():
@@ -838,7 +850,7 @@ def render():
         st.success("Prediction: No anomalies detected. Next maintenance in 14 days (mock).")
 '''
 
-# AI Assistant – all tabs (simple chat interface)
+# AI Assistant – all tabs
 AI_ARCHITECT_CODE = '''import streamlit as st
 
 def render():
@@ -886,61 +898,49 @@ def render():
 '''
 
 # ------------------------------------------------------------------
-# Mapping module paths to their content
+# Mapping of special modules (non-CRUD)
 # ------------------------------------------------------------------
 MODULE_CONTENTS = {
-    # Dashboard
     "modules/dashboard/dashboard.py": DASHBOARD_CODE,
-    # Projects
     "modules/projects/project_page.py": PROJECTS_CODE,
-    # Architecture
     "modules/architecture/synthesis.py": ARCH_SYNTHESIS_CODE,
     "modules/architecture/zoning.py": ARCH_ZONING_CODE,
     "modules/architecture/site_planning.py": ARCH_SITE_CODE,
     "modules/architecture/floor_planning.py": ARCH_FLOOR_CODE,
     "modules/architecture/room_programming.py": ARCH_ROOM_CODE,
     "modules/architecture/compliance.py": ARCH_COMPLIANCE_CODE,
-    # BIM
     "modules/bim/buildings.py": BIM_BUILDINGS_CODE,
     "modules/bim/storeys.py": BIM_STOREYS_CODE,
     "modules/bim/spaces.py": BIM_SPACES_CODE,
     "modules/bim/ifc_export.py": BIM_IFC_CODE,
-    # Structural
     "modules/structural/eurocode.py": STRUCT_EUROCODE_CODE,
-    # MEP
     "modules/mep/analysis.py": MEP_ANALYSIS_CODE,
     "modules/mep/hvac.py": MEP_HVAC_CODE,
     "modules/mep/plumbing.py": MEP_PLUMBING_CODE,
     "modules/mep/energy_simulation.py": MEP_ENERGY_CODE,
-    # Costing
     "modules/costing/procurement.py": COSTING_PROCUREMENT_CODE,
     "modules/costing/forex.py": COSTING_FOREX_CODE,
     "modules/costing/escalation.py": COSTING_ESCALATION_CODE,
     "modules/costing/risk_analysis.py": COSTING_RISK_CODE,
-    # Governance
     "modules/governance/approvals.py": GOVERNANCE_APPROVALS_CODE,
-    # Construction
     "modules/construction/submittals.py": CONSTRUCTION_SUBMITTALS_CODE,
     "modules/construction/site_diary.py": CONSTRUCTION_SITE_DIARY_CODE,
     "modules/construction/progress_tracking.py": CONSTRUCTION_PROGRESS_CODE,
     "modules/construction/snagging.py": CONSTRUCTION_SNAGGING_CODE,
-    # Documents
     "modules/documents/documents.py": DOCUMENTS_MAIN_CODE,
     "modules/documents/revisions.py": DOCUMENTS_REVISIONS_CODE,
     "modules/documents/drawing_register.py": DOCUMENTS_DRAWING_REGISTER_CODE,
     "modules/documents/specifications.py": DOCUMENTS_SPECIFICATIONS_CODE,
     "modules/documents/transmittals.py": DOCUMENTS_TRANSMITTALS_CODE,
-    # Analytics
     "modules/analytics/portfolio.py": ANALYTICS_PORTFOLIO_CODE,
     "modules/analytics/reporting.py": ANALYTICS_REPORTING_CODE,
     "modules/analytics/forecasting.py": ANALYTICS_FORECASTING_CODE,
     "modules/analytics/kpis.py": ANALYTICS_KPIS_CODE,
-    # Digital Twin
     "modules/digital_twin/assets.py": DIGITAL_TWIN_ASSETS_CODE,
+    "modules/digital_twin/sensors.py": DIGITAL_TWIN_SENSORS_CODE,
     "modules/digital_twin/telemetry.py": DIGITAL_TWIN_TELEMETRY_CODE,
     "modules/digital_twin/maintenance.py": DIGITAL_TWIN_MAINTENANCE_CODE,
     "modules/digital_twin/predictive_ai.py": DIGITAL_TWIN_PREDICTIVE_AI_CODE,
-    # AI Assistant
     "modules/ai/architect.py": AI_ARCHITECT_CODE,
     "modules/ai/engineer.py": AI_ENGINEER_CODE,
     "modules/ai/mep.py": AI_MEP_CODE,
@@ -1024,15 +1024,6 @@ CRUD_MODULES = {
         "edit_fields": {"rfi_number": "text", "subject": "text", "status": "text"},
         "add_fields": {"rfi_number": "text", "subject": "text", "status": "text"}
     },
-    "digital_twin/sensors": {
-        "title": "Sensors",
-        "data_key": "sensor_data",
-        "item_name": "sensor",
-        "endpoint": "digital_twin/sensors",
-        "display_fields": ["sensor_id", "location", "value", "unit"],
-        "edit_fields": {"sensor_id": "text", "location": "text", "value": "number", "unit": "text"},
-        "add_fields": {"sensor_id": "text", "location": "text", "value": "number", "unit": "text"}
-    },
     "mep/electrical": {
         "title": "Electrical Panels",
         "data_key": "electrical_data",
@@ -1041,15 +1032,6 @@ CRUD_MODULES = {
         "display_fields": ["panel", "total_load", "reserve"],
         "edit_fields": {"panel": "text", "total_load": "number", "reserve": "number"},
         "add_fields": {"panel": "text", "total_load": "number", "reserve": "number"}
-    },
-    "architecture/zoning": {
-        "title": "Zoning",
-        "data_key": "zoning_data",
-        "item_name": "zoning",
-        "endpoint": "architecture/zoning",
-        "display_fields": ["zone_type", "max_height", "coverage", "setback"],
-        "edit_fields": {"zone_type": "text", "max_height": "number", "coverage": "number", "setback": "number"},
-        "add_fields": {"zone_type": "text", "max_height": "number", "coverage": "number", "setback": "number"}
     },
     "architecture/room_programming": {
         "title": "Room Programming",
@@ -1071,7 +1053,7 @@ def write_file(path, content):
         f.write(content)
 
 def build_all_modules():
-    # 1. Create utils with crud.py and mock_data.py (if not already present)
+    # 1. Create utils with crud.py and mock_data.py
     write_file("modules/utils/crud.py", '''import streamlit as st
 def crud_table(data_key, item_name, endpoint, id_field="id", display_fields=None, edit_fields=None, add_fields=None):
     data = st.session_state.get(data_key, [])
@@ -1301,11 +1283,11 @@ def init_mock_data():
         st.session_state.dt_maintenance_data = []
 ''')
 
-    # 2. Write the specialised modules
+    # 2. Write the special modules
     for path, content in MODULE_CONTENTS.items():
         write_file(path, content)
 
-    # 3. Write the CRUD modules using template
+    # 3. Write CRUD modules using template
     for module_path, config in CRUD_MODULES.items():
         folder, file = module_path.split("/")
         path = f"{BASE}/{folder}/{file}.py"
@@ -1320,7 +1302,7 @@ def init_mock_data():
         )
         write_file(path, content)
 
-    # 4. Write init.py files for all folders (if not present)
+    # 4. Create __init__.py files
     for root, dirs, files in os.walk(BASE):
         for d in dirs:
             init_path = os.path.join(root, d, "__init__.py")
