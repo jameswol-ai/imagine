@@ -9,6 +9,49 @@ Version 24.1
 """
 
 import math
+from modules.mep.hvac import HVACService
+from modules.mep.electrical import ElectricalService
+from modules.mep.plumbing import PlumbingService
+
+
+class MEPAnalysis:
+
+    @classmethod
+    def full_building_analysis(
+        cls,
+        area_m2,
+        occupancy_type,
+        occupants,
+        bathrooms
+    ):
+
+        hvac = HVACService.cooling_load(
+            area_m2,
+            occupancy_type
+        )
+
+        electrical = ElectricalService.connected_load(
+            area_m2,
+            occupancy_type
+        )
+
+        plumbing = PlumbingService.water_demand(
+            occupants
+        )
+
+        wsfu = PlumbingService.wsfu(
+            bathrooms,
+            area_m2
+        )
+
+        return {
+            "hvac": hvac,
+            "electrical": electrical,
+            "plumbing": plumbing,
+            "wsfu": wsfu
+        }
+
+
 
 
 class MEPAnalysis:
