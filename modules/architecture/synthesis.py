@@ -4,12 +4,11 @@ Path: modules/architecture/synthesis.py
 App: imagine
 """
 
-import math
-import random
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 from modules.utils.crud import CRUDService
 
-STATE_KEY = "architecture_layouts"
+# Explicit top-level constant export
+STATE_KEY: str = "architecture_layouts"
 
 
 class ArchitectureSynthesisEngine:
@@ -27,11 +26,10 @@ class ArchitectureSynthesisEngine:
         try:
             site_area = site_width * site_length
             max_allowable_gfa = site_area * target_far
-            footprint_area = site_area * 0.55  # 55% footprint coverage assumption
+            footprint_area = site_area * 0.55
             total_gfa = min(footprint_area * total_floors, max_allowable_gfa)
             achieved_far = total_gfa / site_area if site_area > 0 else 0.0
 
-            # Spatial program distribution based on building typology
             distributions = {
                 "Residential": {"Living/Dining": 0.40, "Bedrooms": 0.30, "Circulation": 0.15, "Services/Wet": 0.15},
                 "Commercial Office": {"Open Workspaces": 0.55, "Meeting Rooms": 0.15, "Circulation/Core": 0.18, "Amenities": 0.12},
@@ -49,7 +47,6 @@ class ArchitectureSynthesisEngine:
                 for zone, ratio in program_ratios.items()
             ]
 
-            # Generate procedural 2D bounding boxes for spatial layout concept
             allocated_spaces = ArchitectureSynthesisEngine._layout_zones_grid(
                 site_width=site_width,
                 site_length=site_length,
@@ -75,7 +72,6 @@ class ArchitectureSynthesisEngine:
     def _layout_zones_grid(
         site_width: float, site_length: float, program_ratios: Dict[str, float]
     ) -> List[Dict[str, Any]]:
-        """Procedurally slices site area into relative 2D room/zone bounding boxes."""
         boxes = []
         curr_y = 0.0
         padding = 1.0
