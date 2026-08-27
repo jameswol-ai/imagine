@@ -1,23 +1,15 @@
-"""
-Asset Registry
-"""
+import streamlit as st
 
-import uuid
+class AssetEngine:
+    def __init__(self):
+        pass
 
+    def run(self, inputs=None):
+        return {"assets": "Demo asset management", "inputs": inputs or {}}
 
-class AssetService:
-
-    @staticmethod
-    def create_asset(
-        name,
-        category,
-        location
-    ):
-
-        return {
-            "id": str(uuid.uuid4()),
-            "name": name,
-            "category": category,
-            "location": location,
-            "status": "Operational"
-        }
+def render():
+    st.header("📡 Digital Twin - Assets")
+    engine = AssetEngine()
+    result = engine.run({"asset": "Chiller"})
+    st.table(st.session_state.assets_data)
+    st.json(result)
