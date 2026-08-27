@@ -1,15 +1,28 @@
+"""
+IMAGINE Projects service layer.
+
+All Project ORM access goes through the central Projects model
+registry so SQLAlchemy has every relationship target registered
+before mapper configuration.
+"""
+
+from __future__ import annotations
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .dashboard import aggregate_project_metrics
-from .models import Project
+from projects.model_registry import Project
 from .schemas import ProjectCreate, ProjectUpdate
 
 
 class ProjectService:
 
     @staticmethod
-    async def get(db: AsyncSession, id: str):
+    async def get(
+        db: AsyncSession,
+        id: str,
+    ):
         return await db.get(Project, id)
 
     @staticmethod
@@ -31,7 +44,9 @@ class ProjectService:
         db: AsyncSession,
         data: ProjectCreate,
     ):
-        project = Project(**data.model_dump())
+        project = Project(
+            **data.model_dump()
+        )
 
         db.add(project)
 
@@ -46,7 +61,10 @@ class ProjectService:
         id: str,
         data: ProjectUpdate,
     ):
-        project = await db.get(Project, id)
+        project = await db.get(
+            Project,
+            id,
+        )
 
         if not project:
             return None
@@ -54,7 +72,11 @@ class ProjectService:
         for key, value in data.model_dump(
             exclude_unset=True
         ).items():
-            setattr(project, key, value)
+            setattr(
+                project,
+                key,
+                value,
+            )
 
         await db.commit()
         await db.refresh(project)
@@ -66,7 +88,10 @@ class ProjectService:
         db: AsyncSession,
         id: str,
     ):
-        project = await db.get(Project, id)
+        project = await db.get(
+            Project,
+            id,
+        )
 
         if not project:
             return False
@@ -81,12 +106,15 @@ class ProjectService:
         db: AsyncSession,
     ):
         """
-        Return calculated Dashboard metrics from Projects.
+        Return calculated dashboard metrics from Projects.
         """
+
         projects = await ProjectService.get_all(
             db=db,
             skip=0,
             limit=10000,
         )
 
-        return aggregate_project_metrics(projects)
+        return aggregate_project_metrics(
+            projects
+        )
