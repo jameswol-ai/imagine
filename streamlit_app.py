@@ -1,81 +1,108 @@
+# streamlit_app.py
 """
 IMAGINE v24 Enterprise
 Application Entry Point
 """
 
 import streamlit as st
+import importlib
+import sys
+import os
 
-# Import page modules
-from modules.dashboard.dashboard import DashboardPage
-from modules.projects.project_page import ProjectPage
+# --------------------------------------------------
+# Safe import helper
+# --------------------------------------------------
+
+def safe_import(module_path, func_name="render"):
+    """
+    Safely import a module and return the named function.
+    If the module or function is missing, return a placeholder.
+    """
+    try:
+        module = importlib.import_module(module_path)
+        return getattr(module, func_name)
+    except (ImportError, AttributeError):
+        def placeholder(**kwargs):
+            st.info(f"📦 Module '{module_path}' is not yet implemented. Coming soon.")
+        return placeholder
+
+# --------------------------------------------------
+# Import all page modules using safe_import
+# --------------------------------------------------
+
+# Dashboard
+DashboardPage = safe_import("modules.dashboard.dashboard")
+
+# Projects
+ProjectPage = safe_import("modules.projects.project_page")
 
 # Architecture
-from modules.architecture.synthesis import render as ArchitecturePage
+ArchitecturePage = safe_import("modules.architecture.synthesis")
 
 # BIM
-from modules.bim.buildings import render as BuildingsPage
-from modules.bim.storeys import render as StoreysPage
-from modules.bim.spaces import render as SpacesPage
-from modules.bim.ifc_export import render as IFCExportPage
+BuildingsPage = safe_import("modules.bim.buildings")
+StoreysPage = safe_import("modules.bim.storeys")
+SpacesPage = safe_import("modules.bim.spaces")
+IFCExportPage = safe_import("modules.bim.ifc_export")
 
 # Structural
-from modules.structural.eurocode import render as EurocodePage
-from modules.structural.beam_design import render as BeamPage
-from modules.structural.column_design import render as ColumnPage
-from modules.structural.slab_design import render as SlabPage
-from modules.structural.foundation_design import render as FoundationPage
-from modules.structural.retaining_walls import render as RetainingWallsPage
+EurocodePage = safe_import("modules.structural.eurocode")
+BeamPage = safe_import("modules.structural.beam_design")
+ColumnPage = safe_import("modules.structural.column_design")
+SlabPage = safe_import("modules.structural.slab_design")
+FoundationPage = safe_import("modules.structural.foundation_design")
+RetainingWallsPage = safe_import("modules.structural.retaining_walls")
 
 # MEP
-from modules.mep.analysis import render as MEPAnalysisPage
-from modules.mep.hvac import render as HVACPage
-from modules.mep.electrical import render as ElectricalPage
-from modules.mep.plumbing import render as PlumbingPage
-from modules.mep.energy_simulation import render as EnergySimPage
+MEPAnalysisPage = safe_import("modules.mep.analysis")
+HVACPage = safe_import("modules.mep.hvac")
+ElectricalPage = safe_import("modules.mep.electrical")
+PlumbingPage = safe_import("modules.mep.plumbing")
+EnergySimPage = safe_import("modules.mep.energy_simulation")
 
 # Costing
-from modules.costing.boq import render as BoQPage
-from modules.costing.procurement import render as ProcurementPage
-from modules.costing.forex import render as ForexPage
-from modules.costing.escalation import render as EscalationPage
-from modules.costing.risk_analysis import render as RiskPage
+BoQPage = safe_import("modules.costing.boq")
+ProcurementPage = safe_import("modules.costing.procurement")
+ForexPage = safe_import("modules.costing.forex")
+EscalationPage = safe_import("modules.costing.escalation")
+RiskPage = safe_import("modules.costing.risk_analysis")
 
 # Governance
-from modules.governance.approvals import render as ApprovalsPage
+ApprovalsPage = safe_import("modules.governance.approvals")
 
 # Construction
-from modules.construction.rfis import render as RFIsPage
-from modules.construction.submittals import render as SubmittalsPage
-from modules.construction.site_diary import render as SiteDiaryPage
-from modules.construction.progress_tracking import render as ProgressPage
-from modules.construction.snagging import render as SnaggingPage
+RFIsPage = safe_import("modules.construction.rfis")
+SubmittalsPage = safe_import("modules.construction.submittals")
+SiteDiaryPage = safe_import("modules.construction.site_diary")
+ProgressPage = safe_import("modules.construction.progress_tracking")
+SnaggingPage = safe_import("modules.construction.snagging")
 
 # Documents
-from modules.documents.documents import render as DocumentsPage
-from modules.documents.revisions import render as RevisionsPage
-from modules.documents.drawing_register import render as DrawingRegisterPage
-from modules.documents.specifications import render as SpecificationsPage
-from modules.documents.transmittals import render as TransmittalsPage
+DocumentsPage = safe_import("modules.documents.documents")
+RevisionsPage = safe_import("modules.documents.revisions")
+DrawingRegisterPage = safe_import("modules.documents.drawing_register")
+SpecificationsPage = safe_import("modules.documents.specifications")
+TransmittalsPage = safe_import("modules.documents.transmittals")
 
 # Analytics
-from modules.analytics.portfolio import render as PortfolioPage
-from modules.analytics.reporting import render as ReportingPage
-from modules.analytics.forecasting import render as ForecastingPage
-from modules.analytics.kpis import render as KPIsPage
+PortfolioPage = safe_import("modules.analytics.portfolio")
+ReportingPage = safe_import("modules.analytics.reporting")
+ForecastingPage = safe_import("modules.analytics.forecasting")
+KPIsPage = safe_import("modules.analytics.kpis")
 
 # Digital Twin
-from modules.digital_twin.assets import render as AssetsPage
-from modules.digital_twin.sensors import render as SensorsPage
-from modules.digital_twin.telemetry import render as TelemetryPage
-from modules.digital_twin.maintenance import render as MaintenancePage
-from modules.digital_twin.predictive_ai import render as PredictiveAIPage
+AssetsPage = safe_import("modules.digital_twin.assets")
+SensorsPage = safe_import("modules.digital_twin.sensors")
+TelemetryPage = safe_import("modules.digital_twin.telemetry")
+MaintenancePage = safe_import("modules.digital_twin.maintenance")
+PredictiveAIPage = safe_import("modules.digital_twin.predictive_ai")
 
 # AI Assistant
-from modules.ai.architect import render as ArchitectAIPage
-from modules.ai.engineer import render as EngineerAIPage
-from modules.ai.mep import render as MEPAIPage
-from modules.ai.qs import render as QSAIPage
-from modules.ai.project_manager import render as PMAIPage
+ArchitectAIPage = safe_import("modules.ai.architect")
+EngineerAIPage = safe_import("modules.ai.engineer")
+MEPAIPage = safe_import("modules.ai.mep")
+QSAIPage = safe_import("modules.ai.qs")
+PMAIPage = safe_import("modules.ai.project_manager")
 
 # --------------------------------------------------
 # Page Configuration
@@ -88,7 +115,7 @@ st.set_page_config(
 )
 
 # --------------------------------------------------
-# Authentication
+# Authentication (mock for now)
 # --------------------------------------------------
 
 if "authenticated" not in st.session_state:
@@ -97,14 +124,39 @@ if "authenticated" not in st.session_state:
     st.session_state.role = "Admin"
 
 # --------------------------------------------------
-# Sidebar
+# Session Initialization (mock data)
+# --------------------------------------------------
+
+def init_mock_data():
+    if "projects_data" not in st.session_state:
+        st.session_state.projects_data = [
+            {"id": 1, "name": "Green Tower", "status": "Active", "budget": 12.5, "progress": 75},
+            {"id": 2, "name": "Harbor Bridge", "status": "Planning", "budget": 8.3, "progress": 20},
+            {"id": 3, "name": "Riverside Mall", "status": "Completed", "budget": 22.1, "progress": 100},
+            {"id": 4, "name": "Solar Park", "status": "Active", "budget": 5.7, "progress": 45},
+        ]
+    if "buildings_data" not in st.session_state:
+        st.session_state.buildings_data = [
+            {"id": 1, "name": "Tower A", "storeys": 25, "area": 15000, "ifc_version": "IFC4"},
+            {"id": 2, "name": "Tower B", "storeys": 18, "area": 12000, "ifc_version": "IFC4"},
+            {"id": 3, "name": "Pavilion", "storeys": 3, "area": 2500, "ifc_version": "IFC2x3"},
+        ]
+    if "boq_data" not in st.session_state:
+        st.session_state.boq_data = []
+    # ... add more mock data as needed
+
+init_mock_data()
+
+# --------------------------------------------------
+# Sidebar Navigation
 # --------------------------------------------------
 
 st.sidebar.title("🏗️ IMAGINE")
-st.sidebar.write(f"User: {st.session_state.user}")
-st.sidebar.write(f"Role: {st.session_state.role}")
+st.sidebar.write(f"**User:** {st.session_state.user}")
+st.sidebar.write(f"**Role:** {st.session_state.role}")
+st.sidebar.markdown("---")
 
-page = st.sidebar.selectbox(
+page = st.sidebar.radio(
     "Navigation",
     [
         "Dashboard",
@@ -128,96 +180,96 @@ page = st.sidebar.selectbox(
 # --------------------------------------------------
 
 if page == "Dashboard":
-    DashboardPage.render(st.session_state.projects_data)
+    DashboardPage()
 
 elif page == "Projects":
-    ProjectPage.render()
+    ProjectPage()
 
 elif page == "Architecture":
     ArchitecturePage()
 
 elif page == "BIM":
     st.title("🏛️ BIM")
-    tab = st.tabs(["Buildings", "Storeys", "Spaces", "IFC Export"])
-    with tab[0]: BuildingsPage()
-    with tab[1]: StoreysPage()
-    with tab[2]: SpacesPage()
-    with tab[3]: IFCExportPage()
+    tabs = st.tabs(["Buildings", "Storeys", "Spaces", "IFC Export"])
+    with tabs[0]: BuildingsPage()
+    with tabs[1]: StoreysPage()
+    with tabs[2]: SpacesPage()
+    with tabs[3]: IFCExportPage()
 
 elif page == "Structural":
     st.title("🔩 Structural")
-    tab = st.tabs(["Eurocode", "Beam", "Column", "Slab", "Foundation", "Retaining Walls"])
-    with tab[0]: EurocodePage()
-    with tab[1]: BeamPage()
-    with tab[2]: ColumnPage()
-    with tab[3]: SlabPage()
-    with tab[4]: FoundationPage()
-    with tab[5]: RetainingWallsPage()
+    tabs = st.tabs(["Eurocode", "Beam", "Column", "Slab", "Foundation", "Retaining Walls"])
+    with tabs[0]: EurocodePage()
+    with tabs[1]: BeamPage()
+    with tabs[2]: ColumnPage()
+    with tabs[3]: SlabPage()
+    with tabs[4]: FoundationPage()
+    with tabs[5]: RetainingWallsPage()
 
 elif page == "MEP":
     st.title("⚡ MEP")
-    tab = st.tabs(["Analysis", "HVAC", "Electrical", "Plumbing", "Energy Simulation"])
-    with tab[0]: MEPAnalysisPage()
-    with tab[1]: HVACPage()
-    with tab[2]: ElectricalPage()
-    with tab[3]: PlumbingPage()
-    with tab[4]: EnergySimPage()
+    tabs = st.tabs(["Analysis", "HVAC", "Electrical", "Plumbing", "Energy Simulation"])
+    with tabs[0]: MEPAnalysisPage()
+    with tabs[1]: HVACPage()
+    with tabs[2]: ElectricalPage()
+    with tabs[3]: PlumbingPage()
+    with tabs[4]: EnergySimPage()
 
 elif page == "Costing":
     st.title("💰 Costing")
-    tab = st.tabs(["BoQ", "Procurement", "Forex", "Escalation", "Risk Analysis"])
-    with tab[0]: BoQPage()
-    with tab[1]: ProcurementPage()
-    with tab[2]: ForexPage()
-    with tab[3]: EscalationPage()
-    with tab[4]: RiskPage()
+    tabs = st.tabs(["BoQ", "Procurement", "Forex", "Escalation", "Risk Analysis"])
+    with tabs[0]: BoQPage()
+    with tabs[1]: ProcurementPage()
+    with tabs[2]: ForexPage()
+    with tabs[3]: EscalationPage()
+    with tabs[4]: RiskPage()
 
 elif page == "Governance":
     ApprovalsPage()
 
 elif page == "Construction":
     st.title("🚧 Construction")
-    tab = st.tabs(["RFIs", "Submittals", "Site Diary", "Progress Tracking", "Snagging"])
-    with tab[0]: RFIsPage()
-    with tab[1]: SubmittalsPage()
-    with tab[2]: SiteDiaryPage()
-    with tab[3]: ProgressPage()
-    with tab[4]: SnaggingPage()
+    tabs = st.tabs(["RFIs", "Submittals", "Site Diary", "Progress Tracking", "Snagging"])
+    with tabs[0]: RFIsPage()
+    with tabs[1]: SubmittalsPage()
+    with tabs[2]: SiteDiaryPage()
+    with tabs[3]: ProgressPage()
+    with tabs[4]: SnaggingPage()
 
 elif page == "Documents":
     st.title("📄 Documents")
-    tab = st.tabs(["Documents", "Revisions", "Drawing Register", "Specifications", "Transmittals"])
-    with tab[0]: DocumentsPage()
-    with tab[1]: RevisionsPage()
-    with tab[2]: DrawingRegisterPage()
-    with tab[3]: SpecificationsPage()
-    with tab[4]: TransmittalsPage()
+    tabs = st.tabs(["Documents", "Revisions", "Drawing Register", "Specifications", "Transmittals"])
+    with tabs[0]: DocumentsPage()
+    with tabs[1]: RevisionsPage()
+    with tabs[2]: DrawingRegisterPage()
+    with tabs[3]: SpecificationsPage()
+    with tabs[4]: TransmittalsPage()
 
 elif page == "Analytics":
     st.title("📈 Analytics")
-    tab = st.tabs(["Portfolio", "Reporting", "Forecasting", "KPIs"])
-    with tab[0]: PortfolioPage()
-    with tab[1]: ReportingPage()
-    with tab[2]: ForecastingPage()
-    with tab[3]: KPIsPage()
+    tabs = st.tabs(["Portfolio", "Reporting", "Forecasting", "KPIs"])
+    with tabs[0]: PortfolioPage()
+    with tabs[1]: ReportingPage()
+    with tabs[2]: ForecastingPage()
+    with tabs[3]: KPIsPage()
 
 elif page == "Digital Twin":
     st.title("🔄 Digital Twin")
-    tab = st.tabs(["Assets", "Sensors", "Telemetry", "Maintenance", "Predictive AI"])
-    with tab[0]: AssetsPage()
-    with tab[1]: SensorsPage()
-    with tab[2]: TelemetryPage()
-    with tab[3]: MaintenancePage()
-    with tab[4]: PredictiveAIPage()
+    tabs = st.tabs(["Assets", "Sensors", "Telemetry", "Maintenance", "Predictive AI"])
+    with tabs[0]: AssetsPage()
+    with tabs[1]: SensorsPage()
+    with tabs[2]: TelemetryPage()
+    with tabs[3]: MaintenancePage()
+    with tabs[4]: PredictiveAIPage()
 
 elif page == "AI Assistant":
     st.title("🤖 AI Assistant")
-    tab = st.tabs(["Architect", "Engineer", "MEP", "QS", "Project Manager"])
-    with tab[0]: ArchitectAIPage()
-    with tab[1]: EngineerAIPage()
-    with tab[2]: MEPAIPage()
-    with tab[3]: QSAIPage()
-    with tab[4]: PMAIPage()
+    tabs = st.tabs(["Architect", "Engineer", "MEP", "QS", "Project Manager"])
+    with tabs[0]: ArchitectAIPage()
+    with tabs[1]: EngineerAIPage()
+    with tabs[2]: MEPAIPage()
+    with tabs[3]: QSAIPage()
+    with tabs[4]: PMAIPage()
 
 # --------------------------------------------------
 # Footer
