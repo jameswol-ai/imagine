@@ -6,6 +6,7 @@ Project Approvals Streamlit UI.
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 import streamlit as st
 
@@ -15,7 +16,6 @@ def _get_attr(
     name: str,
     default: Any = None,
 ) -> Any:
-
     return getattr(
         obj,
         name,
@@ -26,7 +26,6 @@ def _get_attr(
 def _status_value(
     value: Any,
 ) -> str:
-
     if value is None:
         return "unknown"
 
@@ -40,11 +39,21 @@ def _status_value(
 
 
 def _session():
-    from database.connection import (
-        SessionLocal,
-    )
+    from database.connection import SessionLocal
 
     return SessionLocal()
+
+
+def _parse_project_id(value: str) -> UUID | None:
+    value = value.strip()
+
+    if not value:
+        return None
+
+    try:
+        return UUID(value)
+    except ValueError:
+        return None
 
 
 def render_approvals() -> None:
@@ -82,13 +91,21 @@ def render_approvals() -> None:
 
         return
 
-    project_id = st.number_input(
+    project_id_text = st.text_input(
         "Project ID",
-        min_value=1,
-        value=1,
-        step=1,
         key="approvals_project_id",
+        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        help="Enter the UUID of an existing project.",
     )
+
+    project_id = _parse_project_id(
+        project_id_text
+    )
+
+    if project_id_text.strip() and project_id is None:
+        st.error(
+            "Project ID must be a valid UUID."
+        )
 
     st.subheader(
         "Create Approval"
@@ -116,24 +133,30 @@ def render_approvals() -> None:
 
     if submitted:
 
-        try:
+        if project_id is None:
 
-            payload = ApprovalCreate(
-                project_id=int(
-                    project_id
-                ),
-                approver_id=int(
-                    approver_id
-                ),
-                comment=(
-                    comment.strip()
-                    or None
-                ),
+            st.error(
+                "A valid Project UUID is required."
             )
 
-            db = _session()
+        else:
+
+            db = None
 
             try:
+
+                payload = ApprovalCreate(
+                    project_id=project_id,
+                    approver_id=int(
+                        approver_id
+                    ),
+                    comment=(
+                        comment.strip()
+                        or None
+                    ),
+                )
+
+                db = _session()
 
                 create_approval(
                     db=db,
@@ -142,34 +165,41 @@ def render_approvals() -> None:
                     comment=payload.comment,
                 )
 
-            except Exception:
+                st.success(
+                    "Approval created successfully."
+                )
 
-                db.rollback()
-                raise
+                st.rerun()
+
+            except Exception as exc:
+
+                if db is not None:
+                    db.rollback()
+
+                st.error(
+                    "Approval could not be created."
+                )
+
+                with st.expander(
+                    "Complete error",
+                    expanded=True,
+                ):
+                    st.exception(exc)
 
             finally:
 
-                db.close()
-
-            st.success(
-                "Approval created successfully."
-            )
-
-            st.rerun()
-
-        except Exception as exc:
-
-            st.error(
-                "Approval could not be created."
-            )
-
-            with st.expander(
-                "Complete error",
-                expanded=True,
-            ):
-                st.exception(exc)
+                if db is not None:
+                    db.close()
 
     st.divider()
+
+    if project_id is None:
+
+        st.info(
+            "Enter a valid Project UUID to load approval records."
+        )
+
+        return
 
     db = None
 
@@ -179,9 +209,7 @@ def render_approvals() -> None:
 
         approvals = list_approvals(
             db=db,
-            project_id=int(
-                project_id
-            ),
+            project_id=project_id,
         )
 
         approvals = list(
@@ -258,5 +286,4 @@ def render_approvals() -> None:
     finally:
 
         if db is not None:
-
             db.close()
