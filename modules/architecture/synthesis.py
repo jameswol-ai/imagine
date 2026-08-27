@@ -1,13 +1,12 @@
 """
-IMAGINE Platform — Architecture Synthesis & Generative Spatial Engine
+IMAGINE Platform — Architecture Synthesis Engine
 Path: modules/architecture/synthesis.py
 App: imagine
 """
 
 from typing import Any, Dict, List
-from modules.utils.crud import CRUDService
 
-# Explicit top-level constant export
+# Top-level constant export
 STATE_KEY: str = "architecture_layouts"
 
 
