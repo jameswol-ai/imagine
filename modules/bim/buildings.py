@@ -7,6 +7,9 @@ App: imagine
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+def render():
+    st.header("🏛️ BIM - Buildings")
+    st.table(st.session_state.buildings_data)
 from modules.utils.crud import CRUDService
 
 STATE_KEY = "bim_buildings"
