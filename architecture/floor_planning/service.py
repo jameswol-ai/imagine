@@ -17,11 +17,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from architecture.site_planning.models import SitePlan
-
-# IMPORTANT:
-# Adjust this import only if the existing Zoning module uses a
-# different model location/name.
-from architecture.zoning.models import Zoning
+from architecture.zoning.models import ZoningRule
 
 from .models import FloorPlan
 from .repository import FloorPlanRepository
@@ -51,7 +47,6 @@ class FloorPlanService:
         zoning_id: UUID | None = None,
         active_only: bool = False,
     ):
-
         return await self.repository.list(
             project_id=project_id,
             site_plan_id=site_plan_id,
@@ -63,7 +58,6 @@ class FloorPlanService:
         self,
         floor_plan_id: UUID,
     ):
-
         return await self.repository.get(
             floor_plan_id
         )
@@ -292,10 +286,10 @@ class FloorPlanService:
     async def _get_zoning(
         self,
         zoning_id: UUID,
-    ) -> Zoning:
+    ) -> ZoningRule:
 
         zoning = await self.session.get(
-            Zoning,
+            ZoningRule,
             zoning_id,
         )
 
@@ -330,7 +324,6 @@ class FloorPlanService:
         *names,
         default=Decimal("0"),
     ):
-
         for name in names:
             if hasattr(zoning, name):
                 value = getattr(zoning, name)
@@ -344,7 +337,7 @@ class FloorPlanService:
         self,
         values: dict,
         site: SitePlan,
-        zoning: Zoning,
+        zoning: ZoningRule,
     ) -> None:
 
         result = self._calculate_constraints(
@@ -353,16 +346,16 @@ class FloorPlanService:
             values=values,
         )
 
-        if not result.overall_compliant:
+        if not result["overall_compliant"]:
             raise ValueError(
                 "Floor plan violates planning constraints: "
-                + "; ".join(result.violations)
+                + "; ".join(result["violations"])
             )
 
     def _calculate_constraints(
         self,
         site: SitePlan,
-        zoning: Zoning,
+        zoning: ZoningRule,
         values: dict,
     ):
 
@@ -372,6 +365,7 @@ class FloorPlanService:
 
         maximum_coverage = self._zoning_value(
             zoning,
+            "site_coverage_pct",
             "coverage_percent",
             "max_coverage_percent",
             "coverage",
@@ -551,8 +545,6 @@ class FloorPlanService:
         zoning,
         values,
     ):
-
-        from .schemas import FloorPlanConstraintResult
 
         result = self._calculate_constraints(
             site=site,
