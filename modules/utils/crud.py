@@ -1,80 +1,64 @@
 """
-Generic Session State CRUD Manager for imagine
-Path: Modules/utils/crud.py
+IMAGINE Platform Generic CRUD Operations
+Path: modules/utils/crud.py
 App: imagine
 """
 
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import streamlit as st
-from Modules.utils.mock_data import init_mock_data
 
 
-def _ensure_initialized(key: str) -> None:
-    """Ensures mock data is present in session state before querying."""
-    if key not in st.session_state:
-        init_mock_data()
+class CRUDService:
+    """Generic CRUD operations manager acting on Streamlit session state."""
 
+    @staticmethod
+    def get_all(state_key: str) -> List[Dict[str, Any]]:
+        """Retrieve all items stored under a specific session state key."""
+        return st.session_state.get(state_key, [])
 
-def get_all(key: str) -> List[Dict[str, Any]]:
-    """Returns all records for a given session state entity key."""
-    _ensure_initialized(key)
-    return st.session_state.get(key, [])
+    @staticmethod
+    def get_by_id(
+        state_key: str, item_id: str, id_field: str = "id"
+    ) -> Optional[Dict[str, Any]]:
+        """Find a single item by unique identifier."""
+        items = CRUDService.get_all(state_key)
+        for item in items:
+            if str(item.get(id_field)) == str(item_id):
+                return item
+        return None
 
+    @staticmethod
+    def create(state_key: str, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Append a new record to the session state array."""
+        if state_key not in st.session_state:
+            st.session_state[state_key] = []
+        st.session_state[state_key].append(record)
+        return record
 
-def get_by_id(key: str, item_id: Any, id_field: str = "id") -> Optional[Dict[str, Any]]:
-    """Fetches a single record by ID."""
-    items = get_all(key)
-    for item in items:
-        if str(item.get(id_field)) == str(item_id):
-            return item
-    return None
+    @staticmethod
+    def update(
+        state_key: str,
+        item_id: str,
+        updated_fields: Dict[str, Any],
+        id_field: str = "id",
+    ) -> bool:
+        """Update fields on an existing record."""
+        items = CRUDService.get_all(state_key)
+        for item in items:
+            if str(item.get(id_field)) == str(item_id):
+                item.update(updated_fields)
+                return True
+        return False
 
-
-def filter_items(key: str, predicate: Callable[[Dict[str, Any]], bool]) -> List[Dict[str, Any]]:
-    """Filters entity records using a custom evaluation function."""
-    items = get_all(key)
-    return [item for item in items if predicate(item)]
-
-
-def create_item(key: str, item_data: Dict[str, Any], id_field: str = "id") -> Dict[str, Any]:
-    """Adds a new record to the target entity collection in st.session_state."""
-    _ensure_initialized(key)
-
-    new_item = dict(item_data)
-    if "created_at" not in new_item:
-        new_item["created_at"] = datetime.now(timezone.utc).isoformat()
-
-    st.session_state[key].append(new_item)
-    return new_item
-
-
-def update_item(
-    key: str,
-    item_id: Any,
-    updated_data: Dict[str, Any],
-    id_field: str = "id",
-) -> bool:
-    """Updates an existing item by key and ID in place."""
-    _ensure_initialized(key)
-    items = st.session_state.get(key, [])
-
-    for i, item in enumerate(items):
-        if str(item.get(id_field)) == str(item_id):
-            # Preserve original ID and merge changes
-            merged_item = {**item, **updated_data, id_field: item[id_field]}
-            merged_item["updated_at"] = datetime.now(timezone.utc).isoformat()
-            st.session_state[key][i] = merged_item
-            return True
-
-    return False
-
-
-def delete_item(key: str, item_id: Any, id_field: str = "id") -> bool:
-    """Removes a record from st.session_state by ID."""
-    _ensure_initialized(key)
-    initial_count = len(st.session_state[key])
-    st.session_state[key] = [
-        item for item in st.session_state[key] if str(item.get(id_field)) != str(item_id)
-    ]
-    return len(st.session_state[key]) < initial_count
+    @staticmethod
+    def delete(state_key: str, item_id: str, id_field: str = "id") -> bool:
+        """Remove a record by unique identifier."""
+        if state_key in st.session_state:
+            initial_len = len(st.session_state[state_key])
+            st.session_state[state_key] = [
+                item
+                for item in st.session_state[state_key]
+                if str(item.get(id_field)) != str(item_id)
+            ]
+            return len(st.session_state[state_key]) < initial_len
+        return False
