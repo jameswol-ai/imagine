@@ -1,6 +1,30 @@
 # modules/architecture/synthesis.py
 import streamlit as st
-import pandas as pd
+
+class ArchitectureSynthesisEngine:
+    def __init__(self):
+        pass
+
+    def run(self, inputs=None):
+        return {"layout": "Demo generative layout", "inputs": inputs or {}}
+
+def render():
+    st.header("🏛️ Architecture - Generative Layout Solver")
+
+    # Demo inputs
+    inputs = {"site": "Demo Site", "zoning": "Mixed-use"}
+    engine = ArchitectureSynthesisEngine()
+    result = engine.run(inputs)
+
+    # Show metrics
+    col1, col2 = st.columns(2)
+    col1.metric("Site", inputs["site"])
+    col2.metric("Zoning", inputs["zoning"])
+
+    # Show result
+    st.subheader("Generated Layout")
+    st.json(result)
+ pandas as pd
 
 def render():
     st.subheader("Generative Layout Solver")
