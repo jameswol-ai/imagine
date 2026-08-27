@@ -11,7 +11,7 @@ import random
 # ---------------------------
 # Configuration
 # ---------------------------
-USE_MOCK = True
+USE_MOCK = True  # Set to False to use real backend API
 API_BASE_URL = st.secrets.get("API_BASE_URL", "http://localhost:8000/api/v1")
 
 # ---------------------------
@@ -90,7 +90,7 @@ def api_delete(endpoint):
         return False
 
 # ---------------------------
-# Initialise mock data in session state (FIXED)
+# Initialise mock data in session state
 # ---------------------------
 def init_mock_data():
     # Projects
@@ -271,7 +271,7 @@ def init_session_state():
 init_session_state()
 
 # ---------------------------
-# Helper: CRUD table (FIXED)
+# Helper: CRUD table
 # ---------------------------
 def crud_table(data_key, item_name, endpoint, id_field="id", display_fields=None, edit_fields=None, add_fields=None):
     data = st.session_state.get(data_key, [])
@@ -307,7 +307,6 @@ def crud_table(data_key, item_name, endpoint, id_field="id", display_fields=None
                             st.error("Delete failed.")
 
         editing_key = f"editing_{item_name}"
-        # Safer check: avoid nested .get calls
         if editing_key in st.session_state and st.session_state[editing_key] is not None:
             editing_item = st.session_state[editing_key]
             if isinstance(editing_item, dict) and editing_item.get(id_field) == item.get(id_field):
@@ -553,25 +552,27 @@ def page_bim():
                             st.rerun()
 
                 editing_key = f"editing_storey_{selected_building_id}"
-                if st.session_state.get(editing_key, {}).get("id") == storey.get("id"):
-                    with st.expander(f"Edit {storey.get('level', '')}", expanded=True):
-                        with st.form(key=f"edit_storey_form_{storey['id']}"):
-                            new_level = st.text_input("Level", value=storey.get('level', ''))
-                            new_height = st.number_input("Height (m)", value=storey.get('height', 0.0), step=0.1)
-                            new_area = st.number_input("Area (m²)", value=storey.get('area', 0.0), step=10.0)
-                            if st.form_submit_button("Update"):
-                                for s in st.session_state.storeys_data[selected_building_id]:
-                                    if s['id'] == storey['id']:
-                                        s['level'] = new_level
-                                        s['height'] = new_height
-                                        s['area'] = new_area
-                                        break
-                                st.success("Storey updated!")
-                                st.session_state[editing_key] = None
-                                st.rerun()
-                    if st.button("Cancel", key=f"cancel_storey_edit_{storey['id']}"):
-                        st.session_state[editing_key] = None
-                        st.rerun()
+                if editing_key in st.session_state and st.session_state[editing_key] is not None:
+                    editing_item = st.session_state[editing_key]
+                    if editing_item.get("id") == storey.get("id"):
+                        with st.expander(f"Edit {storey.get('level', '')}", expanded=True):
+                            with st.form(key=f"edit_storey_form_{storey['id']}"):
+                                new_level = st.text_input("Level", value=storey.get('level', ''))
+                                new_height = st.number_input("Height (m)", value=storey.get('height', 0.0), step=0.1)
+                                new_area = st.number_input("Area (m²)", value=storey.get('area', 0.0), step=10.0)
+                                if st.form_submit_button("Update"):
+                                    for s in st.session_state.storeys_data[selected_building_id]:
+                                        if s['id'] == storey['id']:
+                                            s['level'] = new_level
+                                            s['height'] = new_height
+                                            s['area'] = new_area
+                                            break
+                                    st.success("Storey updated!")
+                                    st.session_state[editing_key] = None
+                                    st.rerun()
+                        if st.button("Cancel", key=f"cancel_storey_edit_{storey['id']}"):
+                            st.session_state[editing_key] = None
+                            st.rerun()
 
             with st.expander("➕ Add New Storey"):
                 with st.form("new_storey_form"):
@@ -648,27 +649,29 @@ def page_bim():
                                 st.rerun()
 
                     editing_key = f"editing_space_{key}"
-                    if st.session_state.get(editing_key, {}).get("id") == space.get("id"):
-                        with st.expander(f"Edit {space.get('name', '')}", expanded=True):
-                            with st.form(key=f"edit_space_form_{space['id']}"):
-                                new_name = st.text_input("Name", value=space.get('name', ''))
-                                new_type = st.text_input("Space Type", value=space.get('space_type', ''))
-                                new_area = st.number_input("Area (m²)", value=space.get('area', 0.0), step=5.0)
-                                new_height = st.number_input("Height (m)", value=space.get('height', 0.0), step=0.1)
-                                if st.form_submit_button("Update"):
-                                    for s in st.session_state.spaces_data[key]:
-                                        if s['id'] == space['id']:
-                                            s['name'] = new_name
-                                            s['space_type'] = new_type
-                                            s['area'] = new_area
-                                            s['height'] = new_height
-                                            break
-                                    st.success("Space updated!")
-                                    st.session_state[editing_key] = None
-                                    st.rerun()
-                        if st.button("Cancel", key=f"cancel_space_edit_{space['id']}"):
-                            st.session_state[editing_key] = None
-                            st.rerun()
+                    if editing_key in st.session_state and st.session_state[editing_key] is not None:
+                        editing_item = st.session_state[editing_key]
+                        if editing_item.get("id") == space.get("id"):
+                            with st.expander(f"Edit {space.get('name', '')}", expanded=True):
+                                with st.form(key=f"edit_space_form_{space['id']}"):
+                                    new_name = st.text_input("Name", value=space.get('name', ''))
+                                    new_type = st.text_input("Space Type", value=space.get('space_type', ''))
+                                    new_area = st.number_input("Area (m²)", value=space.get('area', 0.0), step=5.0)
+                                    new_height = st.number_input("Height (m)", value=space.get('height', 0.0), step=0.1)
+                                    if st.form_submit_button("Update"):
+                                        for s in st.session_state.spaces_data[key]:
+                                            if s['id'] == space['id']:
+                                                s['name'] = new_name
+                                                s['space_type'] = new_type
+                                                s['area'] = new_area
+                                                s['height'] = new_height
+                                                break
+                                        st.success("Space updated!")
+                                        st.session_state[editing_key] = None
+                                        st.rerun()
+                            if st.button("Cancel", key=f"cancel_space_edit_{space['id']}"):
+                                st.session_state[editing_key] = None
+                                st.rerun()
 
                 with st.expander("➕ Add New Space"):
                     with st.form("new_space_form"):
@@ -815,7 +818,7 @@ def page_costing():
                add_fields={"item": "text", "quantity": "number", "unit": "text", "rate": "number", "total": "number"})
 
 # ---------------------------
-# PAGE: CONSTRUCTION
+# PAGE: CONSTRUCTION (FIXED progress chart)
 # ---------------------------
 def page_construction():
     st.title("🚧 Construction Management")
@@ -823,8 +826,14 @@ def page_construction():
     with col1:
         st.subheader("Progress vs Planned")
         dates = pd.date_range(start="2026-01-01", end="2026-08-19", freq="W")
-        planned = list(range(10, 110, 5))[:len(dates)]
-        actual = [p - random.randint(0, 8) for p in planned]
+        num_weeks = len(dates)
+        # Generate planned progress: start at 10, end at 100, linear
+        planned = list(range(10, 101, int(90 / (num_weeks - 1))))[:num_weeks]
+        # If due to rounding we have fewer, pad with last value
+        if len(planned) < num_weeks:
+            planned += [planned[-1]] * (num_weeks - len(planned))
+        # Actual progress with random variation (ensure not negative)
+        actual = [max(0, p - random.randint(0, 8)) for p in planned]
         df_progress = pd.DataFrame({"Date": dates, "Planned": planned, "Actual": actual})
         st.line_chart(df_progress.set_index("Date"))
     with col2:
