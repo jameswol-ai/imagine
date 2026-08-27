@@ -7,10 +7,11 @@ App: imagine
 from datetime import datetime, timezone
 import uuid
 from typing import Any, Dict, List, Optional
+import pandas as pd
 
 
 class ProjectService:
-    """Service class handling project calculations, creation, and lookups."""
+    """Service class handling project calculations, creation, lookups, and analytics."""
 
     @staticmethod
     def portfolio_metrics(projects: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -23,13 +24,9 @@ class ProjectService:
             }
 
         total_projects = len(projects)
-
-        # Compute total budget (handling key variances: budget or budget_eur)
         total_budget = sum(
             float(p.get("budget", p.get("budget_eur", 0.0))) for p in projects
         )
-
-        # Compute average progress percentage
         total_progress = sum(float(p.get("progress_pct", 0.0)) for p in projects)
         average_progress = round(total_progress / total_projects, 1)
 
@@ -56,7 +53,7 @@ class ProjectService:
             "client": client if client.strip() else "Unassigned Client",
             "category": category,
             "budget": float(budget),
-            "budget_eur": float(budget) * 1_000_000,  # Standardize for costing suite
+            "budget_eur": float(budget) * 1_000_000,
             "status": status,
             "progress_pct": 0.0,
             "location": "TBD",
@@ -75,3 +72,59 @@ class ProjectService:
             if str(project.get("id")) == str(project_id):
                 return project
         return None
+
+    @staticmethod
+    def get_project_calculations(
+        project_id: str,
+        calcs_list: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Filters global structural calculation history by project ID."""
+        return [
+            calc for calc in calcs_list
+            if str(calc.get("project_id")) == str(project_id)
+        ]
+
+    @staticmethod
+    def get_project_milestones(project_id: str) -> pd.DataFrame:
+        """Generates schedule milestone data for timeline visualization."""
+        milestones = [
+            {
+                "Task": "Feasibility & Site Concept",
+                "Start": "2026-01-15",
+                "Finish": "2026-03-01",
+                "Phase": "Architecture",
+                "Completion": 100,
+            },
+            {
+                "Task": "Eurocode Structural Analysis",
+                "Start": "2026-02-15",
+                "Finish": "2026-05-30",
+                "Phase": "Engineering",
+                "Completion": 75,
+            },
+            {
+                "Task": "BIM Model & IFC Coordination",
+                "Start": "2026-04-01",
+                "Finish": "2026-07-15",
+                "Phase": "BIM",
+                "Completion": 50,
+            },
+            {
+                "Task": "BOQ & Procurement Risk Review",
+                "Start": "2026-06-01",
+                "Finish": "2026-08-30",
+                "Phase": "Costing",
+                "Completion": 30,
+            },
+            {
+                "Task": "Site Construction & Verification",
+                "Start": "2026-08-15",
+                "Finish": "2027-06-30",
+                "Phase": "Construction",
+                "Completion": 10,
+            },
+        ]
+        df = pd.DataFrame(milestones)
+        df["Start"] = pd.to_datetime(df["Start"])
+        df["Finish"] = pd.to_datetime(df["Finish"])
+        return df
