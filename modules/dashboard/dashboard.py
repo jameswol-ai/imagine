@@ -1,5 +1,8 @@
 # modules/dashboard/dashboard.py
 import streamlit as st
+def render():
+    st.header("📊 Dashboard")
+    st.table(st.session_state.projects_data)
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
