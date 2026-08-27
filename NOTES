@@ -571,3 +571,28 @@ IMAGINE/
 ├── tests/                    # Unit, integration, API tests
 ├── deployment/               # Docker, Kubernetes, GitHub Actions
 └── docs/                     # Architecture, API, database docs
+
+
+
+modules/
+│
+├── dashboard/
+│   └── dashboard.py
+│
+├── architecture/
+│   └── synthesis.py
+│
+├── structural/
+│   └── eurocode.py
+│
+├── mep/
+│   └── analysis.py
+│
+├── costing/
+│   └── boq.py
+│
+├── governance/
+│   └── approvals.py
+│
+└── bim/
+    └── ifc_export.py
