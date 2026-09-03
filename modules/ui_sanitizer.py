@@ -2,14 +2,17 @@
 
 IMAGINE uses a consistent enterprise UI without emoji glyphs. Existing
 specialist modules can keep their internal labels unchanged while this
-adapter strips emoji characters from all common Streamlit text/widget APIs
-when the application shell is loaded.
+adapter strips emoji characters from common Streamlit text/widget APIs.
+
+The sanitizer must preserve non-string option objects. In particular,
+``str, Enum`` values are valid Streamlit widget options and must not be
+converted to plain strings before a widget's ``format_func`` receives them.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from enum import Enum
 from functools import wraps
 from typing import Any
 
@@ -33,8 +36,12 @@ _EMOJI_RE = re.compile(
 )
 
 
-
 def strip_emoji(value: Any) -> Any:
+    """Strip emoji from UI text without changing option object types."""
+    # Many domain enums inherit from str. Check Enum first so a
+    # ProjectStatus.active remains a ProjectStatus.active object.
+    if isinstance(value, Enum):
+        return value
     if isinstance(value, str):
         return _EMOJI_RE.sub("", value).strip()
     if isinstance(value, list):
@@ -62,7 +69,6 @@ def _wrap_method(name: str) -> None:
 
     wrapped._imagine_emoji_free = True
     setattr(st, name, wrapped)
-
 
 
 def install_emoji_free_ui() -> None:
