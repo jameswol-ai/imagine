@@ -10,9 +10,12 @@ from .engine import ArchitectureAssistant, ArchitectureBrief, ArchitectureAssess
 
 
 def _build_brief() -> ArchitectureBrief:
-    with st.sidebar:
-        st.markdown("### Assistant Brief")
-        project_type = st.selectbox("Project type", ["Office", "Residential", "Mixed-use", "Education", "Healthcare", "Hospitality"], key="arch_ai_project_type")
+    with st.expander("Architecture brief inputs", expanded=True):
+        project_type = st.selectbox(
+            "Project type",
+            ["Office", "Residential", "Mixed-use", "Education", "Healthcare", "Hospitality"],
+            key="arch_ai_project_type",
+        )
         site_area = st.number_input("Site area (m²)", min_value=100.0, value=5000.0, step=100.0, key="arch_ai_site_area")
         c1, c2 = st.columns(2)
         with c1:
@@ -57,6 +60,7 @@ def _assessment_table(assessment: ArchitectureAssessment) -> pd.DataFrame:
         {"Metric": "Buildable depth", "Value": f"{assessment.buildable_depth_m:.1f} m"},
         {"Metric": "Buildable footprint", "Value": f"{assessment.buildable_footprint_m2:,.0f} m²"},
         {"Metric": "Screening GFA capacity", "Value": f"{assessment.max_gfa_by_far_m2:,.0f} m²"},
+        {"Metric": "Program net area", "Value": f"{assessment.program_net_area_m2:,.0f} m²"},
         {"Metric": "Program gross area", "Value": f"{assessment.program_gross_area_m2:,.0f} m²"},
         {"Metric": "Screened storeys", "Value": str(assessment.feasible_storeys)},
         {"Metric": "Indicative parking", "Value": str(assessment.estimated_parking_spaces)},
@@ -71,6 +75,7 @@ def render_architecture_assistant() -> None:
     assistant = ArchitectureAssistant()
     brief = _build_brief()
     assessment = assistant.assess(brief)
+    st.session_state["architecture_brief"] = brief
     st.session_state["architecture_assessment"] = assessment
 
     k1, k2, k3, k4 = st.columns(4)
@@ -94,36 +99,31 @@ def render_architecture_assistant() -> None:
 
     with tabs[1]:
         st.subheader("Assistant findings")
-        rows = [
-            {"Priority": item.priority, "Category": item.category, "Finding": item.finding, "Recommended action": item.action}
-            for item in assessment.recommendations
-        ]
+        rows = [{"Priority": item.priority, "Category": item.category, "Finding": item.finding, "Recommended action": item.action} for item in assessment.recommendations]
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     with tabs[2]:
         st.subheader("Ask the architecture assistant")
         if "architecture_chat" not in st.session_state:
-            st.session_state.architecture_chat = [
-                {"role": "assistant", "content": "I have assessed the current brief. Ask me about the site, program, zoning, floor planning, compliance, generative options or structural handoff."}
-            ]
+            st.session_state.architecture_chat = [{"role": "assistant", "content": "I have assessed the current brief. Ask me about the site, program, zoning, floor planning, compliance, generative options or structural handoff."}]
         for message in st.session_state.architecture_chat:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
         prompt = st.chat_input("Ask about this design brief...")
         if prompt:
             st.session_state.architecture_chat.append({"role": "user", "content": prompt})
-            response = assistant.respond(prompt, assessment)
-            st.session_state.architecture_chat.append({"role": "assistant", "content": response})
+            st.session_state.architecture_chat.append({"role": "assistant", "content": assistant.respond(prompt, assessment)})
             st.rerun()
 
     with tabs[3]:
         st.subheader("Controlled handoff to the next disciplines")
         handoff = pd.DataFrame([
-            {"Discipline": "Site Planning", "Inputs": "Site dimensions, setbacks, north orientation", "Next action": "Develop actual boundary and access geometry"},
+            {"Discipline": "Site Planning", "Inputs": "Site dimensions, setbacks, north orientation", "Next action": "Use the stored architecture brief as the starting envelope"},
             {"Discipline": "Space Programming", "Inputs": f"{brief.target_occupants:,} occupants, {assessment.program_gross_area_m2:,.0f} m² gross", "Next action": "Replace assumptions with an approved room schedule"},
             {"Discipline": "Compliance", "Inputs": "Occupancy, height, egress and adopted code", "Next action": "Run authority-specific code checks"},
             {"Discipline": "Structural", "Inputs": "Storeys, grid concept, geometry and loads", "Next action": "Run preliminary beam/column/slab/foundation screening"},
             {"Discipline": "Generative Design", "Inputs": "Envelope, program and objectives", "Next action": "Generate and compare constrained options"},
         ])
         st.dataframe(handoff, use_container_width=True, hide_index=True)
+        st.info("The current brief is stored in the Streamlit session so downstream architecture workspaces can reuse it during this project session.")
         st.warning("The assistant coordinates preliminary decisions. It does not certify zoning, code compliance, structural safety or planning approval.")
