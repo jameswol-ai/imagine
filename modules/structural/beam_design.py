@@ -2,9 +2,11 @@
 
 The engine provides transparent, deterministic screening calculations for a
 simply supported beam under uniformly distributed permanent and variable
-loads. It is intentionally labelled preliminary and is not a substitute for
-project-specific EN 1992 design, detailing, national annexes, or professional
-verification.
+loads. Shared EC0 action-combination and EC2 reinforced-concrete primitives
+are used so later structural modules can reuse the same calculation layer.
+
+This is not a substitute for project-specific EN 1992 design, detailing,
+national annexes, or professional verification.
 """
 
 from __future__ import annotations
@@ -15,6 +17,18 @@ from typing import Mapping
 
 import pandas as pd
 import streamlit as st
+
+from modules.structural.ec0 import LoadSet, build_sls_combinations, build_uls_combinations
+from modules.structural.ec2 import (
+    ConcreteDesignProperties,
+    SteelDesignProperties,
+    effective_depth_mm,
+    maximum_longitudinal_reinforcement_mm2,
+    minimum_tension_reinforcement_mm2,
+    provided_bar_area_mm2,
+    required_flexural_reinforcement_mm2,
+    vrdc_mpa,
+)
 
 
 @dataclass(frozen=True)
@@ -61,6 +75,7 @@ class BeamDesignEngine:
         permanent = float(values.get("permanent_load_kn_m", 4.0))
         variable = float(values.get("variable_load_kn_m", 8.0))
         alpha_cc = float(values.get("alpha_cc", 0.85))
+        psi0 = float(values.get("psi0", 0.7))
 
         for name, value in {
             "span_m": span,
@@ -79,37 +94,39 @@ class BeamDesignEngine:
             if value <= 0:
                 raise ValueError(f"{name} must be greater than zero")
 
-        if depth * 1.0 <= cover + stirrup + bar_dia / 2:
-            raise ValueError("Beam depth is too small for the specified cover and reinforcement")
+        if not 0 <= psi0 <= 1:
+            raise ValueError("psi0 must be between zero and one")
+
+        d = effective_depth_mm(depth, cover, stirrup, bar_dia)
 
         self_weight = width / 1000.0 * depth / 1000.0 * 25.0
         gk = permanent + self_weight
         qk = variable
-        quls = 1.35 * gk + 1.50 * qk
-        qsls = gk + qk
+
+        loads = LoadSet(permanent=gk, leading_variable=qk)
+        uls_cases = build_uls_combinations(loads, psi0=psi0)
+        sls_cases = build_sls_combinations(loads, psi0=psi0)
+        quls = uls_cases[0][1]
+        qsls = sls_cases[0][1]
 
         med = quls * span**2 / 8.0
         ved = quls * span / 2.0
         msls = qsls * span**2 / 8.0
 
-        d = depth - cover - stirrup - bar_dia / 2.0
-        fcd = alpha_cc * fck / gamma_c
-        fyd = fyk / gamma_s
+        concrete = ConcreteDesignProperties(fck, gamma_c=gamma_c, alpha_cc=alpha_cc)
+        steel = SteelDesignProperties(fyk, gamma_s=gamma_s)
 
-        z = min(0.95 * d, d)
-        as_required = med * 1e6 / (0.87 * fyk * z)
-        fctm = 0.30 * fck ** (2.0 / 3.0)
-        as_min = max(0.26 * fctm / fyk * width * d, 0.0013 * width * d)
-        as_max = 0.04 * width * depth
-        as_provided = math.ceil(as_required / (math.pi * bar_dia**2 / 4.0)) * (
-            math.pi * bar_dia**2 / 4.0
+        as_required = required_flexural_reinforcement_mm2(
+            med, width, d, steel.fyd_mpa
         )
+        as_min = minimum_tension_reinforcement_mm2(width, d, fck, fyk)
+        as_max = maximum_longitudinal_reinforcement_mm2(width, depth)
+        bar_area = provided_bar_area_mm2(bar_dia)
+        as_target = max(as_required, as_min)
+        as_provided = math.ceil(as_target / bar_area) * bar_area
 
-        rho_l = min(as_provided / (width * d), 0.02)
-        k = min(2.0, 1.0 + math.sqrt(200.0 / d))
-        c_rd_c = 0.18 / gamma_c
-        vrdc = c_rd_c * k * (100.0 * rho_l * fck) ** (1.0 / 3.0)
         v_ed = ved * 1000.0 / (width * d)
+        vrdc = vrdc_mpa(fck, width, d, as_provided, gamma_c=gamma_c)
 
         bending_util = as_required / as_provided if as_provided else float("inf")
         shear_util = v_ed / vrdc if vrdc else float("inf")
@@ -127,8 +144,8 @@ class BeamDesignEngine:
             uls_shear_kn=ved,
             sls_moment_kn_m=msls,
             effective_depth_mm=d,
-            fcd_mpa=fcd,
-            fyd_mpa=fyd,
+            fcd_mpa=concrete.fcd_mpa,
+            fyd_mpa=steel.fyd_mpa,
             as_required_mm2=as_required,
             as_min_mm2=as_min,
             as_max_mm2=as_max,
@@ -145,7 +162,7 @@ def render() -> None:
     """Render the interactive beam screening workspace."""
     st.title("Reinforced Concrete Beam Design")
     st.caption(
-        "Preliminary simply supported beam screening using transparent EN 1992-based equations. "
+        "Preliminary simply supported beam screening using shared EN 1990/EN 1992-style calculation primitives. "
         "Final design requires project-specific code checks, detailing and professional verification."
     )
 
@@ -169,6 +186,7 @@ def render() -> None:
             gamma_c = st.number_input("Concrete partial factor gamma_c", min_value=1.0, value=1.5, step=0.05)
             gamma_s = st.number_input("Steel partial factor gamma_s", min_value=1.0, value=1.15, step=0.05)
             alpha_cc = st.number_input("alpha_cc", min_value=0.5, max_value=1.0, value=0.85, step=0.05)
+            psi0 = st.number_input("psi0 for accompanying variable action", min_value=0.0, max_value=1.0, value=0.70, step=0.05)
 
         submitted = st.form_submit_button("Calculate beam design", type="primary")
 
@@ -191,6 +209,7 @@ def render() -> None:
                 "gamma_c": gamma_c,
                 "gamma_s": gamma_s,
                 "alpha_cc": alpha_cc,
+                "psi0": psi0,
             }
         )
     except ValueError as exc:
