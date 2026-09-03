@@ -1,10 +1,4 @@
-"""
-IMAGINE Project Approvals service.
-
-Uses the central Projects model registry so Approval, Revision,
-Project, User, and Organization relationship targets are all
-registered before SQLAlchemy mapper configuration.
-"""
+"""IMAGINE project approval service."""
 
 from __future__ import annotations
 
@@ -26,23 +20,45 @@ def create_approval(
         project_id=project_id,
         approver_id=approver_id,
         comment=comment,
+        status="pending",
     )
-
     db.add(approval)
     db.commit()
     db.refresh(approval)
-
     return approval
 
 
-def list_approvals(
-    db: Session,
-    project_id: UUID,
-):
+def list_approvals(db: Session, project_id: UUID):
     return (
         db.query(Approval)
-        .filter(
-            Approval.project_id == project_id
-        )
+        .filter(Approval.project_id == project_id)
+        .order_by(Approval.id.desc())
         .all()
     )
+
+
+def update_approval(
+    db: Session,
+    approval_id: int,
+    status: str,
+    comment: Optional[str] = None,
+):
+    approval = db.get(Approval, approval_id)
+    if approval is None:
+        return None
+
+    approval.status = status
+    approval.comment = comment
+    db.commit()
+    db.refresh(approval)
+    return approval
+
+
+def delete_approval(db: Session, approval_id: int) -> bool:
+    approval = db.get(Approval, approval_id)
+    if approval is None:
+        return False
+
+    db.delete(approval)
+    db.commit()
+    return True
