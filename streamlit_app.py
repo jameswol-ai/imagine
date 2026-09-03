@@ -231,19 +231,24 @@ def render_header(title: str, subtitle: str, breadcrumb: str) -> None:
 
 
 def get_project_summary() -> tuple[list[object], str]:
+    """Load project records with the repository's actual synchronous session API."""
     try:
         from database.bootstrap import database_health
+        from database.connection import SessionLocal
+
         health = database_health()
         database_status = "Connected" if health.get("ok") else "Unavailable"
-    except Exception:
-        database_status = "Unavailable"
 
-    try:
+        if not health.get("ok"):
+            return [], database_status
+
         from projects.projects.service import ProjectService
-        projects = ProjectService.get_all_sync()
+
+        with SessionLocal() as db:
+            projects = ProjectService.get_all_sync(db=db, skip=0, limit=10000)
         return projects, database_status
     except Exception:
-        return [], database_status
+        return [], "Unavailable"
 
 
 def render_overview() -> None:
@@ -287,8 +292,7 @@ def render_overview() -> None:
             for project in projects[:20]:
                 status = project.status.value if hasattr(project.status, "value") else str(project.status)
                 rows.append({"Project": project.name, "Status": status})
-            df_projects = pd.DataFrame(rows)
-            st.dataframe(df_projects, use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         else:
             st.info("No database project records are currently available.")
 
@@ -300,13 +304,7 @@ def render_overview() -> None:
             ready = sum(spec.implemented for spec in specs)
             domain_rows.append({"Domain": section, "Ready": ready, "Registered": len(specs)})
         df_domains = pd.DataFrame(domain_rows)
-        fig = px.bar(
-            df_domains,
-            x="Domain",
-            y=["Ready", "Registered"],
-            barmode="group",
-            height=360,
-        )
+        fig = px.bar(df_domains, x="Domain", y=["Ready", "Registered"], barmode="group", height=360)
         fig.update_layout(margin=dict(l=10, r=10, t=20, b=80), legend_title_text="")
         st.plotly_chart(fig, use_container_width=True)
         st.caption(f"Portfolio: {active_count} active, {completed_count} completed project record(s).")
@@ -389,6 +387,53 @@ def load_renderer(spec: ModuleSpec) -> Callable[[], object]:
     if not callable(renderer):
         raise AttributeError(f"Module '{spec.module_path}' does not expose a callable renderer.")
     return renderer
+
+
+def render_site_planning_registered() -> None:
+    """Compatibility adapter for the legacy Site Planning route.
+
+    The current Site Planning UI exposes a zero-argument renderer. The adapter
+    keeps that contract stable and isolates import/render failures from the
+    application shell.
+    """
+    try:
+        # Keep the repository import in the adapter contract so dependency
+        # regressions are surfaced here rather than during shell startup.
+        from architecture.site_planning.repository import SitePlanningRepository  # noqa: F401
+        from architecture.site_planning.ui import render_site_planning
+    except Exception as exc:
+        st.error("The Site Planning module could not be loaded.")
+        with st.expander("Complete import traceback", expanded=True):
+            st.exception(exc)
+        return
+
+    try:
+        render_site_planning()
+    except Exception as exc:
+        st.error("Site Planning could not be rendered.")
+        with st.expander("Complete renderer traceback", expanded=True):
+            st.exception(exc)
+
+
+SPECIAL_RENDERERS: dict[str, Callable[[], object]] = {
+    "architecture_site_planning": render_site_planning_registered,
+}
+
+
+def render_route(route: str) -> None:
+    """Render a route using a registered special renderer or enterprise spec."""
+    special = SPECIAL_RENDERERS.get(route)
+    if special is not None:
+        special()
+        return
+
+    route_aliases = {
+        "architecture_site_planning": "Site Planning",
+        "site_planning": "Site Planning",
+    }
+    enterprise_route = route_aliases.get(route, route)
+    set_active_route(enterprise_route)
+    render_selected_module(enterprise_route)
 
 
 def render_placeholder(spec: ModuleSpec) -> None:
