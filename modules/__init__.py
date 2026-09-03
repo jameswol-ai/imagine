@@ -1,13 +1,9 @@
 """IMAGINE Streamlit module package.
 
-The package installs the global emoji-free UI policy and normalizes the
-enterprise registry so every registered route has a callable renderer.
-
-Specialist modules are preserved where they are already implemented. Legacy
-/demo renderers are routed through the shared domain-aware functional
-workspace until their specialist engines are production-ready.
+Specialist workspaces remain discoverable through the central registry. Routes
+without a specialist implementation use the shared functional workspace so
+navigation never points at an empty placeholder.
 """
-
 from __future__ import annotations
 
 import importlib
@@ -16,106 +12,31 @@ from modules.ui_sanitizer import install_emoji_free_ui
 
 install_emoji_free_ui()
 
-_enterprise_registry = importlib.import_module("modules.enterprise_registry")
+_registry = importlib.import_module("modules.enterprise_registry")
 from modules.enterprise_registry import ModuleSpec
 
 
-# These modules previously exposed demonstration engines or hard-coded demo
-# records. Route them through the shared functional workspace so the UI is
-# data-entry driven, validated, persistent, and exportable instead of showing
-# static demonstration output.
-_FUNCTIONAL_ROUTES = {
-    "IMAGINE Architect",
-    "IMAGINE Engineer",
-    "IMAGINE MEP",
-    "IMAGINE QS",
-    "IMAGINE PM",
-    "Vector Store",
-    "RAG",
-    "Prompt Library",
-    "Dashboards",
-    "KPIs",
-    "Portfolio",
-    "Forecasting",
-    "Reporting",
-    "Eurocode Suite",
-    "Retaining Walls",
-    "HVAC",
-    "Integrated MEP Analysis",
-    "Ventilation",
-    "Chilled Water",
-    "Energy Simulation",
-    "Electrical Load Analysis",
-    "BOQ",
-    "Quantity Takeoff",
-    "Procurement",
-    "Forex",
-    "Inflation / Escalation",
-    "Risk Analysis",
-    "Planning",
-    "Scheduling",
-    "RFIs",
-    "Submittals",
-    "Variations",
-    "Snagging",
-    "Progress Tracking",
-    "Site Diaries",
-    "Drawing Management",
-    "Document Register",
-    "Specifications",
-    "Contracts",
-    "Version Control",
-    "Transmittals",
-    "Assets",
-    "Sensors",
-    "Telemetry",
-    "Maintenance",
-    "Predictive AI",
-}
-
-
-# Complete the Eurocode navigation set without coupling the registry to
-# renderer imports.
-_existing_routes = {spec.route for spec in _enterprise_registry.MODULE_SPECS}
-_extra_specs = tuple(
-    spec
-    for spec in (
-        ModuleSpec("EN 1994", "EN 1994", "STRUCTURAL", "modules.functional_workspace", "render_module", True),
-        ModuleSpec("EN 1996", "EN 1996", "STRUCTURAL", "modules.functional_workspace", "render_module", True),
-    )
-    if spec.route not in _existing_routes
-)
-
-_NORMALIZED_SPECS: list[ModuleSpec] = []
-for _spec in (*_enterprise_registry.MODULE_SPECS, *_extra_specs):
-    if _spec.route in _FUNCTIONAL_ROUTES:
-        _NORMALIZED_SPECS.append(
-            ModuleSpec(
-                route=_spec.route,
-                label=_spec.label,
-                section=_spec.section,
-                module_path="modules.functional_workspace",
-                renderer_name="render_module",
-                implemented=True,
+def _normalise_specs() -> tuple[ModuleSpec, ...]:
+    """Keep specialist renderers intact and provide a safe fallback for gaps."""
+    specs: list[ModuleSpec] = []
+    for spec in _registry.MODULE_SPECS:
+        if spec.implemented and spec.module_path:
+            specs.append(spec)
+        else:
+            specs.append(
+                ModuleSpec(
+                    route=spec.route,
+                    label=spec.label,
+                    section=spec.section,
+                    module_path="modules.functional_workspace",
+                    renderer_name="render_module",
+                    implemented=True,
+                )
             )
-        )
-    elif _spec.implemented and _spec.module_path:
-        _NORMALIZED_SPECS.append(_spec)
-    else:
-        _NORMALIZED_SPECS.append(
-            ModuleSpec(
-                route=_spec.route,
-                label=_spec.label,
-                section=_spec.section,
-                module_path="modules.functional_workspace",
-                renderer_name="render_module",
-                implemented=True,
-            )
-        )
+    return tuple(specs)
 
-_enterprise_registry.MODULE_SPECS = tuple(_NORMALIZED_SPECS)
-_enterprise_registry.MODULES_BY_ROUTE = {
-    spec.route: spec for spec in _enterprise_registry.MODULE_SPECS
-}
 
-__all__ = ["install_emoji_free_ui"]
+_registry.MODULE_SPECS = _normalise_specs()
+_registry.MODULES_BY_ROUTE = {spec.route: spec for spec in _registry.MODULE_SPECS}
+
+__all__ = ["install_emoji_free_ui", "ModuleSpec"]
