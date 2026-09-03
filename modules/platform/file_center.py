@@ -1,18 +1,15 @@
-"""Project file center for the IMAGINE Streamlit workspace.
+"""Persistent project file center for the IMAGINE Streamlit workspace.
 
-The current implementation provides a safe session-backed project-file
-workspace. It deliberately keeps uploaded bytes out of the source tree and
-uses content hashes for duplicate detection and stable UI actions.
-
-Persistent object storage/database integration can be added behind this
-presentation layer without changing the Streamlit workflow.
+The file center uses the application database when available, so uploads survive
+Streamlit reruns and deployments. If the database is unavailable, it falls back
+to the current session and clearly reports that limitation.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-import hashlib
 from io import BytesIO
+import hashlib
 from typing import Any
 
 import pandas as pd
@@ -21,6 +18,7 @@ import streamlit as st
 
 @dataclass
 class ProjectFile:
+    id: str
     name: str
     size_bytes: int
     file_type: str
@@ -28,12 +26,7 @@ class ProjectFile:
     project: str
     category: str
     data: bytes
-
-    @property
-    def file_id(self) -> str:
-        """Return a deterministic identifier for this uploaded file."""
-        payload = f"{self.name}|{self.size_bytes}|".encode("utf-8") + self.data
-        return hashlib.sha256(payload).hexdigest()
+    checksum: str = ""
 
 
 def _human_size(value: int) -> str:
@@ -43,10 +36,6 @@ def _human_size(value: int) -> str:
             return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
         size /= 1024
     return f"{value} B"
-
-
-def _records() -> list[ProjectFile]:
-    return st.session_state.setdefault("project_files", [])
 
 
 def _category_for(name: str) -> str:
@@ -61,39 +50,114 @@ def _category_for(name: str) -> str:
     return mapping.get(suffix, "Other")
 
 
-def _upload_key(name: str, payload: bytes) -> tuple[str, int, str]:
-    """Build a collision-resistant key from filename, size and content."""
-    return name, len(payload), hashlib.sha256(payload).hexdigest()
+def _database_session():
+    """Return a database session when persistent storage is available."""
+    try:
+        from database.bootstrap import ensure_schema
+        from database.connection import SessionLocal
+
+        ensure_schema()
+        return SessionLocal()
+    except Exception:
+        return None
 
 
-def _add_uploads(files: list[Any], project: str, category: str) -> tuple[int, int]:
-    """Add uploads and return ``(added, skipped_duplicates)``."""
-    records = _records()
-    existing = {_upload_key(item.name, item.data) for item in records}
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    added = 0
-    skipped = 0
+def _row_to_file(row: Any) -> ProjectFile:
+    uploaded = row.uploaded_at
+    if isinstance(uploaded, datetime):
+        if uploaded.tzinfo is None:
+            uploaded = uploaded.replace(tzinfo=timezone.utc)
+        uploaded_text = uploaded.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    else:
+        uploaded_text = str(uploaded)
+    return ProjectFile(
+        id=str(row.id),
+        name=row.name,
+        size_bytes=int(row.size_bytes),
+        file_type=row.file_type,
+        uploaded_at=uploaded_text,
+        project=row.project,
+        category=row.category,
+        data=bytes(row.content),
+        checksum=row.checksum,
+    )
 
-    for uploaded in files:
-        payload = uploaded.getvalue()
-        key = _upload_key(uploaded.name, payload)
-        if key in existing:
-            skipped += 1
-            continue
-        records.append(
-            ProjectFile(
+
+def _session_records() -> list[ProjectFile]:
+    return st.session_state.setdefault("project_files", [])
+
+
+def _load_records() -> tuple[list[ProjectFile], bool]:
+    db = _database_session()
+    if db is None:
+        return list(_session_records()), False
+    try:
+        from database.models.project_file import ProjectFileRecord
+        rows = db.query(ProjectFileRecord).order_by(ProjectFileRecord.uploaded_at.desc()).all()
+        return [_row_to_file(row) for row in rows], True
+    except Exception:
+        return list(_session_records()), False
+    finally:
+        db.close()
+
+
+def _add_uploads(files: list[Any], project: str, category: str) -> tuple[int, int, bool]:
+    """Persist uploads and return ``(added, skipped_duplicates, persistent)``."""
+    db = _database_session()
+    if db is None:
+        records = _session_records()
+        existing = {hashlib.sha256(item.data).hexdigest() for item in records}
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        added = skipped = 0
+        for uploaded in files:
+            payload = uploaded.getvalue()
+            checksum = hashlib.sha256(payload).hexdigest()
+            if checksum in existing:
+                skipped += 1
+                continue
+            records.append(
+                ProjectFile(
+                    id=checksum[:36],
+                    name=uploaded.name,
+                    size_bytes=len(payload),
+                    file_type=(uploaded.name.rsplit(".", 1)[-1].upper() if "." in uploaded.name else "FILE"),
+                    uploaded_at=now,
+                    project=project.strip() or "Unassigned",
+                    category=category if category != "Auto" else _category_for(uploaded.name),
+                    data=payload,
+                    checksum=checksum,
+                )
+            )
+            existing.add(checksum)
+            added += 1
+        return added, skipped, False
+
+    try:
+        from database.models.project_file import ProjectFileRecord
+        added = skipped = 0
+        for uploaded in files:
+            payload = uploaded.getvalue()
+            checksum = hashlib.sha256(payload).hexdigest()
+            if db.query(ProjectFileRecord).filter(ProjectFileRecord.checksum == checksum).first():
+                skipped += 1
+                continue
+            db.add(ProjectFileRecord(
                 name=uploaded.name,
                 size_bytes=len(payload),
                 file_type=(uploaded.name.rsplit(".", 1)[-1].upper() if "." in uploaded.name else "FILE"),
-                uploaded_at=now,
                 project=project.strip() or "Unassigned",
                 category=category if category != "Auto" else _category_for(uploaded.name),
-                data=payload,
-            )
-        )
-        existing.add(key)
-        added += 1
-    return added, skipped
+                checksum=checksum,
+                content=payload,
+            ))
+            added += 1
+        db.commit()
+        return added, skipped, True
+    except Exception:
+        db.rollback()
+        return 0, len(files), False
+    finally:
+        db.close()
 
 
 def _preview(file: ProjectFile) -> None:
@@ -101,8 +165,7 @@ def _preview(file: ProjectFile) -> None:
     if suffix in {"txt", "md", "json", "csv"}:
         try:
             if suffix == "csv":
-                frame = pd.read_csv(BytesIO(file.data))
-                st.dataframe(frame, use_container_width=True, hide_index=True)
+                st.dataframe(pd.read_csv(BytesIO(file.data)), use_container_width=True, hide_index=True)
             else:
                 text = file.data.decode("utf-8", errors="replace")
                 st.code(text[:12000], language="json" if suffix == "json" else None)
@@ -111,21 +174,41 @@ def _preview(file: ProjectFile) -> None:
     elif suffix in {"png", "jpg", "jpeg"}:
         st.image(file.data, use_container_width=True)
     else:
-        st.info("Preview is not rendered for this file type. Use Download to open it in the appropriate application.")
+        st.info("Preview is not rendered for this file type. Download it to open it in the appropriate application.")
 
 
-def _delete_file(file_id: str) -> bool:
-    records = _records()
-    before = len(records)
-    records[:] = [item for item in records if item.file_id != file_id]
-    return len(records) != before
+def _delete_file(file: ProjectFile) -> bool:
+    db = _database_session()
+    if db is None:
+        records = _session_records()
+        before = len(records)
+        records[:] = [item for item in records if item.id != file.id]
+        return len(records) != before
+    try:
+        from database.models.project_file import ProjectFileRecord
+        row = db.get(ProjectFileRecord, file.id)
+        if row is None:
+            return False
+        db.delete(row)
+        db.commit()
+        return True
+    except Exception:
+        db.rollback()
+        return False
+    finally:
+        db.close()
 
 
 def render() -> None:
     st.subheader("Project File Center")
-    st.caption("Upload, organize, inspect and download project information from one workspace.")
+    st.caption("Persistent project document, drawing, BIM and data workspace.")
 
-    records = _records()
+    records, persistent = _load_records()
+    if persistent:
+        st.success("Persistent database storage is active.")
+    else:
+        st.warning("Database storage is unavailable. Files are currently held only in this Streamlit session.")
+
     upload_tab, library_tab, preview_tab = st.tabs(["Upload", "Library", "Preview"])
 
     with upload_tab:
@@ -136,14 +219,17 @@ def render() -> None:
             type=["pdf", "doc", "docx", "txt", "md", "csv", "xls", "xlsx", "ifc", "dwg", "dxf", "rvt", "json", "png", "jpg", "jpeg"],
             accept_multiple_files=True,
             key="project_file_uploader",
-            help="Uploads are held in the current Streamlit session. Persistent storage can be connected later without changing this UI contract.",
+            help="Files are stored in the application database when database storage is available.",
         )
-        if uploads:
-            added, skipped = _add_uploads(uploads, project, category)
-            if added:
-                st.success(f"{added} file(s) added to the workspace library.")
-            if skipped:
-                st.info(f"{skipped} duplicate file(s) were skipped.")
+        if uploads and st.button("Save files", type="primary", use_container_width=True):
+            added, skipped, stored = _add_uploads(uploads, project, category)
+            if stored:
+                st.success(f"Saved {added} file(s) to persistent storage. {skipped} duplicate(s) skipped.")
+            elif added:
+                st.warning(f"Saved {added} file(s) to the current session. Database storage was unavailable.")
+            else:
+                st.info(f"No new files saved. {skipped} duplicate or unavailable file(s).")
+            st.rerun()
 
     with library_tab:
         if not records:
@@ -152,11 +238,9 @@ def render() -> None:
             categories = sorted({item.category for item in records})
             filter_category = st.selectbox("Category filter", ["All categories", *categories], key="file_category_filter")
             query = st.text_input("Filter files", placeholder="Search by filename, project or category", key="file_query")
-            filtered = [
-                item for item in records
-                if (filter_category == "All categories" or item.category == filter_category)
-                and (not query or query.casefold() in f"{item.name} {item.project} {item.category}".casefold())
-            ]
+            filtered = [item for item in records if
+                        (filter_category == "All categories" or item.category == filter_category)
+                        and (not query or query.casefold() in f"{item.name} {item.project} {item.category}".casefold())]
             st.caption(f"{len(filtered)} of {len(records)} file(s) shown")
             for item in filtered:
                 with st.container(border=True):
@@ -169,11 +253,12 @@ def render() -> None:
                     with right:
                         download_col, delete_col = st.columns(2)
                         with download_col:
-                            st.download_button("Download", item.data, item.name, key=f"download_file_{item.file_id}", use_container_width=True)
+                            st.download_button("Download", item.data, item.name, key=f"download_file_{item.id}", use_container_width=True)
                         with delete_col:
-                            if st.button("Remove", key=f"delete_file_{item.file_id}", use_container_width=True):
-                                _delete_file(item.file_id)
-                                st.rerun()
+                            if st.button("Remove", key=f"delete_file_{item.id}", use_container_width=True):
+                                if _delete_file(item):
+                                    st.rerun()
+                                st.error("File could not be removed.")
 
             table = pd.DataFrame([
                 {"File": item.name, "Type": item.file_type, "Category": item.category, "Project": item.project, "Size": _human_size(item.size_bytes), "Uploaded": item.uploaded_at}
@@ -186,20 +271,21 @@ def render() -> None:
         if not records:
             st.info("Add a file first to enable preview.")
         else:
-            selected_id = st.selectbox(
-                "Select file",
-                [item.file_id for item in records],
-                format_func=lambda value: next(item.name for item in records if item.file_id == value),
-                key="file_preview_id",
-            )
-            selected = next(item for item in records if item.file_id == selected_id)
+            options = {f"{item.name} | {item.project} | {item.id[:8]}": item for item in records}
+            selected_label = st.selectbox("Select file", list(options), key="file_preview_id")
+            selected = options[selected_label]
             st.markdown(f"### {selected.name}")
             st.caption(f"{selected.category} · {selected.file_type} · {_human_size(selected.size_bytes)} · {selected.project}")
             _preview(selected)
             st.download_button("Download selected file", selected.data, selected.name, key="download_selected_file")
 
     if records:
-        metadata = pd.DataFrame([{k: v for k, v in asdict(item).items() if k != "data"} | {"File ID": item.file_id} for item in records])
+        metadata = pd.DataFrame([
+            {"File ID": item.id, "File": item.name, "Type": item.file_type, "Category": item.category,
+             "Project": item.project, "Size": _human_size(item.size_bytes), "Uploaded": item.uploaded_at,
+             "Checksum": item.checksum}
+            for item in records
+        ])
         st.download_button("Export file manifest", metadata.to_csv(index=False).encode("utf-8"), "imagine_file_manifest.csv", "text/csv", key="export_file_manifest")
 
 
