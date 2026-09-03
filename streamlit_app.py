@@ -1,9 +1,10 @@
 """IMAGINE AEC Engine Streamlit application shell.
 
-The application shell is deliberately dependency-light: registered workspaces
-are discovered from metadata, and specialist modules are imported only when a
-user opens them. A failure in one workspace therefore cannot take down the
-entire Streamlit application.
+The shell is intentionally defensive. Streamlit configuration happens before
+any local ``modules`` package is imported because Python executes a package's
+``__init__.py`` while importing a submodule. Specialist renderers are imported
+only when their workspace is opened, so one broken module cannot prevent the
+application shell from starting.
 """
 from __future__ import annotations
 
@@ -16,18 +17,35 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-ROOT_DIR = Path(__file__).resolve().parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-from modules.enterprise_registry import MODULE_SPECS, ModuleSpec, validate_registry
-
+# -----------------------------------------------------------------------------
+# Streamlit MUST be configured before importing the local ``modules`` package.
+# ``modules/__init__.py`` has historically installed UI helpers during import,
+# and Streamlit requires set_page_config() to be the first Streamlit command.
+# -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="IMAGINE | AEC Engine",
     page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+ROOT_DIR = Path(__file__).resolve().parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+# Registry import is now safely after Streamlit configuration. It contains
+# metadata only; specialist modules remain lazy-loaded below.
+try:
+    from modules.enterprise_registry import MODULE_SPECS, ModuleSpec, validate_registry
+    REGISTRY_IMPORT_ERROR: str | None = None
+except Exception as exc:  # keep the shell alive and expose the real problem
+    MODULE_SPECS = ()
+    ModuleSpec = object  # type: ignore[assignment,misc]
+    REGISTRY_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+
+    def validate_registry() -> None:
+        return None
+
 
 SEARCH_ALIASES = {
     "projects": ("projects", "approvals", "revisions", "workflows", "governance"),
@@ -53,8 +71,6 @@ def init_session_state() -> None:
         "recent_routes": [],
         "selected_project_id": None,
         "selected_project_name": None,
-        "sidebar_nav_domain": "HOME",
-        "sidebar_nav_workspace": "Overview",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -88,11 +104,11 @@ def inject_styles() -> None:
     )
 
 
-def specs(domain: str | None = None) -> list[ModuleSpec]:
+def specs(domain: str | None = None):
     return [spec for spec in MODULE_SPECS if domain is None or spec.section == domain]
 
 
-def spec_for(route: str) -> ModuleSpec | None:
+def spec_for(route: str):
     return next((spec for spec in MODULE_SPECS if spec.route == route), None)
 
 
@@ -108,13 +124,13 @@ def set_active(route: str) -> None:
     ]
 
 
-def search_specs(query: str) -> list[ModuleSpec]:
+def search_specs(query: str):
     normalized = " ".join(query.lower().split())
     terms = normalized.split()
     expanded = set(terms)
     for term in terms:
         expanded.update(SEARCH_ALIASES.get(term, ()))
-    found: list[tuple[float, ModuleSpec]] = []
+    found = []
     for spec in MODULE_SPECS:
         haystack = f"{spec.route} {spec.label} {spec.section} {spec.module_path or ''}".lower()
         score = sum(term in haystack for term in terms) + 0.2 * sum(term in haystack for term in expanded)
@@ -125,7 +141,7 @@ def search_specs(query: str) -> list[ModuleSpec]:
     return [spec for _, spec in sorted(found, key=lambda item: (-item[0], item[1].section, item[1].label))]
 
 
-def import_renderer(spec: ModuleSpec) -> tuple[Callable | None, str | None]:
+def import_renderer(spec) -> tuple[Callable | None, str | None]:
     """Import one renderer without allowing exceptions to escape the shell."""
     if not spec.module_path or spec.module_path == "__builtin__":
         return None, "Built-in route"
@@ -138,13 +154,6 @@ def import_renderer(spec: ModuleSpec) -> tuple[Callable | None, str | None]:
     if not callable(renderer):
         return None, f"RendererError: no callable '{spec.renderer_name}' or 'render' in {spec.module_path}"
     return renderer, None
-
-
-def load_renderer(spec: ModuleSpec) -> Callable:
-    renderer, error = import_renderer(spec)
-    if renderer is None:
-        raise RuntimeError(error or "Renderer unavailable")
-    return renderer
 
 
 def render_sidebar() -> None:
@@ -177,13 +186,13 @@ def render_sidebar() -> None:
         if chosen != "HOME" and active_label not in labels:
             active_label = "Discipline Overview"
         if chosen == "HOME" and active_label not in labels:
-            active_label = labels[0]
+            active_label = labels[0] if labels else "Overview"
 
-        selected = st.selectbox("Workspace", labels, index=labels.index(active_label), key="workspace_select")
+        selected = st.selectbox("Workspace", labels or ["Overview"], index=(labels.index(active_label) if active_label in labels else 0), key="workspace_select")
         if chosen != "HOME" and selected == "Discipline Overview":
             st.session_state.active_route = "Overview"
             st.session_state.active_domain = chosen
-        elif selected:
+        elif selected and selected != "Overview":
             set_active(selected)
 
         st.markdown('<div class="sidebar-heading">Search all workspaces</div>', unsafe_allow_html=True)
@@ -221,7 +230,7 @@ def render_header() -> None:
 
 def render_overview() -> None:
     all_specs = list(MODULE_SPECS)
-    counts = pd.Series([spec.section for spec in all_specs]).value_counts()
+    counts = pd.Series([spec.section for spec in all_specs]).value_counts() if all_specs else pd.Series(dtype="int64")
     projects = len(specs("PROJECTS"))
     bim = len(specs("BIM"))
     structural = len(specs("STRUCTURAL"))
@@ -232,15 +241,17 @@ def render_overview() -> None:
         unsafe_allow_html=True,
     )
     columns = st.columns(5)
-    for column, title, value in zip(
-        columns,
-        ["Workspaces", "Projects", "BIM", "Structural", "Domains"],
-        [len(all_specs), projects, bim, structural, len(counts)],
-    ):
+    for column, title, value in zip(columns, ["Workspaces", "Projects", "BIM", "Structural", "Domains"], [len(all_specs), projects, bim, structural, len(counts)]):
         column.markdown(
             f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div></div>',
             unsafe_allow_html=True,
         )
+
+    if not all_specs:
+        st.error("IMAGINE registry could not be loaded.")
+        if REGISTRY_IMPORT_ERROR:
+            st.code(REGISTRY_IMPORT_ERROR, language="text")
+        return
 
     st.subheader("Platform coverage")
     dataframe = counts.rename_axis("Domain").reset_index(name="Workspaces")
@@ -254,20 +265,24 @@ def render_overview() -> None:
 
 
 def render_system_health() -> None:
-    rows: list[dict[str, str]] = []
+    if REGISTRY_IMPORT_ERROR:
+        st.title("System Health")
+        st.error("Registry import failed")
+        st.code(REGISTRY_IMPORT_ERROR, language="text")
+        return
+
+    rows = []
     for spec in MODULE_SPECS:
         if not spec.implemented or spec.module_path in (None, "__builtin__"):
             continue
         _, error = import_renderer(spec)
-        rows.append(
-            {
-                "Workspace": spec.label,
-                "Domain": spec.section,
-                "Status": "Ready" if error is None else "Error",
-                "Detail": "Callable renderer found" if error is None else error,
-                "Module": spec.module_path or "",
-            }
-        )
+        rows.append({
+            "Workspace": spec.label,
+            "Domain": spec.section,
+            "Status": "Ready" if error is None else "Error",
+            "Detail": "Callable renderer found" if error is None else error,
+            "Module": spec.module_path or "",
+        })
     dataframe = pd.DataFrame(rows)
     st.title("System Health")
     ready = int((dataframe["Status"] == "Ready").sum()) if not dataframe.empty else 0
