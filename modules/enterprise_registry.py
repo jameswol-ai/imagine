@@ -14,6 +14,7 @@ class ModuleSpec:
 FALLBACK = "modules.enterprise_missing"
 STRUCTURAL_WORKBENCH = "modules.structural.workspaces"
 EUROCODE_SUITE = "modules.structural.eurocode_suite"
+DESIGN_BASIS = "modules.structural.design_basis"
 
 MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Overview", "Overview", "PLATFORM", "__builtin__", "render_overview", True),
@@ -34,6 +35,7 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Compliance", "Compliance", "ARCHITECTURE", "architecture.compliance.ui", "render_compliance", True),
     ModuleSpec("Generative Design", "Generative Design", "ARCHITECTURE", "architecture.generative_design.ui", "render_generative_design", True),
     ModuleSpec("Structural Engineering Dashboard", "Structural Engineering Dashboard", "STRUCTURAL", "modules.structural.design_dashboard", "render", True),
+    ModuleSpec("Structural Design Basis", "Structural Design Basis", "STRUCTURAL", DESIGN_BASIS, "render", True),
     ModuleSpec("Structural Design Handbook", "Structural Design Handbook", "STRUCTURAL", "modules.structural.handbook", "render", True),
     ModuleSpec("Building Materials", "Building Materials", "STRUCTURAL", "modules.structural.building_materials", "render", True),
     ModuleSpec("Load Combinations", "Load Combinations", "STRUCTURAL", "modules.structural.load_combinations", "render", True),
