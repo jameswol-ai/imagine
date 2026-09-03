@@ -9,7 +9,6 @@ from typing import Callable
 
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
 from modules.enterprise_registry import MODULE_SPECS, ModuleSpec, validate_registry
@@ -208,6 +207,12 @@ def render_sidebar() -> None:
         if current_domain not in nav_domains:
             current_domain = "HOME"
         selected_domain = st.selectbox("Discipline", nav_domains, index=nav_domains.index(current_domain), key="sidebar_domain_select", label_visibility="collapsed")
+        if selected_domain != current_domain:
+            st.session_state.sidebar_nav_domain = selected_domain
+            st.session_state.sidebar_nav_workspace = "Overview" if selected_domain == "HOME" else ""
+            set_active_route("Overview")
+            st.rerun()
+
         domain = "PLATFORM" if selected_domain == "HOME" else selected_domain
         pages = domain_specs(domain)
         page_labels = [p.label + ("" if p.implemented else " · Registered") for p in pages]
@@ -221,16 +226,11 @@ def render_sidebar() -> None:
                 set_active_route(chosen.route)
                 st.rerun()
 
-        st.markdown('<div class="sidebar-heading">Search workspaces</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-heading">Search all workspaces</div>', unsafe_allow_html=True)
         st.text_input("Search", key="module_search", placeholder="Search stairs, EN 1992, BIM...", label_visibility="collapsed")
-        search_domains = ["All domains", *domains()]
-        if st.session_state.module_search_domain not in search_domains:
-            st.session_state.module_search_domain = "All domains"
-        st.selectbox("Search domain", search_domains, key="module_search_domain", label_visibility="collapsed")
-
         query = st.session_state.module_search.strip()
         if query:
-            matches = search_specs(query, st.session_state.module_search_domain)
+            matches = search_specs(query)
             st.markdown(f'<div class="sidebar-heading">Search results · {len(matches)}</div>', unsafe_allow_html=True)
             if not matches:
                 st.caption("No matching workspace. Try a discipline, handbook, material or design tool.")
@@ -256,7 +256,7 @@ def render_sidebar() -> None:
             st.caption("Recently opened workspaces will appear here.")
 
         st.divider()
-        st.caption("Navigation stays in the sidebar. The selected workspace opens in the main Home area.")
+        st.caption("Navigation stays in the sidebar. Search is global and selected workspaces open in the main area.")
 
 
 def render_header(title: str, subtitle: str, breadcrumb: str) -> None:
@@ -281,28 +281,79 @@ def render_workspace_controls() -> None:
 
 def render_search_landing() -> None:
     query = st.session_state.module_search.strip()
-    matches = search_specs(query, st.session_state.module_search_domain)
-    render_header("Search", "Find a workspace, then open it in the main Home area.", f"Search / {st.session_state.module_search_domain}")
+    matches = search_specs(query)
+    render_header("Search", "Find a workspace, then open it from the sidebar results.", "Search / All workspaces")
     if not matches:
         st.info(f"No workspace matched '{query}'.")
         return
-    st.markdown(f'<div class="imagine-section"><div class="imagine-section-title">{len(matches)} matching workspaces</div><div class="imagine-section-copy">Search results are shown in the sidebar. This page provides a clear landing view while you choose one.</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="imagine-section"><div class="imagine-section-title">{len(matches)} matching workspaces</div><div class="imagine-section-copy">Search results remain in the sidebar so navigation and the workspace canvas stay visually separate.</div></div>', unsafe_allow_html=True)
     rows = [{"Workspace": s.label, "Discipline": s.section, "Status": "Ready" if s.implemented else "Registered"} for s in matches[:30]]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=min(520, 80 + len(rows) * 35))
 
 
+def render_discipline_dashboard(domain: str) -> None:
+    specs = registry_snapshot()
+    group = [s for s in specs if s.section == domain]
+    ready = [s for s in group if s.implemented]
+    pending = [s for s in group if not s.implemented]
+    coverage = round(100 * len(ready) / len(group), 1) if group else 0
+    render_header(f"{domain.title()} Dashboard", f"Discipline command center for {domain.title()} workspaces", f"Home / {domain.title()}")
+    st.markdown(f'<div class="imagine-hero"><div class="imagine-hero-title">{domain.title()} at a glance.</div><div class="imagine-hero-copy">This dashboard changes with the selected discipline. Use the workspace selector for direct navigation, or choose a ready workspace below to move into the detailed tool.</div></div>', unsafe_allow_html=True)
+
+    cards = [
+        ("Workspaces", len(group), "Registered in this discipline"),
+        ("Ready", len(ready), "Executable renderers"),
+        ("Coverage", f"{coverage}%", "Renderer readiness"),
+        ("Pending", len(pending), "Registered but not connected"),
+    ]
+    cols = st.columns(4)
+    for i, (title, value, description) in enumerate(cards):
+        with cols[i]:
+            st.markdown(f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div><div class="imagine-card-description">{description}</div></div>', unsafe_allow_html=True)
+
+    status_df = pd.DataFrame({"Status": ["Ready", "Pending"], "Count": [len(ready), len(pending)]})
+    left, right = st.columns([1.15, 1.85])
+    with left:
+        st.markdown('<div class="imagine-section"><div class="imagine-section-title">Workspace readiness</div><div class="imagine-section-copy">Executable versus registered workspaces.</div></div>', unsafe_allow_html=True)
+        fig = px.pie(status_df, names="Status", values="Count", hole=.62, height=310)
+        fig.update_layout(margin=dict(l=10, r=10, t=15, b=10), showlegend=True)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    with right:
+        st.markdown('<div class="imagine-section"><div class="imagine-section-title">Workspace portfolio</div><div class="imagine-section-copy">The discipline registry and current execution state.</div></div>', unsafe_allow_html=True)
+        portfolio = pd.DataFrame([{"Workspace": s.label, "Status": "Ready" if s.implemented else "Pending", "Route": s.route} for s in group])
+        st.dataframe(portfolio, use_container_width=True, hide_index=True, height=310)
+
+    st.markdown('<div class="imagine-section"><div class="imagine-section-title">Key workspaces</div><div class="imagine-section-copy">Open the most useful ready tools directly from the command center.</div></div>', unsafe_allow_html=True)
+    featured = ready[:8]
+    if not featured:
+        st.info("No executable workspaces are connected to this discipline yet.")
+        return
+    cols = st.columns(4)
+    for i, spec in enumerate(featured):
+        with cols[i % 4]:
+            st.markdown(f'<div class="imagine-panel"><div class="imagine-panel-title">{spec.label}</div><div class="imagine-panel-description">{spec.section.title()} workspace</div></div>', unsafe_allow_html=True)
+            if st.button("Open workspace", key=f"discipline_open_{domain}_{spec.route}", use_container_width=True):
+                set_active_route(spec.route)
+                st.rerun()
+
+
 def render_overview() -> None:
     specs = registry_snapshot()
+    selected_domain = st.session_state.get("sidebar_nav_domain", "HOME")
+    if selected_domain not in {"HOME", ""}:
+        render_discipline_dashboard(selected_domain)
+        return
+
     ready = sum(s.implemented for s in specs)
     registered = len(specs)
     coverage = round(100 * ready / registered, 1) if registered else 0
     render_header("Home", "IMAGINE Integrated Architecture, Engineering & Construction Engine", "Home / Command Center")
-    st.markdown('<div class="imagine-hero"><div class="imagine-hero-title">Design intelligence, organized as one workspace.</div><div class="imagine-hero-copy">Use the sidebar to move through disciplines and search for specialist tools. The Home dashboard keeps the platform status, discipline coverage, recent activity and key workspaces visible without burying the user in navigation.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="imagine-hero"><div class="imagine-hero-title">Design intelligence, organized as one workspace.</div><div class="imagine-hero-copy">Use the sidebar to select a discipline, then use its workspace menu. The Home dashboard becomes a discipline command center when a discipline is selected, while the global search finds specialist tools across the entire platform.</div></div>', unsafe_allow_html=True)
 
     cards = [
         ("Workspaces", registered, "Central enterprise registry"),
         ("Ready", ready, f"{coverage}% renderer coverage"),
-        ("Disciplines", len(domains()), "Architecture to Digital Twin"),
+        ("Disciplines", len([d for d in domains() if d != "PLATFORM"]), "Architecture to Digital Twin"),
         ("Recent", len(st.session_state.recent_routes), "Recently opened workspaces"),
     ]
     cols = st.columns(4)
@@ -327,18 +378,13 @@ def render_overview() -> None:
         fig.update_layout(margin=dict(l=10, r=10, t=25, b=100), yaxis=dict(range=[0, 110]), xaxis_tickangle=-35, showlegend=False)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    st.markdown('<div class="imagine-section"><div class="imagine-section-title">Discipline snapshot</div><div class="imagine-section-copy">Choose a discipline below to open its workspace family.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="imagine-section"><div class="imagine-section-title">Discipline snapshot</div><div class="imagine-section-copy">Select a discipline in the sidebar to transform Home into its command center.</div></div>', unsafe_allow_html=True)
     cols = st.columns(4)
     for i, domain in enumerate([d for d in domains() if d != "PLATFORM"]):
         group = [s for s in specs if s.section == domain]
         ready_count = sum(s.implemented for s in group)
         with cols[i % 4]:
             st.markdown(f'<div class="imagine-panel"><div class="imagine-panel-title">{domain.title()}</div><div class="imagine-panel-description">{ready_count} ready of {len(group)} registered</div></div>', unsafe_allow_html=True)
-            if st.button("Open discipline", key=f"home_domain_{domain}", use_container_width=True):
-                first = next((s for s in group if s.implemented), group[0] if group else None)
-                if first:
-                    set_active_route(first.route)
-                    st.rerun()
 
 
 def render_system_health() -> None:
@@ -393,7 +439,7 @@ def main() -> None:
         render_selected_module(st.session_state.active_route)
     load_ms = st.session_state.get("last_route_load_ms")
     timing = f" · last workspace load {load_ms} ms" if load_ms else ""
-    st.markdown(f'<div class="imagine-footer">IMAGINE AEC Engine · Sidebar navigation + sidebar search + Home workspace presentation{timing}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="imagine-footer">IMAGINE AEC Engine · Sidebar navigation + global workspace search + discipline-aware Home{timing}</div>', unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
