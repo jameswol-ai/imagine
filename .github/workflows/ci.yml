@@ -28,5 +28,5 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q .
 
-      - name: Run Projects regression tests
-        run: pytest -q tests/test_projects_model_registry.py
+      - name: Run regression tests
+        run: pytest -q tests
