@@ -12,12 +12,7 @@ from database.connection import Base
 
 
 class ProjectFileRecord(Base):
-    """Database-backed project file and metadata record.
-
-    File bytes are stored in the database so the Streamlit workspace does not
-    depend on the ephemeral application filesystem. Deployments with an
-    external object store can later replace the payload with a storage key.
-    """
+    """Database-backed project file and metadata record."""
 
     __tablename__ = "project_files"
 
@@ -29,6 +24,7 @@ class ProjectFileRecord(Base):
     file_type: Mapped[str] = mapped_column(String(32), nullable=False, default="FILE")
     project: Mapped[str] = mapped_column(String(255), nullable=False, default="Unassigned", index=True)
     category: Mapped[str] = mapped_column(String(64), nullable=False, default="Other", index=True)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True
     )
