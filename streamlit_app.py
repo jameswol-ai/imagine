@@ -18,7 +18,6 @@ import streamlit as st
 
 from modules.enterprise_registry import MODULE_SPECS, ModuleSpec, validate_registry
 
-
 ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -33,7 +32,7 @@ st.set_page_config(
 DOMAIN_DESCRIPTIONS = {
     "PLATFORM": "Enterprise workspace, registry validation and diagnostics.",
     "PROJECTS": "Project lifecycle, approvals, revisions, workflows and governance.",
-    "ARCHITECTURE": "Zoning, site planning, floor planning, programming and generative design.",
+    "ARCHITECTURE": "Architecture Assistant, zoning, site planning, floor planning, programming, compliance and generative design.",
     "STRUCTURAL": "Structural analysis, reinforced concrete, steel and Eurocode workflows.",
     "BIM": "Buildings, storeys, spaces, elements and OpenBIM workflows.",
     "MEP": "Mechanical, electrical, plumbing and energy engineering.",
@@ -118,7 +117,6 @@ def search_specs(query: str, section: str = "All domains") -> list[ModuleSpec]:
     candidates = registry_snapshot()
     if section != "All domains":
         candidates = tuple(spec for spec in candidates if spec.section == section)
-
     terms = normalized.split()
     scored: list[tuple[int, ModuleSpec]] = []
     for spec in candidates:
@@ -153,20 +151,9 @@ def render_sidebar() -> None:
             unsafe_allow_html=True,
         )
         st.divider()
-
         st.markdown('<div class="imagine-label">Module Search</div>', unsafe_allow_html=True)
-        st.text_input(
-            "Search modules",
-            key="module_search",
-            placeholder="Try beam, zoning, BIM, project...",
-            label_visibility="collapsed",
-        )
-        st.selectbox(
-            "Search domain",
-            ["All domains", *SECTION_ORDER],
-            key="module_search_domain",
-            label_visibility="collapsed",
-        )
+        st.text_input("Search modules", key="module_search", placeholder="Try assistant, beam, zoning, BIM, project...", label_visibility="collapsed")
+        st.selectbox("Search domain", ["All domains", *SECTION_ORDER], key="module_search_domain", label_visibility="collapsed")
 
         query = st.session_state.module_search.strip()
         if query:
@@ -176,11 +163,7 @@ def render_sidebar() -> None:
                 st.info("No matching modules found.")
             for spec in matches[:12]:
                 status = "Ready" if spec.implemented else "Registered"
-                if st.button(
-                    f"{spec.label} · {status}",
-                    key=f"search_{spec.route}",
-                    use_container_width=True,
-                ):
+                if st.button(f"{spec.label} · {status}", key=f"search_{spec.route}", use_container_width=True):
                     set_active_route(spec.route)
                     st.rerun()
         else:
@@ -195,12 +178,7 @@ def render_sidebar() -> None:
             with st.expander(label, expanded=(section == st.session_state.sidebar_domain)):
                 st.caption(DOMAIN_DESCRIPTIONS[section])
                 for spec in specs[:10]:
-                    if st.button(
-                        spec.label,
-                        key=f"domain_{section}_{spec.route}",
-                        use_container_width=True,
-                        disabled=not spec.implemented,
-                    ):
+                    if st.button(spec.label, key=f"domain_{section}_{spec.route}", use_container_width=True, disabled=not spec.implemented):
                         st.session_state.sidebar_domain = section
                         set_active_route(spec.route)
                         st.rerun()
@@ -208,10 +186,7 @@ def render_sidebar() -> None:
                     st.caption(f"Use search to find the remaining {len(specs) - 10} modules.")
 
         st.divider()
-        active = next(
-            (spec for spec in registry_snapshot() if spec.route == st.session_state.active_route),
-            registry_snapshot()[0],
-        )
+        active = next((spec for spec in registry_snapshot() if spec.route == st.session_state.active_route), registry_snapshot()[0])
         st.markdown('<div class="imagine-label">Current Workspace</div>', unsafe_allow_html=True)
         st.markdown(f"**{active.label}**  \n{active.section} · {'Ready' if active.implemented else 'Registered'}")
         st.caption(f"{len(registry_snapshot())} registered modules")
@@ -235,15 +210,11 @@ def get_project_summary() -> tuple[list[object], str]:
     try:
         from database.bootstrap import database_health
         from database.connection import SessionLocal
-
         health = database_health()
         database_status = "Connected" if health.get("ok") else "Unavailable"
-
         if not health.get("ok"):
             return [], database_status
-
         from projects.projects.service import ProjectService
-
         with SessionLocal() as db:
             projects = ProjectService.get_all_sync(db=db, skip=0, limit=10000)
         return projects, database_status
@@ -252,12 +223,7 @@ def get_project_summary() -> tuple[list[object], str]:
 
 
 def render_overview() -> None:
-    render_header(
-        "IMAGINE",
-        "Integrated Architecture, Engineering & Construction Engine",
-        "Overview / Enterprise Workspace",
-    )
-
+    render_header("IMAGINE", "Integrated Architecture, Engineering & Construction Engine", "Overview / Enterprise Workspace")
     projects, database_status = get_project_summary()
     project_count = len(projects)
     active_count = sum(1 for project in projects if str(project.status).lower().endswith("active"))
@@ -273,18 +239,12 @@ def render_overview() -> None:
     cols = st.columns(4)
     for col, (title, value, description) in zip(cols, cards):
         with col:
-            st.markdown(
-                f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div><div class="imagine-card-description">{description}</div></div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div><div class="imagine-card-description">{description}</div></div>', unsafe_allow_html=True)
 
     st.write("")
     left, right = st.columns([1.25, 1])
     with left:
-        st.markdown(
-            '<div class="imagine-panel"><div class="imagine-panel-title">Engineering Workspace</div><div class="imagine-panel-description">Use the searchable sidebar to open Architecture, Structural, BIM, MEP, Costing and Construction workflows. Structural calculation modules are loaded lazily so one renderer failure does not stop the application shell.</div></div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="imagine-panel"><div class="imagine-panel-title">Engineering Workspace</div><div class="imagine-panel-description">Use the searchable sidebar to open Architecture, Structural, BIM, MEP, Costing and Construction workflows. The Architecture Assistant coordinates the early design brief and produces traceable preliminary recommendations.</div></div>', unsafe_allow_html=True)
         st.write("")
         st.subheader("Portfolio Snapshot")
         if projects:
@@ -309,16 +269,21 @@ def render_overview() -> None:
         st.plotly_chart(fig, use_container_width=True)
         st.caption(f"Portfolio: {active_count} active, {completed_count} completed project record(s).")
 
+    st.subheader("Architecture Workspace")
+    architecture_routes = ["Architecture Assistant", "Zoning", "Site Planning", "Floor Planning", "Room Programming", "Compliance", "Generative Design"]
+    architecture_cols = st.columns(4)
+    for index, route in enumerate(architecture_routes):
+        spec = next((item for item in registry_snapshot() if item.route == route), None)
+        if spec is None:
+            continue
+        with architecture_cols[index % 4]:
+            if st.button(spec.label, key=f"quick_arch_{route}", use_container_width=True, disabled=not spec.implemented):
+                set_active_route(route)
+                st.session_state.sidebar_domain = "ARCHITECTURE"
+                st.rerun()
+
     st.subheader("Structural Quick Access")
-    structural_routes = [
-        "Beam Design",
-        "Column Design",
-        "Slab Design",
-        "Foundation Design",
-        "Retaining Walls",
-        "Steel Connections",
-        "Eurocode Suite",
-    ]
+    structural_routes = ["Beam Design", "Column Design", "Slab Design", "Foundation Design", "Retaining Walls", "Steel Connections", "Eurocode Suite"]
     quick_cols = st.columns(4)
     for index, route in enumerate(structural_routes):
         spec = next((item for item in registry_snapshot() if item.route == route), None)
@@ -327,16 +292,12 @@ def render_overview() -> None:
         with quick_cols[index % 4]:
             if st.button(spec.label, key=f"quick_{route}", use_container_width=True, disabled=not spec.implemented):
                 set_active_route(route)
+                st.session_state.sidebar_domain = "STRUCTURAL"
                 st.rerun()
 
 
 def render_system_health() -> None:
-    render_header(
-        "System Health",
-        "Registry validation, renderer availability and database diagnostics",
-        "Platform / System Health",
-    )
-
+    render_header("System Health", "Registry validation, renderer availability and database diagnostics", "Platform / System Health")
     try:
         validate_registry()
         registry_ok = True
@@ -344,36 +305,24 @@ def render_system_health() -> None:
     except Exception as exc:
         registry_ok = False
         registry_error = f"{type(exc).__name__}: {exc}"
-
     try:
         from database.bootstrap import database_health
         db_health = database_health()
     except Exception as exc:
         db_health = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-
     ready = sum(spec.implemented for spec in registry_snapshot())
     a, b, c, d = st.columns(4)
     a.metric("Registered", len(registry_snapshot()))
     b.metric("Ready", ready)
     c.metric("Registry", "Healthy" if registry_ok else "Failed")
     d.metric("Database", "Connected" if db_health.get("ok") else "Unavailable")
-
     if not registry_ok:
         st.error(registry_error)
     if db_health.get("ok"):
         st.success("Database connectivity check passed.")
     else:
         st.warning(db_health.get("error", "Database connectivity check failed."))
-
-    rows = [
-        {
-            "Module": spec.label,
-            "Domain": spec.section,
-            "Status": "Ready" if spec.implemented else "Registered",
-            "Renderer": spec.module_path or "Pending",
-        }
-        for spec in registry_snapshot()
-    ]
+    rows = [{"Module": spec.label, "Domain": spec.section, "Status": "Ready" if spec.implemented else "Registered", "Renderer": spec.module_path or "Pending"} for spec in registry_snapshot()]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
@@ -390,15 +339,8 @@ def load_renderer(spec: ModuleSpec) -> Callable[[], object]:
 
 
 def render_site_planning_registered() -> None:
-    """Compatibility adapter for the legacy Site Planning route.
-
-    The current Site Planning UI exposes a zero-argument renderer. The adapter
-    keeps that contract stable and isolates import/render failures from the
-    application shell.
-    """
+    """Compatibility adapter for the legacy Site Planning route."""
     try:
-        # Keep the repository import in the adapter contract so dependency
-        # regressions are surfaced here rather than during shell startup.
         from architecture.site_planning.repository import SitePlanningRepository  # noqa: F401
         from architecture.site_planning.ui import render_site_planning
     except Exception as exc:
@@ -406,7 +348,6 @@ def render_site_planning_registered() -> None:
         with st.expander("Complete import traceback", expanded=True):
             st.exception(exc)
         return
-
     try:
         render_site_planning()
     except Exception as exc:
@@ -426,11 +367,7 @@ def render_route(route: str) -> None:
     if special is not None:
         special()
         return
-
-    route_aliases = {
-        "architecture_site_planning": "Site Planning",
-        "site_planning": "Site Planning",
-    }
+    route_aliases = {"architecture_site_planning": "Site Planning", "site_planning": "Site Planning"}
     enterprise_route = route_aliases.get(route, route)
     set_active_route(enterprise_route)
     render_selected_module(enterprise_route)
@@ -438,10 +375,7 @@ def render_route(route: str) -> None:
 
 def render_placeholder(spec: ModuleSpec) -> None:
     render_header(spec.label, f"{spec.section} workspace", f"{spec.section} / {spec.label}")
-    st.markdown(
-        f'<div class="imagine-panel"><div class="imagine-panel-title">Module Registered</div><div class="imagine-panel-description">{spec.label} is present in the enterprise registry and remains searchable, but its dedicated renderer is not connected yet.</div></div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<div class="imagine-panel"><div class="imagine-panel-title">Module Registered</div><div class="imagine-panel-description">{spec.label} is present in the enterprise registry and remains searchable, but its dedicated renderer is not connected yet.</div></div>', unsafe_allow_html=True)
 
 
 def render_selected_module(route: str) -> None:
@@ -459,7 +393,6 @@ def render_selected_module(route: str) -> None:
     if not spec.implemented or not spec.module_path:
         render_placeholder(spec)
         return
-
     render_header(spec.label, f"IMAGINE {spec.section.title()} Workspace", f"{spec.section} / {spec.label}")
     try:
         renderer = load_renderer(spec)
@@ -482,20 +415,12 @@ def render_selected_module(route: str) -> None:
     except Exception as exc:
         st.error(f"{spec.label} encountered a runtime error.")
         with st.expander("Complete module error", expanded=True):
-            st.code(
-                f"Domain: {spec.section}\n"
-                f"Module: {spec.label}\n"
-                f"Python module: {spec.module_path}\n"
-                f"Renderer: {spec.renderer_name}"
-            )
+            st.code(f"Domain: {spec.section}\nModule: {spec.label}\nPython module: {spec.module_path}\nRenderer: {spec.renderer_name}")
             st.exception(exc)
 
 
 def render_footer() -> None:
-    st.markdown(
-        '<div class="imagine-footer">IMAGINE AEC Engine | Integrated Architecture, Engineering & Construction Platform</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="imagine-footer">IMAGINE AEC Engine | Integrated Architecture, Engineering & Construction Platform</div>', unsafe_allow_html=True)
 
 
 def main() -> None:
