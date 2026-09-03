@@ -17,11 +17,16 @@ def test_every_registered_route_has_a_renderer_contract() -> None:
         assert callable(renderer), f"Missing renderer for {spec.route}"
 
 
-def test_unimplemented_routes_are_safe_functional_workspaces() -> None:
+def test_enterprise_route_workspaces_are_executable() -> None:
+    routes = {
+        "Finite Element Analysis", "Elements", "COBie", "BIM Digital Twin", "Energy",
+        "Uganda", "Kenya", "Tanzania", "Rwanda", "South Sudan", "Codes", "Zoning Laws",
+        "Microsoft", "AutoCAD", "Revit", "Archicad", "Tekla", "IfcOpenShell", "ArcGIS", "Azure", "Mapbox",
+    }
     for spec in MODULE_SPECS:
-        if spec.route in {"Finite Element Analysis", "Elements", "COBie", "BIM Digital Twin", "Energy"}:
-            assert spec.module_path == "modules.functional_workspace"
-            assert spec.renderer_name == "render_module"
+        if spec.route in routes:
+            assert spec.module_path == "modules.enterprise_missing"
+            assert spec.renderer_name == "render"
             assert spec.implemented is True
 
 
