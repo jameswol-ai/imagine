@@ -1,6 +1,6 @@
 """IMAGINE AEC Engine Streamlit application shell.
 
-The shell provides search-first navigation, a compact domain navigator and a
+The shell provides search-first navigation, a compact dropdown menu bar and a
 workspace-oriented presentation layer. Domain pages are discovered from the
 central registry so navigation does not drift away from the module inventory.
 """
@@ -59,6 +59,7 @@ def init_session_state() -> None:
         "module_search": "",
         "module_search_domain": "All domains",
         "active_domain": "PLATFORM",
+        "menu_domain": "HOME",
         "last_route_load_ms": None,
         "recent_routes": [],
         "selected_project_id": None,
@@ -81,10 +82,11 @@ def inject_styles() -> None:
         .imagine-hero{padding:1.5rem;margin-bottom:1rem;border-radius:20px;background:linear-gradient(135deg,rgba(255,255,255,.94),rgba(238,244,250,.86));border:1px solid rgba(120,135,155,.17);box-shadow:0 18px 55px rgba(35,55,80,.08)}.imagine-hero-title{font-size:1.5rem;font-weight:850;letter-spacing:-.035em}.imagine-hero-copy{margin-top:.45rem;color:#647184;line-height:1.6}
         .imagine-card{min-height:105px;padding:1rem;border:1px solid rgba(120,135,155,.17);border-radius:16px;background:rgba(255,255,255,.84);box-shadow:0 10px 30px rgba(35,55,80,.05)}.imagine-card-title{color:#687588;font-size:.62rem;font-weight:850;letter-spacing:.09em;text-transform:uppercase}.imagine-card-value{margin-top:.35rem;font-size:1.45rem;font-weight:900}.imagine-card-description{margin-top:.2rem;color:#7a8697;font-size:.7rem}
         .imagine-panel{padding:1rem 1.1rem;border:1px solid rgba(120,135,155,.17);border-radius:15px;background:rgba(255,255,255,.8);box-shadow:0 10px 30px rgba(35,55,80,.045)}.imagine-panel-title{font-size:1rem;font-weight:800}.imagine-panel-description{margin-top:.25rem;color:#687588;font-size:.78rem;line-height:1.5}
-        .imagine-nav{padding:.65rem .75rem;margin-bottom:1rem;border:1px solid rgba(120,135,155,.18);border-radius:15px;background:rgba(255,255,255,.76);box-shadow:0 8px 25px rgba(35,55,80,.05)}
+        .imagine-nav{padding:.8rem 1rem;margin-bottom:1rem;border:1px solid rgba(120,135,155,.18);border-radius:15px;background:rgba(255,255,255,.82);box-shadow:0 8px 25px rgba(35,55,80,.05)}
+        .imagine-nav-title{font-size:.62rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:#687588;margin-bottom:.35rem}.imagine-nav-subtitle{font-size:.75rem;color:#7a8697;margin-bottom:.7rem}
         .imagine-search-hint{padding:.7rem .8rem;margin-top:.5rem;border:1px dashed rgba(120,135,155,.35);border-radius:12px;color:#687588;font-size:.75rem;line-height:1.5}.imagine-footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid rgba(120,135,155,.2);color:#8792a1;font-size:.67rem}
         div.stButton>button{min-height:2.25rem;border-radius:10px;font-weight:680;transition:transform .14s ease,box-shadow .14s ease}div.stButton>button:hover{transform:translateY(-1px);box-shadow:0 7px 18px rgba(35,55,80,.12)}
-        @media(prefers-color-scheme:dark){.stApp{background:radial-gradient(circle at top right,#172231 0%,#0b1118 55%,#0b1118 100%)}.imagine-header,.imagine-hero,.imagine-card,.imagine-panel,.imagine-nav{background:rgba(19,28,39,.84);border-color:#293746}.imagine-brand-title,.imagine-header-title,.imagine-hero-title,.imagine-card-value,.imagine-panel-title{color:#f1f5f9}.imagine-brand-subtitle,.imagine-header-subtitle,.imagine-hero-copy,.imagine-panel-description,.imagine-card-description,.imagine-search-hint{color:#aab5c3}.imagine-breadcrumb{background:#17212c;border-color:#2b3948;color:#b9c4d1}.imagine-label,.imagine-card-title{color:#aab5c3}.imagine-footer{border-top-color:#293746}}
+        @media(prefers-color-scheme:dark){.stApp{background:radial-gradient(circle at top right,#172231 0%,#0b1118 55%,#0b1118 100%)}.imagine-header,.imagine-hero,.imagine-card,.imagine-panel,.imagine-nav{background:rgba(19,28,39,.84);border-color:#293746}.imagine-brand-title,.imagine-header-title,.imagine-hero-title,.imagine-card-value,.imagine-panel-title{color:#f1f5f9}.imagine-brand-subtitle,.imagine-header-subtitle,.imagine-hero-copy,.imagine-panel-description,.imagine-card-description,.imagine-search-hint,.imagine-nav-subtitle{color:#aab5c3}.imagine-breadcrumb{background:#17212c;border-color:#2b3948;color:#b9c4d1}.imagine-label,.imagine-card-title,.imagine-nav-title{color:#aab5c3}.imagine-footer{border-top-color:#293746}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -142,6 +144,7 @@ def set_active_route(route: str) -> None:
         return
     st.session_state.active_route = route
     st.session_state.active_domain = spec.section
+    st.session_state.menu_domain = "HOME" if spec.section == "PLATFORM" else spec.section
     recent = [r for r in st.session_state.get("recent_routes", []) if r != route]
     st.session_state.recent_routes = [route, *recent][:6]
 
@@ -195,39 +198,63 @@ def render_sidebar() -> None:
         if current not in domains_for_search:
             current = "All domains"
         st.selectbox("Search domain", domains_for_search, index=domains_for_search.index(current), key="module_search_domain")
-        st.caption("Use the main navigator to browse a discipline. Search is reserved for finding a specific workspace quickly.")
+        st.caption("Use the menu bar above to browse disciplines. Search is reserved for finding a specific workspace quickly.")
 
 
 def render_navigation() -> None:
-    current = st.session_state.get("active_domain", "PLATFORM")
-    if current not in domains():
-        current = "PLATFORM"
-    st.markdown('<div class="imagine-nav">', unsafe_allow_html=True)
-    labels = ["HOME" if d == "PLATFORM" else d for d in domains()]
-    selected_label = "HOME" if current == "PLATFORM" else current
-    choice = st.radio("Primary navigation", labels, index=labels.index(selected_label), horizontal=True, label_visibility="collapsed", key="primary_navigation")
-    selected_domain = "PLATFORM" if choice == "HOME" else choice
-    if selected_domain != current:
-        st.session_state.active_domain = selected_domain
-        candidates = domain_specs(selected_domain)
-        if selected_domain == "PLATFORM":
-            set_active_route("Overview")
-        elif candidates:
-            ready = next((x for x in candidates if x.implemented), candidates[0])
-            set_active_route(ready.route)
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    """Render the primary dropdown menu bar and the selected domain page menu."""
+    all_domains = domains()
+    domain_labels = ["HOME" if domain == "PLATFORM" else domain for domain in all_domains]
+    current_domain = st.session_state.get("active_domain", "PLATFORM")
+    current_label = "HOME" if current_domain == "PLATFORM" else current_domain
+    if current_label not in domain_labels:
+        current_label = "HOME"
 
-    if selected_domain != "PLATFORM":
-        pages = domain_specs(selected_domain)
-        labels = [spec.label + ("" if spec.implemented else " · Registered") for spec in pages]
-        active = st.session_state.get("active_route")
-        active_index = next((i for i, spec in enumerate(pages) if spec.route == active), 0)
-        page_choice = st.radio("Domain pages", labels, index=active_index, horizontal=True, label_visibility="collapsed", key=f"domain_pages_{selected_domain}")
-        selected = pages[labels.index(page_choice)]
-        if selected.route != active:
-            set_active_route(selected.route)
-            st.rerun()
+    st.markdown(
+        '<div class="imagine-nav"><div class="imagine-nav-title">IMAGINE Menu</div>'
+        '<div class="imagine-nav-subtitle">Choose a discipline, then choose its workspace.</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    menu_col, page_col, status_col = st.columns([1.15, 2.25, 1.0])
+    with menu_col:
+        selected_label = st.selectbox(
+            "Discipline",
+            domain_labels,
+            index=domain_labels.index(current_label),
+            key="menu_domain_selector",
+            label_visibility="collapsed",
+        )
+    selected_domain = "PLATFORM" if selected_label == "HOME" else selected_label
+
+    pages = domain_specs(selected_domain)
+    page_labels = [spec.label + ("" if spec.implemented else " · Registered") for spec in pages]
+    active_route = st.session_state.get("active_route", "Overview")
+    active_index = next((i for i, spec in enumerate(pages) if spec.route == active_route), 0)
+
+    with page_col:
+        selected_page = st.selectbox(
+            "Workspace",
+            page_labels,
+            index=active_index,
+            key=f"menu_page_selector_{selected_domain}",
+            label_visibility="collapsed",
+        )
+    selected_spec = pages[page_labels.index(selected_page)] if pages else None
+
+    with status_col:
+        if selected_spec:
+            status = "Ready" if selected_spec.implemented else "Registered"
+            st.caption(f"{selected_domain}\n{status}")
+
+    changed_domain = selected_domain != current_domain
+    changed_page = selected_spec is not None and selected_spec.route != active_route
+    if changed_domain or changed_page:
+        if selected_spec is not None:
+            set_active_route(selected_spec.route)
+        elif selected_domain == "PLATFORM":
+            set_active_route("Overview")
+        st.rerun()
 
 
 def render_header(title: str, subtitle: str, breadcrumb: str) -> None:
@@ -267,7 +294,7 @@ def render_search_results() -> bool:
     for index, spec in enumerate(matches[:30]):
         with cols[index % 3]:
             status = "Ready" if spec.implemented else "Registered"
-            st.markdown(f'<div class="imagine-panel"><div class="imagine-panel-title">{spec.label}</div><div class="imagine-panel-description">{spec.section} · {status}<br>{spec.module_path or "Built-in workspace"}</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="imagine-panel"><div class="imagine-panel-title">{spec.label}</div><div class="imagine-panel-description">{spec.section} · {status}</div></div>', unsafe_allow_html=True)
             if spec.implemented and st.button("Open workspace", key=f"search_open_{spec.route}", use_container_width=True):
                 set_active_route(spec.route)
                 st.session_state.module_search = ""
@@ -390,7 +417,7 @@ def render_selected_module(route: str) -> None:
 def render_footer() -> None:
     load_ms = st.session_state.get("last_route_load_ms")
     timing = f" · last workspace load {load_ms} ms" if load_ms is not None else ""
-    st.markdown(f'<div class="imagine-footer">IMAGINE AEC Engine · Domain navigation + workspace search{timing}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="imagine-footer">IMAGINE AEC Engine · Dropdown domain navigation + workspace search{timing}</div>', unsafe_allow_html=True)
 
 
 def main() -> None:
