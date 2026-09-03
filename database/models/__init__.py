@@ -12,6 +12,7 @@ from .permission import Permission
 from .audit import AuditRecord
 from .notification import Notification
 from .module_workspace import ModuleWorkspaceRecord
+from .project_file import ProjectFileRecord
 from .associations import (
     role_permissions_table,
     user_roles_table,
@@ -27,6 +28,7 @@ __all__ = [
     "AuditRecord",
     "Notification",
     "ModuleWorkspaceRecord",
+    "ProjectFileRecord",
     "role_permissions_table",
     "user_roles_table",
     "organization_users_table",
