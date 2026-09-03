@@ -24,16 +24,24 @@ def _candidates(width: float, depth: float, setback: float, floors: int, w_solar
 
 
 def render_generative_design() -> None:
-    """Generate and compare deterministic massing candidates from constraints."""
+    """Generate and compare deterministic massing candidates from the shared architecture workflow."""
     st.title("Generative Architectural Design")
     st.caption("Constraint-driven massing synthesis. Candidate scores are transparent heuristics, not an AI claim or permit-ready design.")
 
+    assessment = st.session_state.get("architecture_assessment")
+    site_result = st.session_state.get("site_plan_result", {})
+    zoning_result = st.session_state.get("zoning_result", {})
+    default_width = float(assessment.buildable_width_m) if assessment else float(site_result.get("buildable_width_m", 34.0))
+    default_depth = float(assessment.buildable_depth_m) if assessment else float(site_result.get("buildable_depth_m", 90.0))
+    default_floors = int(assessment.feasible_storeys) if assessment else 4
+
     left, right = st.columns([1, 2], gap="large")
     with left:
-        width = st.number_input("Site width (m)", min_value=10.0, value=40.0, step=1.0, key="gd_width")
-        depth = st.number_input("Site depth (m)", min_value=10.0, value=30.0, step=1.0, key="gd_depth")
-        setback = st.number_input("Setback (m)", min_value=0.0, value=3.0, step=0.5, key="gd_setback")
-        floors = st.number_input("Maximum storeys", min_value=1, max_value=50, value=4, step=1, key="gd_floors")
+        width = st.number_input("Buildable width (m)", min_value=5.0, value=max(5.0, default_width), step=1.0, key="gd_width")
+        depth = st.number_input("Buildable depth (m)", min_value=5.0, value=max(5.0, default_depth), step=1.0, key="gd_depth")
+        setback = st.number_input("Internal massing setback (m)", min_value=0.0, value=3.0, step=0.5, key="gd_setback")
+        floors = st.number_input("Storeys", min_value=1, max_value=50, value=max(1, default_floors), step=1, key="gd_floors")
+        target_gfa = st.number_input("Target GFA (m²)", min_value=0.0, value=float(assessment.program_gross_area_m2) if assessment else 5000.0, step=250.0, key="gd_target_gfa")
         st.markdown("**Objective weights**")
         w_solar = st.slider("Solar", 0.0, 1.0, 0.8, 0.05, key="gd_solar")
         w_circ = st.slider("Circulation", 0.0, 1.0, 0.9, 0.05, key="gd_circ")
@@ -42,19 +50,31 @@ def render_generative_design() -> None:
         generate = st.button("Generate candidates", type="primary", use_container_width=True, key="gd_generate")
 
     candidates = _candidates(width, depth, setback, int(floors), w_solar, w_circ, w_view, w_cost)
+    candidates["GFA delta (m²)"] = (candidates["GFA (m²)"] - target_gfa).round(1)
+    candidates["Target fit"] = candidates["GFA delta (m²)"].abs().apply(lambda x: max(0.0, 1.0 - x / max(target_gfa, 1.0)))
+    candidates["Final score"] = (candidates["Composite score"] * 0.85 + candidates["Target fit"] * 0.15).round(3)
+    candidates = candidates.sort_values("Final score", ascending=False).reset_index(drop=True)
     best = candidates.iloc[0]
+    st.session_state["generative_design_result"] = best.to_dict() if generate else st.session_state.get("generative_design_result", best.to_dict())
+
     with right:
-        if generate:
-            st.success("Five deterministic constrained massing candidates generated.")
-        else:
-            st.info("Candidates update from the current constraints. Generate to record the current comparison.")
+        st.success("Five deterministic constrained massing candidates generated and ranked.") if generate else st.info("Candidates respond to the shared architecture envelope. Generate to store the preferred concept for downstream structural coordination.")
+        if zoning_result:
+            st.caption("Zoning screening result is available in this session and should be reviewed alongside candidate GFA.")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Preferred candidate", best["Candidate"])
+        m1.metric("Preferred", best["Candidate"])
         m2.metric("Footprint", f"{best['Footprint (m²)']:,.0f} m²")
         m3.metric("GFA", f"{best['GFA (m²)']:,.0f} m²")
-        m4.metric("Composite", f"{best['Composite score']:.3f}")
+        m4.metric("Final score", f"{best['Final score']:.3f}")
         st.dataframe(candidates, use_container_width=True, hide_index=True)
-        chart = candidates.melt(id_vars="Candidate", value_vars=["Solar score", "Circulation score", "Structural regularity", "View score"], var_name="Objective", value_name="Score")
-        fig = px.bar(chart, x="Candidate", y="Score", color="Objective", barmode="group", height=350)
+        chart = candidates.melt(id_vars="Candidate", value_vars=["Solar score", "Circulation score", "Structural regularity", "View score", "Target fit"], var_name="Objective", value_name="Score")
+        fig = px.bar(chart, x="Candidate", y="Score", color="Objective", barmode="group", height=350, title="Candidate objective scores")
         st.plotly_chart(fig, use_container_width=True)
+        st.subheader("Structural handoff")
+        st.dataframe(pd.DataFrame([
+            {"Parameter": "Preferred footprint", "Value": f"{best['Footprint (m²)']:,.1f} m²"},
+            {"Parameter": "Preferred GFA", "Value": f"{best['GFA (m²)']:,.1f} m²"},
+            {"Parameter": "Storeys", "Value": int(floors)},
+            {"Parameter": "GFA target delta", "Value": f"{best['GFA delta (m²)']:+,.1f} m²"},
+        ]), use_container_width=True, hide_index=True)
         st.warning("The preferred option is an optimization heuristic. Verify geometry, setbacks, access, daylight, fire strategy, structure and local planning requirements before design development.")
