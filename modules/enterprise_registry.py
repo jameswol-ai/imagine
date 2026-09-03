@@ -78,6 +78,7 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Snagging", "Snagging", "CONSTRUCTION", "modules.construction.snagging", "render", True),
     ModuleSpec("Site Diaries", "Site Diaries", "CONSTRUCTION", "modules.construction.site_diary", "render", True),
     ModuleSpec("Drawing Management", "Drawing Management", "DOCUMENTS", "modules.documents.drawing_register", "render", True),
+    ModuleSpec("Drawings", "Drawings", "DOCUMENTS", "modules.documents.drawing_register", "render", True),
     ModuleSpec("Document Register", "Document Register", "DOCUMENTS", "modules.documents.documents", "render", True),
     ModuleSpec("Specifications", "Specifications", "DOCUMENTS", "modules.documents.specifications", "render", True),
     ModuleSpec("Contracts", "Contracts", "DOCUMENTS", "modules.documents.documents", "render", True),
