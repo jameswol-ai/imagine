@@ -27,17 +27,6 @@ class BIMElement:
     guid: str = ""
 
 
-def active_project() -> str:
-    return str(st.session_state.get("active_project_id", ""))
-
-
-def set_active_project(project_id: str) -> None:
-    st.session_state["active_project_id"] = str(project_id)
-    # Force project-scoped BIM caches to be rebuilt on the next render.
-    for key in ("bim_buildings", "bim_storeys", "bim_spaces", "bim_elements"):
-        st.session_state.pop(key, None)
-
-
 def project_options() -> dict[str, str]:
     """Return real Projects as UUID -> display-name options."""
     try:
@@ -48,6 +37,25 @@ def project_options() -> dict[str, str]:
         return {str(project.id): project.name for project in projects}
     except Exception:
         return {}
+
+
+def active_project() -> str:
+    """Return the selected project, defaulting to the first real project."""
+    current = str(st.session_state.get("active_project_id", ""))
+    if current:
+        return current
+
+    options = project_options()
+    if options:
+        current = next(iter(options))
+        st.session_state["active_project_id"] = current
+    return current
+
+
+def set_active_project(project_id: str) -> None:
+    st.session_state["active_project_id"] = str(project_id)
+    for key in ("bim_buildings", "bim_storeys", "bim_spaces", "bim_elements"):
+        st.session_state.pop(key, None)
 
 
 def records(key: str) -> list[dict[str, Any]]:
@@ -73,12 +81,7 @@ def save(key: str, record: dict[str, Any]) -> None:
 
 
 def delete(key: str, record_id: str) -> None:
-    """Delete from the current UI store.
-
-    Database deletion is intentionally not exposed through this compatibility
-    helper yet, preventing accidental destructive operations while the BIM
-    migration layer is still being hardened.
-    """
+    """Delete from the compatibility UI store until destructive DB APIs are hardened."""
     CRUDService.delete(key, record_id)
 
 
