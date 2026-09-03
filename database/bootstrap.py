@@ -11,28 +11,16 @@ from database.connection import Base, DATABASE_URL, engine
 def _ensure_bim_legacy_columns() -> None:
     """Add BIM columns introduced after the original BIM tables.
 
-    This is deliberately additive and nullable so existing deployments are not
-    forced through destructive migrations. Production schema evolution should
-    still be captured by a proper migration system when one is introduced.
+    Additions are nullable to keep existing deployments non-destructive. A
+    future Alembic migration should formalize production schema evolution.
     """
+    storey_id_type = "UUID" if engine.dialect.name == "postgresql" else "VARCHAR(36)"
     additions = {
-        "buildings": {
-            "code": "VARCHAR",
-            "height": "FLOAT",
-            "typology": "VARCHAR",
-            "status": "VARCHAR",
-        },
-        "storeys": {
-            "code": "VARCHAR",
-            "elevation": "FLOAT",
-            "description": "VARCHAR",
-        },
-        "spaces": {
-            "code": "VARCHAR",
-            "capacity": "INTEGER",
-        },
+        "buildings": {"code": "VARCHAR", "height": "FLOAT", "typology": "VARCHAR", "status": "VARCHAR"},
+        "storeys": {"code": "VARCHAR", "elevation": "FLOAT", "description": "VARCHAR"},
+        "spaces": {"code": "VARCHAR", "capacity": "INTEGER"},
         "elements": {
-            "storey_id": "VARCHAR",
+            "storey_id": storey_id_type,
             "code": "VARCHAR",
             "type_name": "VARCHAR",
             "status": "VARCHAR",
@@ -64,21 +52,11 @@ def ensure_schema() -> None:
 
 
 def database_health() -> dict[str, Any]:
-    """Return a small, safe database health report for the UI."""
+    """Return a safe database health report for the UI."""
     required = {
-        "projects",
-        "approvals",
-        "revisions",
-        "workflows",
-        "module_workspace_records",
-        "project_files",
-        "buildings",
-        "storeys",
-        "spaces",
-        "elements",
-        "ifc_models",
-        "cobie_assets",
-        "digital_twins",
+        "projects", "approvals", "revisions", "workflows", "module_workspace_records",
+        "project_files", "buildings", "storeys", "spaces", "elements", "ifc_models",
+        "cobie_assets", "digital_twins",
     }
     try:
         with engine.connect() as connection:
