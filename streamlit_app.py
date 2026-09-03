@@ -1,8 +1,8 @@
 """IMAGINE AEC Engine Streamlit application shell.
 
-The shell provides search-first navigation, a compact dropdown menu bar and a
-workspace-oriented presentation layer. Domain pages are discovered from the
-central registry so navigation does not drift away from the module inventory.
+The application shell provides a professional dropdown module navigator,
+search-first workspace discovery, resilient lazy loading and a consistent
+presentation layer for engineering workspaces.
 """
 from __future__ import annotations
 
@@ -27,36 +27,30 @@ st.set_page_config(page_title="IMAGINE | AEC Engine", page_icon=None, layout="wi
 SEARCH_ALIASES = {
     "concrete": ("beam", "column", "slab", "foundation", "punching", "en 1992", "building materials"),
     "rc": ("beam", "column", "slab", "foundation", "punching", "en 1992"),
-    "reinforced": ("beam", "column", "slab", "foundation", "punching"),
-    "steel": ("steel members", "steel connections", "section shapes", "en 1993", "en 1994"),
-    "timber": ("en 1995", "structural design handbook", "building materials"),
-    "masonry": ("en 1996", "structural design handbook", "building materials"),
-    "aluminium": ("en 1999", "structural design handbook", "building materials"),
-    "aluminum": ("en 1999", "structural design handbook", "building materials"),
+    "steel": ("steel members", "steel connections", "section shapes", "en 1993"),
+    "timber": ("en 1995", "roof design", "building materials"),
+    "masonry": ("en 1996", "building materials"),
+    "aluminium": ("en 1999", "building materials"),
+    "aluminum": ("en 1999", "building materials"),
     "geotechnical": ("en 1997", "foundation design", "retaining walls"),
     "seismic": ("en 1998", "structural analysis"),
-    "earthquake": ("en 1998", "structural analysis"),
     "composite": ("en 1994", "steel members", "beam design", "slab design"),
     "materials": ("building materials", "concrete", "steel", "timber", "masonry", "aluminium"),
-    "structural handbook": ("structural design handbook", "building materials", "eurocode suite"),
     "handbook": ("structural design handbook", "architectural design handbook"),
-    "eurocode": ("eurocode suite", "en 1990", "en 1991", "en 1992", "en 1993", "en 1994", "en 1995", "en 1996", "en 1997", "en 1998", "en 1999"),
-    "en": ("en 1990", "en 1991", "en 1992", "en 1993", "en 1994", "en 1995", "en 1996", "en 1997", "en 1998", "en 1999"),
-    "ec": ("en 1990", "en 1991", "en 1992", "en 1993", "en 1994", "en 1995", "en 1996", "en 1997", "en 1998", "en 1999", "eurocode suite"),
+    "eurocode": tuple(f"en 199{i}" for i in range(0, 10)) + ("eurocode suite",),
+    "analysis": ("structural analysis", "finite element analysis"),
+    "architecture": ("architecture assistant", "design standards", "architectural design handbook", "zoning", "site planning", "floor planning", "room programming", "compliance", "generative design"),
+    "stairs": ("stairs design", "architecture", "compliance"),
+    "stair": ("stairs design", "architecture", "compliance"),
+    "opening": ("openings design", "beam design", "architecture"),
+    "openings": ("openings design", "beam design", "architecture"),
+    "railing": ("railings & balustrades", "architecture"),
+    "railings": ("railings & balustrades", "architecture"),
     "bim": ("buildings", "storeys", "spaces", "elements", "ifc", "cobie", "digital twin"),
     "mep": ("integrated mep analysis", "hvac", "ventilation", "chilled water", "electrical load analysis", "water supply", "drainage"),
     "cost": ("boq", "quantity takeoff", "procurement", "forex", "inflation / escalation", "risk analysis"),
     "construction": ("planning", "scheduling", "rfis", "submittals", "snagging", "site diaries"),
     "documents": ("drawing management", "document register", "specifications", "contracts", "version control", "transmittals"),
-    "ai": ("imagine architect", "imagine engineer", "imagine mep", "imagine qs", "imagine pm"),
-    "project": ("projects", "approvals", "revisions", "workflows", "governance"),
-    "analysis": ("structural analysis", "finite element analysis", "eurocode suite"),
-    "architecture": ("architecture assistant", "design standards", "architectural design handbook", "zoning", "site planning", "floor planning", "room programming", "compliance", "generative design"),
-    "roof": ("roof design",),
-    "energy": ("energy", "hvac", "chilled water", "energy simulation"),
-    "digital": ("digital twin", "assets", "sensors", "telemetry", "energy", "maintenance", "predictive ai"),
-    "regional": ("uganda", "kenya", "tanzania", "rwanda", "south sudan", "codes", "zoning laws"),
-    "integration": ("microsoft", "autocad", "revit", "archicad", "tekla", "ifcopenshell", "arcgis", "azure", "mapbox"),
     "files": ("project files", "file center", "documents", "drawings", "bim"),
 }
 
@@ -67,116 +61,86 @@ def registry_snapshot() -> tuple[ModuleSpec, ...]:
 
 
 def init_session_state() -> None:
-    defaults = {
-        "active_route": "Overview",
-        "module_search": "",
-        "module_search_domain": "All domains",
-        "active_domain": "PLATFORM",
-        "menu_domain": "HOME",
-        "last_route_load_ms": None,
-        "recent_routes": [],
-        "selected_project_id": None,
-        "selected_project_name": None,
-    }
+    defaults = {"active_route": "Overview", "module_search": "", "module_search_domain": "All domains", "active_domain": "PLATFORM", "recent_routes": [], "selected_project_id": None, "selected_project_name": None, "last_route_load_ms": None}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
 
 def inject_styles() -> None:
-    st.markdown(
-        """
-        <style>
-        .stApp{background:linear-gradient(135deg,#f7f9fc 0%,#eef3f8 52%,#f8fafc 100%)}
-        .block-container{max-width:1600px;padding-top:.85rem;padding-bottom:3rem}
-        .imagine-brand{padding:.2rem .1rem .8rem}.imagine-brand-title{font-size:1.8rem;font-weight:900;letter-spacing:-.06em}.imagine-brand-subtitle{margin-top:.25rem;color:#687588;font-size:.74rem;line-height:1.45}
-        .imagine-label{margin:.7rem 0 .35rem;color:#687588;font-size:.64rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase}
-        .imagine-header{padding:1.2rem 1.35rem;margin-bottom:1rem;border:1px solid rgba(120,135,155,.18);border-radius:18px;background:rgba(255,255,255,.78);box-shadow:0 16px 40px rgba(35,55,80,.07)}
-        .imagine-header-title{margin:0;font-size:2.2rem;line-height:1;font-weight:900;letter-spacing:-.055em}.imagine-header-subtitle{margin-top:.45rem;color:#687588;font-size:.9rem}.imagine-breadcrumb{display:inline-block;margin-top:.7rem;padding:.3rem .6rem;border:1px solid #dce3eb;border-radius:999px;background:#f3f6f9;color:#566276;font-size:.68rem}
-        .imagine-hero{padding:1.5rem;margin-bottom:1rem;border-radius:20px;background:linear-gradient(135deg,rgba(255,255,255,.94),rgba(238,244,250,.86));border:1px solid rgba(120,135,155,.17);box-shadow:0 18px 55px rgba(35,55,80,.08)}.imagine-hero-title{font-size:1.5rem;font-weight:850;letter-spacing:-.035em}.imagine-hero-copy{margin-top:.45rem;color:#647184;line-height:1.6}
-        .imagine-card{min-height:105px;padding:1rem;border:1px solid rgba(120,135,155,.17);border-radius:16px;background:rgba(255,255,255,.84);box-shadow:0 10px 30px rgba(35,55,80,.05)}.imagine-card-title{color:#687588;font-size:.62rem;font-weight:850;letter-spacing:.09em;text-transform:uppercase}.imagine-card-value{margin-top:.35rem;font-size:1.45rem;font-weight:900}.imagine-card-description{margin-top:.2rem;color:#7a8697;font-size:.7rem}
-        .imagine-panel{padding:1rem 1.1rem;border:1px solid rgba(120,135,155,.17);border-radius:15px;background:rgba(255,255,255,.8);box-shadow:0 10px 30px rgba(35,55,80,.045)}.imagine-panel-title{font-size:1rem;font-weight:800}.imagine-panel-description{margin-top:.25rem;color:#687588;font-size:.78rem;line-height:1.5}
-        .imagine-nav{padding:.8rem 1rem;margin-bottom:1rem;border:1px solid rgba(120,135,155,.18);border-radius:15px;background:rgba(255,255,255,.82);box-shadow:0 8px 25px rgba(35,55,80,.05)}
-        .imagine-nav-title{font-size:.62rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:#687588;margin-bottom:.35rem}.imagine-nav-subtitle{font-size:.75rem;color:#7a8697;margin-bottom:.7rem}
-        .imagine-search-hint{padding:.7rem .8rem;margin-top:.5rem;border:1px dashed rgba(120,135,155,.35);border-radius:12px;color:#687588;font-size:.75rem;line-height:1.5}.imagine-footer{margin-top:2.5rem;padding-top:1rem;border-top:1px solid rgba(120,135,155,.2);color:#8792a1;font-size:.67rem}
-        div.stButton>button{min-height:2.25rem;border-radius:10px;font-weight:680;transition:transform .14s ease,box-shadow .14s ease}div.stButton>button:hover{transform:translateY(-1px);box-shadow:0 7px 18px rgba(35,55,80,.12)}
-        @media(prefers-color-scheme:dark){.stApp{background:radial-gradient(circle at top right,#172231 0%,#0b1118 55%,#0b1118 100%)}.imagine-header,.imagine-hero,.imagine-card,.imagine-panel,.imagine-nav{background:rgba(19,28,39,.84);border-color:#293746}.imagine-brand-title,.imagine-header-title,.imagine-hero-title,.imagine-card-value,.imagine-panel-title{color:#f1f5f9}.imagine-brand-subtitle,.imagine-header-subtitle,.imagine-hero-copy,.imagine-panel-description,.imagine-card-description,.imagine-search-hint,.imagine-nav-subtitle{color:#aab5c3}.imagine-breadcrumb{background:#17212c;border-color:#2b3948;color:#b9c4d1}.imagine-label,.imagine-card-title,.imagine-nav-title{color:#aab5c3}.imagine-footer{border-top-color:#293746}}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+    <style>
+    .stApp{background:linear-gradient(135deg,#f7f9fc,#eef3f8 55%,#f8fafc)}
+    .block-container{max-width:1600px;padding-top:.8rem;padding-bottom:3rem}
+    .imagine-brand-title{font-size:1.8rem;font-weight:900;letter-spacing:-.06em}.imagine-brand-subtitle{color:#687588;font-size:.74rem;line-height:1.45;margin-top:.25rem}
+    .imagine-header,.imagine-nav,.imagine-hero,.imagine-panel,.imagine-file-card{border:1px solid rgba(120,135,155,.18);border-radius:18px;background:rgba(255,255,255,.82);box-shadow:0 12px 35px rgba(35,55,80,.06)}
+    .imagine-header{padding:1.15rem 1.3rem;margin-bottom:.9rem}.imagine-header-title{font-size:2.15rem;font-weight:900;letter-spacing:-.05em}.imagine-header-subtitle{color:#687588;margin-top:.35rem}.imagine-breadcrumb{display:inline-block;margin-top:.65rem;padding:.28rem .6rem;border-radius:999px;background:#f1f4f7;color:#566276;font-size:.68rem}
+    .imagine-nav{padding:.85rem 1rem;margin-bottom:1rem}.imagine-nav-title,.imagine-label{font-size:.62rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:#687588}.imagine-nav-subtitle{font-size:.75rem;color:#7a8697;margin:.3rem 0 .65rem}
+    .imagine-hero{padding:1.35rem;margin-bottom:1rem}.imagine-hero-title{font-size:1.45rem;font-weight:850}.imagine-hero-copy{color:#647184;line-height:1.6;margin-top:.35rem}
+    .imagine-panel{padding:1rem;margin-bottom:.7rem}.imagine-panel-title{font-weight:800}.imagine-panel-description{color:#687588;font-size:.76rem;margin-top:.25rem}.imagine-file-card{padding:1rem;margin:.45rem 0}
+    .imagine-card{min-height:100px;padding:1rem;border:1px solid rgba(120,135,155,.17);border-radius:15px;background:rgba(255,255,255,.84)}.imagine-card-title{color:#687588;font-size:.62rem;font-weight:850;letter-spacing:.09em;text-transform:uppercase}.imagine-card-value{font-size:1.4rem;font-weight:900;margin-top:.35rem}.imagine-card-description{color:#7a8697;font-size:.7rem}
+    .imagine-footer{margin-top:2rem;padding-top:1rem;border-top:1px solid rgba(120,135,155,.2);color:#8792a1;font-size:.67rem}
+    @media(prefers-color-scheme:dark){.stApp{background:#0b1118}.imagine-header,.imagine-nav,.imagine-hero,.imagine-panel,.imagine-file-card,.imagine-card{background:rgba(19,28,39,.88);border-color:#293746}.imagine-header-title,.imagine-hero-title,.imagine-card-value,.imagine-panel-title{color:#f1f5f9}.imagine-header-subtitle,.imagine-hero-copy,.imagine-panel-description,.imagine-card-description,.imagine-nav-subtitle,.imagine-brand-subtitle{color:#aab5c3}.imagine-breadcrumb{background:#17212c;border-color:#2b3948;color:#b9c4d1}}
+    </style>
+    """, unsafe_allow_html=True)
 
 
 def spec_for_route(route: str) -> ModuleSpec | None:
-    return next((spec for spec in registry_snapshot() if spec.route == route), None)
+    return next((s for s in registry_snapshot() if s.route == route), None)
 
 
 def domains() -> list[str]:
-    return sorted({spec.section for spec in registry_snapshot()})
+    return sorted({s.section for s in registry_snapshot()})
 
 
 def domain_specs(domain: str) -> list[ModuleSpec]:
-    return [spec for spec in registry_snapshot() if spec.section == domain]
+    return [s for s in registry_snapshot() if s.section == domain]
 
 
 def search_specs(query: str, domain: str = "All domains") -> list[ModuleSpec]:
-    normalized = " ".join(query.strip().casefold().split())
+    normalized = " ".join(query.casefold().split())
     if not normalized:
         return []
     candidates = [s for s in registry_snapshot() if domain == "All domains" or s.section == domain]
     terms = normalized.split()
-    expanded_terms = set(terms)
+    expanded = set(terms)
     for term in terms:
-        expanded_terms.update(SEARCH_ALIASES.get(term, ()))
-    scored: list[tuple[int, ModuleSpec]] = []
+        expanded.update(SEARCH_ALIASES.get(term, ()))
+    scored = []
     for spec in candidates:
         haystack = " ".join((spec.route, spec.label, spec.section, spec.module_path or "")).casefold()
-        direct_hits = sum(1 for term in terms if term in haystack)
-        alias_hits = sum(1 for term in expanded_terms if term in haystack)
-        phrase_hit = normalized in haystack
-        if direct_hits == 0 and alias_hits == 0 and not phrase_hit:
+        direct = sum(term in haystack for term in terms)
+        alias = sum(term in haystack for term in expanded)
+        phrase = normalized in haystack
+        if not (direct or alias or phrase):
             continue
-        score = direct_hits * 80 + alias_hits * 15 + (100 if spec.implemented else 0)
-        if phrase_hit:
-            score += 120
-        if normalized in {spec.label.casefold(), spec.route.casefold()}:
-            score += 180
-        elif normalized in spec.label.casefold():
-            score += 80
-        elif normalized in spec.route.casefold():
-            score += 60
-        elif normalized in spec.section.casefold():
-            score += 40
+        score = direct * 80 + alias * 15 + (100 if spec.implemented else 0) + (120 if phrase else 0)
+        if normalized in {spec.route.casefold(), spec.label.casefold()}: score += 180
+        elif normalized in spec.label.casefold(): score += 80
         scored.append((score, spec))
-    scored.sort(key=lambda item: (-item[0], item[1].section, item[1].label))
-    return [spec for _, spec in scored]
+    return [s for _, s in sorted(scored, key=lambda x: (-x[0], x[1].section, x[1].label))]
 
 
 def set_active_route(route: str) -> None:
     spec = spec_for_route(route)
-    if spec is None:
-        return
+    if not spec: return
     st.session_state.active_route = route
     st.session_state.active_domain = spec.section
-    st.session_state.menu_domain = "HOME" if spec.section == "PLATFORM" else spec.section
     recent = [r for r in st.session_state.get("recent_routes", []) if r != route]
     st.session_state.recent_routes = [route, *recent][:6]
 
 
 def load_renderer(spec: ModuleSpec) -> Callable[[], object]:
-    if not spec.module_path or spec.module_path == "__builtin__":
-        raise AttributeError(f"No external renderer is configured for {spec.route}.")
+    if not spec.module_path or spec.module_path == "__builtin__": raise AttributeError(f"No external renderer is configured for {spec.route}.")
     module = importlib.import_module(spec.module_path)
     renderer = getattr(module, spec.renderer_name, None) or getattr(module, "render", None)
-    if not callable(renderer):
-        raise AttributeError(f"Module '{spec.module_path}' does not expose a callable renderer.")
+    if not callable(renderer): raise AttributeError(f"Module '{spec.module_path}' does not expose a callable renderer.")
     return renderer
 
 
 def probe_renderers() -> list[dict[str, str]]:
     rows = []
     for spec in registry_snapshot():
-        if not spec.implemented or not spec.module_path or spec.module_path == "__builtin__":
-            continue
+        if not spec.implemented or not spec.module_path or spec.module_path == "__builtin__": continue
         try:
             module = importlib.import_module(spec.module_path)
             renderer = getattr(module, spec.renderer_name, None) or getattr(module, "render", None)
@@ -186,75 +150,35 @@ def probe_renderers() -> list[dict[str, str]]:
     return rows
 
 
-def get_project_summary() -> tuple[list[object], str]:
-    try:
-        from database.bootstrap import database_health
-        from database.connection import SessionLocal
-        health = database_health()
-        if not health.get("ok"):
-            return [], "Unavailable"
-        from projects.projects.service import ProjectService
-        with SessionLocal() as db:
-            return ProjectService.get_all_sync(db=db, skip=0, limit=10000), "Connected"
-    except Exception:
-        return [], "Unavailable"
-
-
 def render_sidebar() -> None:
     with st.sidebar:
-        st.markdown('<div class="imagine-brand"><div class="imagine-brand-title">IMAGINE</div><div class="imagine-brand-subtitle">Integrated Architecture, Engineering & Construction Engine</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="imagine-brand-title">IMAGINE</div><div class="imagine-brand-subtitle">Integrated Architecture, Engineering & Construction Engine</div>', unsafe_allow_html=True)
         st.divider()
         st.markdown('<div class="imagine-label">Workspace search</div>', unsafe_allow_html=True)
-        st.text_input("Search modules", key="module_search", placeholder="Search beam, EN 1992, handbook, BIM...", label_visibility="collapsed")
-        domains_for_search = ["All domains", *domains()]
-        current = st.session_state.get("module_search_domain", "All domains")
-        if current not in domains_for_search:
-            current = "All domains"
-        st.selectbox("Search domain", domains_for_search, index=domains_for_search.index(current), key="module_search_domain")
-        st.caption("Use the menu bar above to browse disciplines. Search is reserved for finding a specific workspace quickly.")
+        st.text_input("Search modules", key="module_search", placeholder="Search stairs, openings, railings, EN 1992, BIM...", label_visibility="collapsed")
+        options = ["All domains", *domains()]
+        if st.session_state.module_search_domain not in options: st.session_state.module_search_domain = "All domains"
+        st.selectbox("Search domain", options, key="module_search_domain")
+        st.caption("Browse disciplines with the dropdown menu bar. Use search when you already know the workspace you need.")
 
 
 def render_navigation() -> None:
-    """Render the primary dropdown menu bar and the selected domain page menu."""
-    all_domains = domains()
-    domain_labels = ["HOME" if domain == "PLATFORM" else domain for domain in all_domains]
-    current_domain = st.session_state.get("active_domain", "PLATFORM")
-    current_label = "HOME" if current_domain == "PLATFORM" else current_domain
-    if current_label not in domain_labels:
-        current_label = "HOME"
-
-    st.markdown(
-        '<div class="imagine-nav"><div class="imagine-nav-title">IMAGINE Menu</div>'
-        '<div class="imagine-nav-subtitle">Choose a discipline, then choose its workspace.</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    menu_col, page_col, status_col = st.columns([1.15, 2.25, 1.0])
-    with menu_col:
-        selected_label = st.selectbox("Discipline", domain_labels, index=domain_labels.index(current_label), key="menu_domain_selector", label_visibility="collapsed")
-    selected_domain = "PLATFORM" if selected_label == "HOME" else selected_label
-
-    pages = domain_specs(selected_domain)
-    page_labels = [spec.label + ("" if spec.implemented else " · Registered") for spec in pages]
-    active_route = st.session_state.get("active_route", "Overview")
-    active_index = next((i for i, spec in enumerate(pages) if spec.route == active_route), 0)
-
-    with page_col:
-        selected_page = st.selectbox("Workspace", page_labels, index=active_index, key=f"menu_page_selector_{selected_domain}", label_visibility="collapsed")
-    selected_spec = pages[page_labels.index(selected_page)] if pages else None
-
-    with status_col:
-        if selected_spec:
-            status = "Ready" if selected_spec.implemented else "Registered"
-            st.caption(f"{selected_domain}\n{status}")
-
-    changed_domain = selected_domain != current_domain
-    changed_page = selected_spec is not None and selected_spec.route != active_route
-    if changed_domain or changed_page:
-        if selected_spec is not None:
-            set_active_route(selected_spec.route)
-        elif selected_domain == "PLATFORM":
-            set_active_route("Overview")
+    st.markdown('<div class="imagine-nav"><div class="imagine-nav-title">IMAGINE Module Menu</div><div class="imagine-nav-subtitle">Select a discipline, then select a workspace from its dropdown.</div></div>', unsafe_allow_html=True)
+    labels = ["HOME" if d == "PLATFORM" else d for d in domains()]
+    current = "HOME" if st.session_state.active_domain == "PLATFORM" else st.session_state.active_domain
+    if current not in labels: current = "HOME"
+    c1, c2, c3 = st.columns([1.2, 2.4, 1])
+    with c1: selected = st.selectbox("Discipline", labels, index=labels.index(current), key="module_menu_domain", label_visibility="collapsed")
+    domain = "PLATFORM" if selected == "HOME" else selected
+    pages = domain_specs(domain)
+    page_labels = [p.label + ("" if p.implemented else " · Registered") for p in pages]
+    active = st.session_state.active_route
+    idx = next((i for i, p in enumerate(pages) if p.route == active), 0)
+    with c2: page = st.selectbox("Workspace", page_labels, index=idx, key=f"module_menu_page_{domain}", label_visibility="collapsed")
+    chosen = pages[page_labels.index(page)] if pages else None
+    with c3: st.caption(f"{domain}\n{'Ready' if chosen and chosen.implemented else 'Registered'}")
+    if chosen and chosen.route != active:
+        set_active_route(chosen.route)
         st.rerun()
 
 
@@ -263,145 +187,75 @@ def render_header(title: str, subtitle: str, breadcrumb: str) -> None:
 
 
 def render_workspace_controls() -> None:
-    active = st.session_state.get("active_route", "Overview")
-    left, middle, right = st.columns([1.1, 1.5, 1.1])
-    with left:
-        if active != "Overview" and st.button("Back to Overview", use_container_width=True):
-            set_active_route("Overview")
-            st.rerun()
-    with middle:
-        recent = [r for r in st.session_state.get("recent_routes", []) if r != active and spec_for_route(r)]
+    active = st.session_state.active_route
+    a, b, c = st.columns([1.1, 1.5, 1.1])
+    with a:
+        if active != "Overview" and st.button("Back to Overview", use_container_width=True): set_active_route("Overview"); st.rerun()
+    with b:
+        recent = [r for r in st.session_state.recent_routes if r != active and spec_for_route(r)]
         if recent:
-            choice = st.selectbox("Recent workspace", ["Select recent workspace", *recent], key="recent_workspace_selector")
-            if choice != "Select recent workspace":
-                set_active_route(choice)
-                st.rerun()
-    with right:
-        st.caption(f"Active workspace: {active}")
+            choice = st.selectbox("Recent workspace", ["Select recent workspace", *recent], key="recent_workspace")
+            if choice != "Select recent workspace": set_active_route(choice); st.rerun()
+    with c: st.caption(f"Active: {active}")
 
 
-def render_search_results() -> bool:
-    query = st.session_state.get("module_search", "").strip()
-    if not query:
-        return False
-    domain = st.session_state.get("module_search_domain", "All domains")
-    matches = search_specs(query, domain)
+def render_search_results() -> None:
+    query = st.session_state.module_search.strip()
+    matches = search_specs(query, st.session_state.module_search_domain)
     st.subheader("Workspace Search")
-    st.caption(f"{len(matches)} result(s) for '{query}' · {domain}")
+    st.caption(f"{len(matches)} result(s) for '{query}'")
     if not matches:
-        st.info("No matching workspace was found. Try beam, EN 1992, handbook, materials, BIM, HVAC, BOQ, RFIs, files or a discipline name.")
-        return True
-    cols = st.columns(3)
-    for index, spec in enumerate(matches[:30]):
-        with cols[index % 3]:
-            status = "Ready" if spec.implemented else "Registered"
-            st.markdown(f'<div class="imagine-panel"><div class="imagine-panel-title">{spec.label}</div><div class="imagine-panel-description">{spec.section} · {status}</div></div>', unsafe_allow_html=True)
-            if spec.implemented and st.button("Open workspace", key=f"search_open_{spec.route}", use_container_width=True):
-                set_active_route(spec.route)
-                st.session_state.module_search = ""
-                st.rerun()
-    return True
-
-
-def render_project_context(projects: list[object]) -> None:
-    if not projects:
+        st.info("No matching workspace. Try stairs, openings, railings, beam, EN 1992, handbook, materials, BIM or a discipline name.")
         return
-    options = {getattr(p, "name", f"Project {getattr(p, 'id', '')}"): getattr(p, "id", None) for p in projects}
-    names = list(options)
-    current = st.session_state.get("selected_project_name")
-    if current not in names:
-        current = names[0]
-    selected = st.selectbox("Active project context", names, index=names.index(current), key="active_project_selector")
-    st.session_state.selected_project_name = selected
-    st.session_state.selected_project_id = options[selected]
-
-
-def render_domain_summary(specs: tuple[ModuleSpec, ...]) -> None:
-    st.subheader("Workspace Coverage")
-    rows = []
-    for section in domains():
-        group = [spec for spec in specs if spec.section == section]
-        ready = sum(spec.implemented for spec in group)
-        rows.append({"Domain": section, "Ready": ready, "Registered": len(group), "Coverage": round(ready / len(group) * 100, 1)})
-    frame = pd.DataFrame(rows)
-    left, right = st.columns([1.15, 1])
-    with left:
-        st.dataframe(frame, use_container_width=True, hide_index=True, column_config={"Coverage": st.column_config.NumberColumn(format="%.1f%%")})
-    with right:
-        fig = px.bar(frame, x="Domain", y="Coverage", height=330)
-        fig.update_layout(margin=dict(l=10, r=10, t=15, b=90), yaxis_title="Ready coverage (%)", xaxis_tickangle=-35)
-        st.plotly_chart(fig, use_container_width=True)
+    cols = st.columns(3)
+    for i, spec in enumerate(matches[:30]):
+        with cols[i % 3]:
+            st.markdown(f'<div class="imagine-panel"><div class="imagine-panel-title">{spec.label}</div><div class="imagine-panel-description">{spec.section} · {"Ready" if spec.implemented else "Registered"}</div></div>', unsafe_allow_html=True)
+            if spec.implemented and st.button("Open workspace", key=f"search_open_{spec.route}", use_container_width=True):
+                set_active_route(spec.route); st.session_state.module_search = ""; st.rerun()
 
 
 def render_overview() -> None:
+    specs = registry_snapshot(); ready = sum(s.implemented for s in specs); coverage = round(100 * ready / len(specs), 1)
     render_header("IMAGINE", "Integrated Architecture, Engineering & Construction Engine", "Home / Enterprise Workspace")
-    specs = registry_snapshot()
-    projects, database_status = get_project_summary()
-    ready = sum(spec.implemented for spec in specs)
-    coverage = round(ready / len(specs) * 100, 1) if specs else 0
-    st.markdown('<div class="imagine-hero"><div class="imagine-hero-title">Design. Engineer. Build. Operate.</div><div class="imagine-hero-copy">One workspace for project delivery, architecture, structural engineering, BIM, MEP, cost, construction, documents, AI and operational intelligence.</div></div>', unsafe_allow_html=True)
     render_workspace_controls()
-    if projects:
-        render_project_context(projects)
-    cards = [("Workspaces", len(specs), "Enterprise registry"), ("Ready", ready, f"{coverage}% coverage"), ("Projects", len(projects), "Database records"), ("Database", database_status, "Runtime connectivity")]
+    st.markdown('<div class="imagine-hero"><div class="imagine-hero-title">Design. Engineer. Build. Operate.</div><div class="imagine-hero-copy">A unified workspace for architecture, structural engineering, BIM, MEP, cost, construction, documents, AI and operational intelligence.</div></div>', unsafe_allow_html=True)
+    cards = [("Workspaces", len(specs), "Central registry"), ("Ready", ready, f"{coverage}% registry coverage"), ("Structural tools", sum(s.section == "STRUCTURAL" and s.implemented for s in specs), "Design workspaces"), ("Domains", len(domains()), "Enterprise disciplines")]
     cols = st.columns(4)
     for i, (title, value, desc) in enumerate(cards):
-        with cols[i]:
-            st.markdown(f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div><div class="imagine-card-description">{desc}</div></div>', unsafe_allow_html=True)
-    left, right = st.columns([1.05, 1])
-    with left:
-        st.subheader("Portfolio Snapshot")
-        if projects:
-            rows = [{"Project": getattr(p, "name", "Unnamed project"), "Status": p.status.value if hasattr(p.status, "value") else str(p.status)} for p in projects[:25]]
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        else:
-            st.info("No database project records are currently available.")
+        with cols[i]: st.markdown(f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div><div class="imagine-card-description">{desc}</div></div>', unsafe_allow_html=True)
+    rows = []
+    for domain in domains():
+        group = [s for s in specs if s.section == domain]; r = sum(s.implemented for s in group)
+        rows.append({"Domain": domain, "Ready": r, "Registered": len(group), "Coverage %": round(100*r/len(group), 1)})
+    df = pd.DataFrame(rows)
+    left, right = st.columns([1.1, 1])
+    with left: st.dataframe(df, use_container_width=True, hide_index=True)
     with right:
-        st.subheader("Platform Coverage")
-        rows = [{"Domain": section, "Ready": sum(x.implemented for x in specs if x.section == section), "Registered": sum(1 for x in specs if x.section == section)} for section in domains()]
-        fig = px.bar(pd.DataFrame(rows), x="Domain", y=["Ready", "Registered"], barmode="group", height=390)
-        fig.update_layout(margin=dict(l=10, r=10, t=15, b=95), legend_title_text="", xaxis_tickangle=-35)
+        fig = px.bar(df, x="Domain", y="Coverage %", height=360); fig.update_layout(margin=dict(l=10,r=10,t=15,b=90), xaxis_tickangle=-35)
         st.plotly_chart(fig, use_container_width=True)
-    render_domain_summary(specs)
 
 
 def render_system_health() -> None:
-    render_header("System Health", "Registry validation, renderer probing and database diagnostics", "Platform / System Health")
-    try:
-        validate_registry(); registry_status = "Healthy"; registry_error = ""
-    except Exception as exc:
-        registry_status = "Failed"; registry_error = f"{type(exc).__name__}: {exc}"
-    try:
-        from database.bootstrap import database_health
-        db_health = database_health()
-    except Exception as exc:
-        db_health = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-    specs = registry_snapshot()
-    a, b, c, d = st.columns(4)
-    a.metric("Registered", len(specs)); b.metric("Marked Ready", sum(x.implemented for x in specs)); c.metric("Registry", registry_status); d.metric("Database", "Connected" if db_health.get("ok") else "Unavailable")
-    if registry_error: st.error(registry_error)
-    if db_health.get("ok"): st.success("Database connectivity check passed.")
-    else: st.warning(db_health.get("error", "Database connectivity check failed."))
-    st.subheader("Renderer Health")
+    render_header("System Health", "Registry, renderer and runtime diagnostics", "Platform / System Health")
+    try: validate_registry(); registry = "Healthy"
+    except Exception as exc: registry = f"Failed: {exc}"
     rows = probe_renderers()
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True) if rows else st.info("No external implemented renderers were available to probe.")
+    a,b,c = st.columns(3); a.metric("Registered", len(registry_snapshot())); b.metric("Ready", sum(s.implemented for s in registry_snapshot())); c.metric("Registry", registry)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True) if rows else st.info("No external renderers available to probe.")
 
 
 def render_placeholder(spec: ModuleSpec) -> None:
     render_header(spec.label, f"{spec.section} workspace", f"{spec.section} / {spec.label}")
-    st.warning("This page is registered but its execution renderer is not connected yet.")
+    st.warning("This workspace is registered in the enterprise menu but its execution renderer is not connected yet.")
 
 
 def render_selected_module(route: str) -> None:
     spec = spec_for_route(route)
-    if spec is None:
-        set_active_route("Overview"); render_overview(); return
-    if route == "Overview":
-        render_overview(); return
-    if route == "System Health":
-        render_system_health(); return
-    if not spec.implemented or not spec.module_path:
-        render_placeholder(spec); return
+    if not spec: return render_overview()
+    if route == "Overview": return render_overview()
+    if route == "System Health": return render_system_health()
+    if not spec.implemented or not spec.module_path: return render_placeholder(spec)
     render_header(spec.label, f"IMAGINE {spec.section.title()} Workspace", f"{spec.section} / {spec.label}")
     render_workspace_controls()
     started = time.perf_counter()
@@ -409,30 +263,19 @@ def render_selected_module(route: str) -> None:
         load_renderer(spec)()
         st.session_state.last_route_load_ms = round((time.perf_counter() - started) * 1000, 1)
     except Exception as exc:
-        st.error(f"{spec.label} could not be loaded safely. The navigation shell remains available.")
-        with st.expander("Technical details", expanded=False):
-            st.code(f"Domain: {spec.section}\nModule: {spec.module_path}\nRenderer: {spec.renderer_name}")
-            st.exception(exc)
-
-
-def render_footer() -> None:
-    load_ms = st.session_state.get("last_route_load_ms")
-    timing = f" · last workspace load {load_ms} ms" if load_ms is not None else ""
-    st.markdown(f'<div class="imagine-footer">IMAGINE AEC Engine · Dropdown domain navigation + workspace search{timing}</div>', unsafe_allow_html=True)
+        st.error(f"{spec.label} could not be loaded safely. The module menu remains available.")
+        with st.expander("Technical details", expanded=False): st.code(f"Module: {spec.module_path}\nRenderer: {spec.renderer_name}"); st.exception(exc)
 
 
 def main() -> None:
-    init_session_state()
-    inject_styles()
-    render_sidebar()
-    render_navigation()
-    query = st.session_state.get("module_search", "").strip()
-    if query:
+    init_session_state(); inject_styles(); render_sidebar(); render_navigation()
+    if st.session_state.module_search.strip():
         render_header("Workspace Search", "Find an engineering, project, delivery or file workspace", "Search / Workspace")
         render_search_results()
     else:
         render_selected_module(st.session_state.active_route)
-    render_footer()
+    load_ms = st.session_state.get("last_route_load_ms"); timing = f" · last workspace load {load_ms} ms" if load_ms else ""
+    st.markdown(f'<div class="imagine-footer">IMAGINE AEC Engine · Dropdown module navigation + workspace search{timing}</div>', unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
