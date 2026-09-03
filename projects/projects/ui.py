@@ -1,138 +1,200 @@
-"""
-projects/projects/ui.py
-------------------------
-Central project repository, BIM file management, revision tracking, and team collaboration.
-Exposes zero-argument `render_projects()` required by streamlit_app.py.
-"""
+"""Database-backed Streamlit UI for the IMAGINE Projects workspace."""
 
 from __future__ import annotations
+
+from typing import Any
 
 import streamlit as st
 
 
+def _ensure_schema() -> None:
+    from database.bootstrap import ensure_schema
+
+    ensure_schema()
+
+
+def _session():
+    from database.connection import SessionLocal
+
+    return SessionLocal()
+
+
+def _project_rows(projects: list[Any]) -> list[dict[str, Any]]:
+    rows = []
+    for project in projects:
+        status = getattr(getattr(project, "status", None), "value", getattr(project, "status", ""))
+        rows.append(
+            {
+                "ID": str(getattr(project, "id", "")),
+                "Name": getattr(project, "name", ""),
+                "Status": str(status),
+                "Budget": float(getattr(project, "budget", 0.0) or 0.0),
+                "Progress %": float(getattr(project, "progress", 0.0) or 0.0),
+                "Client ID": getattr(project, "client_id", None) or "",
+                "Start": getattr(project, "start_date", None) or "",
+                "End": getattr(project, "end_date", None) or "",
+            }
+        )
+    return rows
+
+
 def render_projects() -> None:
-    """Zero-argument Streamlit renderer for Project Management & Workspace."""
+    """Render production-oriented Project CRUD and workspace controls."""
+    st.title("Project Workspace")
+    st.caption("Project lifecycle, database records, budget, progress and client allocation.")
 
-    st.title("📁 Project Workspace & Repository")
-    st.caption("Centralized BIM project management, structural model versioning, revision history, and team role allocation.")
+    try:
+        _ensure_schema()
+        from projects.projects.schemas import ProjectCreate, ProjectStatus, ProjectUpdate
+        from projects.projects.service import ProjectService
+    except Exception as exc:
+        st.error("Projects could not be initialized.")
+        with st.expander("Complete error", expanded=True):
+            st.exception(exc)
+        return
 
-    st.divider()
+    db = None
+    try:
+        db = _session()
+        projects = ProjectService.get_all_sync(db, limit=10000)
 
-    col_params, col_main = st.columns([1, 2], gap="large")
+        active_count = sum(
+            1 for p in projects
+            if getattr(getattr(p, "status", None), "value", getattr(p, "status", "")) == "active"
+        )
+        completed_count = sum(
+            1 for p in projects
+            if getattr(getattr(p, "status", None), "value", getattr(p, "status", "")) == "completed"
+        )
+        total_budget = sum(float(getattr(p, "budget", 0.0) or 0.0) for p in projects)
 
-    with col_params:
-        st.subheader("Active Workspace Controls")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Projects", len(projects))
+        m2.metric("Active", active_count)
+        m3.metric("Completed", completed_count)
+        m4.metric("Portfolio Budget", f"{total_budget:,.2f}")
 
-        selected_project = st.selectbox(
-            "Select Project",
-            [
-                "PRJ-2026-001 | StudioHome HQ Tower",
-                "PRJ-2026-002 | Horizon Residential Complex",
-                "PRJ-2026-003 | Civic Center Atrium",
-                "PRJ-2026-004 | Riverside Eco Bridge",
-            ],
-            key="proj_select",
+        tab_projects, tab_create, tab_update, tab_delete = st.tabs(
+            ["Project Register", "Create Project", "Update Project", "Delete Project"]
         )
 
-        project_stage = st.selectbox(
-            "Design Stage",
-            [
-                "Concept Design (RIBA Stage 2)",
-                "Spatial Coordination (RIBA Stage 3)",
-                "Technical Design / FEA (RIBA Stage 4)",
-                "Construction Documentation",
-            ],
-            index=2,
-            key="proj_stage",
-        )
+        with tab_projects:
+            if projects:
+                st.dataframe(_project_rows(projects), use_container_width=True, hide_index=True)
+            else:
+                st.info("No projects are registered yet. Create the first project from the Create Project tab.")
 
-        st.markdown("**BIM Model Sync Status**")
-        st.caption("Connected Central Repository: Revit Server / IFC Cloud")
-        
-        sync_freq = st.radio(
-            "Auto-Sync Interval",
-            ["Real-time", "Hourly", "Manual Sync"],
-            index=0,
-            key="proj_sync_freq",
-            horizontal=True,
-        )
+        with tab_create:
+            with st.form("projects_create_form", clear_on_submit=True):
+                name = st.text_input("Project Name", max_chars=255)
+                description = st.text_area("Description")
+                status = st.selectbox("Status", list(ProjectStatus), format_func=lambda x: x.value.replace("_", " ").title())
+                budget = st.number_input("Budget", min_value=0.0, value=0.0, step=1000.0)
+                progress = st.number_input("Progress %", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
+                client_id_raw = st.text_input("Client / Organization ID (optional)", help="organizations.id is an integer.")
+                start_date = st.text_input("Start Date (optional)", placeholder="2026-09-01")
+                end_date = st.text_input("End Date (optional)", placeholder="2027-09-01")
+                submitted = st.form_submit_button("Create Project", type="primary", use_container_width=True)
 
-        st.divider()
+            if submitted:
+                if not name.strip():
+                    st.error("Project name is required.")
+                else:
+                    client_id = None
+                    if client_id_raw.strip():
+                        try:
+                            client_id = int(client_id_raw.strip())
+                            if client_id < 1:
+                                raise ValueError
+                        except ValueError:
+                            st.error("Client / Organization ID must be a positive integer.")
+                            client_id = -1
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.button(
-                "➕ New Project",
-                use_container_width=True,
-                key="proj_new_btn",
-            )
-        with c2:
-            st.button(
-                "☁️ Sync Central",
-                type="primary",
-                use_container_width=True,
-                key="proj_sync_btn",
-            )
+                    if client_id != -1:
+                        try:
+                            payload = ProjectCreate(
+                                name=name.strip(),
+                                description=description.strip() or None,
+                                status=status,
+                                budget=budget,
+                                progress=progress,
+                                client_id=client_id,
+                                start_date=start_date.strip() or None,
+                                end_date=end_date.strip() or None,
+                            )
+                            ProjectService.create_sync(db, payload)
+                            st.success("Project created successfully.")
+                            st.rerun()
+                        except Exception as exc:
+                            db.rollback()
+                            st.error("Project could not be created.")
+                            with st.expander("Complete error", expanded=True):
+                                st.exception(exc)
 
-    with col_main:
-        if "proj_loaded" not in st.session_state:
-            st.session_state.proj_loaded = True
+        with tab_update:
+            project_ids = [str(getattr(p, "id")) for p in projects]
+            if not project_ids:
+                st.info("Create a project before updating one.")
+            else:
+                selected_id = st.selectbox("Project", project_ids, key="project_update_id")
+                selected = ProjectService.get_sync(db, selected_id)
+                if selected is not None:
+                    current_status = getattr(getattr(selected, "status", None), "value", getattr(selected, "status", "planning"))
+                    status_values = [x.value for x in ProjectStatus]
+                    current_index = status_values.index(current_status) if current_status in status_values else 0
+                    with st.form("projects_update_form"):
+                        new_name = st.text_input("Project Name", value=getattr(selected, "name", ""))
+                        new_description = st.text_area("Description", value=getattr(selected, "description", "") or "")
+                        new_status = st.selectbox("Status", status_values, index=current_index)
+                        new_budget = st.number_input("Budget", min_value=0.0, value=float(getattr(selected, "budget", 0.0) or 0.0), step=1000.0)
+                        new_progress = st.number_input("Progress %", min_value=0.0, max_value=100.0, value=float(getattr(selected, "progress", 0.0) or 0.0), step=1.0)
+                        update_submitted = st.form_submit_button("Save Changes", type="primary", use_container_width=True)
 
-        tab_overview, tab_models, tab_revisions, tab_team = st.tabs([
-            "📌 Project Overview",
-            "🧊 BIM & Geometry Files",
-            "📜 Revision History",
-            "👥 Team & Roles",
-        ])
+                    if update_submitted:
+                        try:
+                            payload = ProjectUpdate(
+                                name=new_name.strip(),
+                                description=new_description.strip() or None,
+                                status=ProjectStatus(new_status),
+                                budget=new_budget,
+                                progress=new_progress,
+                            )
+                            ProjectService.update_sync(db, selected_id, payload)
+                            st.success("Project updated successfully.")
+                            st.rerun()
+                        except Exception as exc:
+                            db.rollback()
+                            st.error("Project could not be updated.")
+                            with st.expander("Complete error", expanded=True):
+                                st.exception(exc)
 
-        with tab_overview:
-            st.success(f"Loaded **{selected_project.split(' | ')[1]}** ({selected_project.split(' | ')[0]})")
+        with tab_delete:
+            project_ids = [str(getattr(p, "id")) for p in projects]
+            if not project_ids:
+                st.info("There are no projects to delete.")
+            else:
+                delete_id = st.selectbox("Project to delete", project_ids, key="project_delete_id")
+                confirm = st.checkbox("I understand that this deletes the project and its approval/revision records.")
+                if st.button("Delete Project", type="secondary", disabled=not confirm, use_container_width=True):
+                    try:
+                        deleted = ProjectService.delete_sync(db, delete_id)
+                        if deleted:
+                            st.success("Project deleted successfully.")
+                            st.rerun()
+                        else:
+                            st.warning("Project was not found.")
+                    except Exception as exc:
+                        db.rollback()
+                        st.error("Project could not be deleted.")
+                        with st.expander("Complete error", expanded=True):
+                            st.exception(exc)
 
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Gross Floor Area", "18,400 m²")
-            m2.metric("Building Height", "48.5 m (12 Storeys)")
-            m3.metric("Lead Typology", "Mixed-Use Office")
-            m4.metric("Active Revision", "v2.4.1")
-
-            st.markdown("### Project Metadata")
-            meta_data = [
-                {"Parameter": "Client", "Value": "Metro Development Corp"},
-                {"Parameter": "Site Location", "Value": "Sector 4, Central Business District"},
-                {"Parameter": "Building Code", "Value": "IBC 2024 / Eurocode 2 & 3"},
-                {"Parameter": "Structural System", "Value": "RC Core with Post-Tensioned Slabs"},
-                {"Parameter": "Target Sustainability Rating", "Value": "LEED Platinum / BREEAM Outstanding"},
-            ]
-            st.dataframe(meta_data, use_container_width=True, hide_index=True)
-
-        with tab_models:
-            st.markdown("### Linked Structural & Architectural Models")
-
-            models_data = [
-                {"File Name": "StudioHome_HQ_ARC_v2.4.ifc", "Format": "IFC4", "Size": "142 MB", "Author": "Arch Studio", "Status": "Synced (10m ago)"},
-                {"File Name": "StudioHome_HQ_STR_v2.4.rvt", "Format": "Revit 2026", "Size": "210 MB", "Author": "Structure AI", "Status": "Synced (10m ago)"},
-                {"File Name": "StudioHome_HQ_MEP_v2.1.ifc", "Format": "IFC4", "Size": "98 MB", "Author": "MEP Consultants", "Status": "Pending Sync"},
-                {"File Name": "FEA_Mesh_Floor12.json", "Format": "JSON / SAF", "Size": "14 MB", "Author": "Analysis Engine", "Status": "Synced (2h ago)"},
-            ]
-            st.dataframe(models_data, use_container_width=True, hide_index=True)
-
-        with tab_revisions:
-            st.markdown("### Version Control & Model Commits")
-
-            commits = [
-                {"Version": "v2.4.1", "Date": "2026-08-19", "Author": "Structural AI", "Commit Message": "Updated column grid spacing to 8.4m and adjusted core wall thickness."},
-                {"Version": "v2.4.0", "Date": "2026-08-18", "Author": "Lead Architect", "Commit Message": "Revised penthouse floor plan layout and expanded atrium void."},
-                {"Version": "v2.3.2", "Date": "2026-08-15", "Author": "Code Compliance Engine", "Commit Message": "Egress stair travel distance check validated - compliant."},
-                {"Version": "v2.3.0", "Date": "2026-08-10", "Author": "Lead Structural Eng", "Commit Message": "Initial FEA slab thickness optimization run completed."},
-            ]
-            st.dataframe(commits, use_container_width=True, hide_index=True)
-
-        with tab_team:
-            st.markdown("### Assigned Project Members & Stakeholders")
-
-            team_data = [
-                {"Name": "Alex Chen", "Role": "Principal Architect / Project Director", "Access Level": "Admin / Approver"},
-                {"Name": "Elena Rostova", "Role": "Lead Structural Engineer", "Access Level": "Full Edit"},
-                {"Name": "StudioHome AI", "Role": "Automated FEA & Compliance Engine", "Access Level": "System Integration"},
-                {"Name": "Marcus Vance", "Role": "BIM Coordinator", "Access Level": "Full Edit"},
-            ]
-            st.dataframe(team_data, use_container_width=True, hide_index=True)
+    except Exception as exc:
+        if db is not None:
+            db.rollback()
+        st.error("Project workspace could not be loaded.")
+        with st.expander("Complete error", expanded=True):
+            st.exception(exc)
+    finally:
+        if db is not None:
+            db.close()
