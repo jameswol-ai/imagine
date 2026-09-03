@@ -49,11 +49,18 @@ def test_implemented_eurocode_modules_are_searchable() -> None:
     assert results[0].implemented is True
 
 
-def test_sidebar_no_longer_renders_static_module_radio() -> None:
+def test_sidebar_uses_single_global_search() -> None:
     source = inspect.getsource(streamlit_app.render_sidebar)
     assert "st.radio" not in source
     assert "Quick Navigation" not in source
-    assert "Search modules" in source
+    assert "Search all workspaces" in source
+    assert "Search domain" not in source
+    assert "search_domains" not in source
+
+
+def test_discipline_dashboard_is_available() -> None:
+    assert callable(streamlit_app.render_discipline_dashboard)
+    assert "STRUCTURAL" in streamlit_app.domains()
 
 
 def test_render_selected_module_is_isolated() -> None:
