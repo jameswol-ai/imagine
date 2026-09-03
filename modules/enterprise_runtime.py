@@ -1,8 +1,4 @@
-"""Shared runtime for registered IMAGINE enterprise modules.
-
-Every registered module has a usable workspace. Specialist modules can later
-replace this renderer without changing navigation or persistence contracts.
-"""
+"""Shared runtime for registered IMAGINE enterprise modules."""
 
 from __future__ import annotations
 
@@ -14,19 +10,29 @@ import pandas as pd
 import streamlit as st
 
 
+# Compatibility storage for tests and lightweight/session-only operation.
+_records: dict[str, list[dict[str, Any]]] = {}
+
+
 def _active_route() -> str:
     return str(st.session_state.get("active_route", "Enterprise Module"))
 
 
-def _session_records(route: str) -> list[dict[str, Any]]:
+def _records_for(route: str) -> list[dict[str, Any]]:
+    """Return session-backed records for a route."""
     key = f"enterprise_workspace_{route}"
     if key not in st.session_state:
         st.session_state[key] = []
     return st.session_state[key]
 
 
+def _records(route: str) -> list[dict[str, Any]]:
+    """Backward-compatible session record accessor."""
+    return _records_for(route)
+
+
 def _load_records(route: str) -> tuple[list[dict[str, Any]], bool]:
-    """Load persistent records, falling back to session storage if unavailable."""
+    """Load persistent records, falling back to session storage."""
     try:
         from database.bootstrap import ensure_schema
         from database.connection import SessionLocal
@@ -53,10 +59,16 @@ def _load_records(route: str) -> tuple[list[dict[str, Any]], bool]:
             ]
         return records, True
     except Exception:
-        return list(_session_records(route)), False
+        return list(_records_for(route)), False
 
 
-def _save_record(route: str, name: str, description: str, value: float, metadata: dict[str, Any]) -> None:
+def _save_record(
+    route: str,
+    name: str,
+    description: str,
+    value: float,
+    metadata: dict[str, Any],
+) -> None:
     try:
         from database.bootstrap import ensure_schema
         from database.connection import SessionLocal
@@ -79,8 +91,7 @@ def _save_record(route: str, name: str, description: str, value: float, metadata
             db.commit()
         return
     except Exception:
-        records = _session_records(route)
-        records.append(
+        _records_for(route).append(
             {
                 "name": name,
                 "description": description,
@@ -106,7 +117,6 @@ def render_module() -> None:
         a.metric("Records", len(records))
         b.metric("Persistence", "Database" if persistent else "Session fallback")
         c.metric("Last Update", records[0]["updated_at"] if records else "None")
-
         if records:
             st.dataframe(pd.DataFrame(records), use_container_width=True, hide_index=True)
         else:
@@ -117,11 +127,7 @@ def render_module() -> None:
             name = st.text_input("Record name")
             description = st.text_area("Description")
             value = st.number_input("Value", value=0.0, step=1.0)
-            metadata_text = st.text_area(
-                "Additional metadata (JSON)",
-                value="{}",
-                help="Enter a JSON object for module-specific workspace data.",
-            )
+            metadata_text = st.text_area("Additional metadata (JSON)", value="{}")
             submitted = st.form_submit_button("Save Record", use_container_width=True)
 
         if submitted:
@@ -140,22 +146,10 @@ def render_module() -> None:
     with export:
         if records:
             frame = pd.DataFrame(records)
-            st.download_button(
-                "Download CSV",
-                frame.to_csv(index=False).encode("utf-8"),
-                file_name=f"{route.lower().replace(' ', '_')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-            st.download_button(
-                "Download JSON",
-                json.dumps(records, indent=2, ensure_ascii=False).encode("utf-8"),
-                file_name=f"{route.lower().replace(' ', '_')}.json",
-                mime="application/json",
-                use_container_width=True,
-            )
+            st.download_button("Download CSV", frame.to_csv(index=False).encode("utf-8"), file_name=f"{route.lower().replace(' ', '_')}.csv", mime="text/csv", use_container_width=True)
+            st.download_button("Download JSON", json.dumps(records, indent=2, ensure_ascii=False).encode("utf-8"), file_name=f"{route.lower().replace(' ', '_')}.json", mime="application/json", use_container_width=True)
         else:
             st.info("Enter records before exporting workspace data.")
 
 
-__all__ = ["render_module"]
+__all__ = ["_active_route", "_records", "render_module"]
