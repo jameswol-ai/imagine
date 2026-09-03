@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from projects.model_registry import Project
 
 from .dashboard import aggregate_project_metrics
+from .models import ProjectStatus as ModelProjectStatus
 from .schemas import ProjectCreate, ProjectUpdate
 
 
@@ -27,12 +28,23 @@ def _project_uuid(value: str | UUID) -> UUID:
     return UUID(str(value))
 
 
+def _model_data(data: ProjectCreate | ProjectUpdate, *, exclude_unset: bool = False) -> dict:
+    """Convert API/UI schema values into ORM-safe values.
+
+    Pydantic and SQLAlchemy each define a ProjectStatus enum. Although their
+    values are intentionally identical, SQLAlchemy's Enum column is bound to
+    the ORM enum class. Normalize the Pydantic enum before persistence so both
+    the async API and Streamlit paths behave consistently.
+    """
+    payload = data.model_dump(exclude_unset=exclude_unset)
+    status = payload.get("status")
+    if status is not None:
+        payload["status"] = ModelProjectStatus(status.value if hasattr(status, "value") else str(status))
+    return payload
+
+
 class ProjectService:
     """Project CRUD service."""
-
-    # ------------------------------------------------------------------
-    # Async API methods
-    # ------------------------------------------------------------------
 
     @staticmethod
     async def get(db: AsyncSession, id: str | UUID):
@@ -47,7 +59,7 @@ class ProjectService:
 
     @staticmethod
     async def create(db: AsyncSession, data: ProjectCreate):
-        project = Project(**data.model_dump())
+        project = Project(**_model_data(data))
         db.add(project)
         await db.commit()
         await db.refresh(project)
@@ -59,7 +71,7 @@ class ProjectService:
         if not project:
             return None
 
-        for key, value in data.model_dump(exclude_unset=True).items():
+        for key, value in _model_data(data, exclude_unset=True).items():
             setattr(project, key, value)
 
         await db.commit()
@@ -81,10 +93,6 @@ class ProjectService:
         projects = await ProjectService.get_all(db=db, skip=0, limit=10000)
         return aggregate_project_metrics(projects)
 
-    # ------------------------------------------------------------------
-    # Sync Streamlit methods
-    # ------------------------------------------------------------------
-
     @staticmethod
     def get_sync(db: Session, id: str | UUID):
         return db.get(Project, _project_uuid(id))
@@ -100,7 +108,7 @@ class ProjectService:
 
     @staticmethod
     def create_sync(db: Session, data: ProjectCreate):
-        project = Project(**data.model_dump())
+        project = Project(**_model_data(data))
         db.add(project)
         db.commit()
         db.refresh(project)
@@ -112,7 +120,7 @@ class ProjectService:
         if not project:
             return None
 
-        for key, value in data.model_dump(exclude_unset=True).items():
+        for key, value in _model_data(data, exclude_unset=True).items():
             setattr(project, key, value)
 
         db.commit()
