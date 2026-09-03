@@ -1,8 +1,6 @@
-"""
-IMAGINE database models.
+"""IMAGINE database models.
 
-All models share the canonical SQLAlchemy Base from
-database.connection.
+All models share the canonical SQLAlchemy Base from database.connection.
 """
 
 from database.connection import Base
@@ -13,6 +11,7 @@ from .role import Role
 from .permission import Permission
 from .audit import AuditRecord
 from .notification import Notification
+from .module_workspace import ModuleWorkspaceRecord
 from .associations import (
     role_permissions_table,
     user_roles_table,
@@ -27,7 +26,7 @@ __all__ = [
     "Permission",
     "AuditRecord",
     "Notification",
-    "AuditRecord",
+    "ModuleWorkspaceRecord",
     "role_permissions_table",
     "user_roles_table",
     "organization_users_table",
