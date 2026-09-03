@@ -31,13 +31,17 @@ class CompositeBeamInput:
             "concrete_area_mm2": self.concrete_area_mm2,
             "concrete_fck_mpa": self.concrete_fck_mpa,
             "effective_width_mm": self.effective_width_mm,
-            "steel_lever_arm_mm": self.steel_lever_arm_mm,
-            "concrete_lever_arm_mm": self.concrete_lever_arm_mm,
             "gamma_m0": self.gamma_m0,
             "gamma_c": self.gamma_c,
         }.items():
             if value <= 0:
                 raise ValueError(f"{name} must be greater than zero")
+        for name, value in {
+            "steel_lever_arm_mm": self.steel_lever_arm_mm,
+            "concrete_lever_arm_mm": self.concrete_lever_arm_mm,
+        }.items():
+            if value < 0:
+                raise ValueError(f"{name} must not be negative")
         if self.axial_demand_kn < 0 or self.moment_demand_kn_m < 0:
             raise ValueError("demands cannot be negative")
 
@@ -56,7 +60,7 @@ class CompositeBeamResult:
 
 def design_composite_beam(inputs: CompositeBeamInput) -> CompositeBeamResult:
     steel = inputs.steel_area_mm2 * inputs.steel_fy_mpa / inputs.gamma_m0 / 1000.0
-    concrete = inputs.effective_width_mm * inputs.concrete_area_mm2 / inputs.effective_width_mm * inputs.concrete_fck_mpa / inputs.gamma_c / 1000.0
+    concrete = inputs.concrete_area_mm2 * inputs.concrete_fck_mpa / inputs.gamma_c / 1000.0
     compression = min(steel, concrete)
     moment = compression * abs(inputs.steel_lever_arm_mm - inputs.concrete_lever_arm_mm) / 1000.0
     axial_u = inputs.axial_demand_kn / compression if compression else float("inf")
