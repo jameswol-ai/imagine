@@ -13,24 +13,26 @@ def ensure_schema() -> None:
     """Create missing registered tables without dropping existing data."""
     import projects.model_registry  # noqa: F401
     from database.models.module_workspace import ModuleWorkspaceRecord  # noqa: F401
+    from database.models.project_file import ProjectFileRecord  # noqa: F401
 
     Base.metadata.create_all(bind=engine, checkfirst=True)
 
 
 def database_health() -> dict[str, Any]:
     """Return a small, safe database health report for the UI."""
+    required = {
+        "projects",
+        "approvals",
+        "revisions",
+        "module_workspace_records",
+        "project_files",
+    }
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
             inspector = inspect(connection)
             tables = set(inspector.get_table_names())
 
-        required = {
-            "projects",
-            "approvals",
-            "revisions",
-            "module_workspace_records",
-        }
         return {
             "ok": True,
             "configured_url": DATABASE_URL,
@@ -43,12 +45,7 @@ def database_health() -> dict[str, Any]:
             "ok": False,
             "configured_url": DATABASE_URL,
             "driver": engine.url.drivername,
-            "required_tables": [
-                "projects",
-                "approvals",
-                "revisions",
-                "module_workspace_records",
-            ],
+            "required_tables": sorted(required),
             "missing_tables": [],
             "error": f"{type(exc).__name__}: {exc}",
         }
