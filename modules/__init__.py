@@ -10,7 +10,7 @@ install_emoji_free_ui()
 
 # Preload and normalize the enterprise registry before streamlit_app imports it.
 # Specialist renderers remain untouched. Routes without a specialist renderer
-# receive the shared persistent workspace so no registered route is dead.
+# receive a domain-aware functional workspace so no registered route is dead.
 _enterprise_registry = importlib.import_module("modules.enterprise_registry")
 from modules.enterprise_registry import ModuleSpec
 
@@ -25,7 +25,7 @@ for _spec in _enterprise_registry.MODULE_SPECS:
                 route=_spec.route,
                 label=_spec.label,
                 section=_spec.section,
-                module_path="modules.enterprise_runtime",
+                module_path="modules.functional_workspace",
                 renderer_name="render_module",
                 implemented=True,
             )
