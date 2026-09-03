@@ -1,21 +1,15 @@
 """Deterministic preliminary reinforced-concrete column screening engine.
 
-This module separates column calculations from Streamlit presentation. It
-covers section properties, EC2-style material strengths, reinforcement limits,
-slenderness screening and minimum eccentricity. It intentionally does not
-pretend to replace the full EN 1992-1-1 column procedure: second-order effects,
-creep, biaxial interaction, imperfections, confinement, fire and detailing
-checks require project-specific inputs and verification.
+The engine covers section properties, EC2-style material strengths, minimum and
+maximum longitudinal reinforcement, slenderness, minimum eccentricity, axial
+resistance and a transparent biaxial interaction screening. It is not a full
+EN 1992-1-1 second-order column design solver.
 """
-
 from __future__ import annotations
-
 import math
 from dataclasses import dataclass
 from typing import Mapping
-
 from modules.structural.ec2 import ConcreteDesignProperties, SteelDesignProperties
-
 
 @dataclass(frozen=True)
 class ColumnScreeningResult:
@@ -37,86 +31,49 @@ class ColumnScreeningResult:
     minimum_eccentricity_z_mm: float
     axial_capacity_kn: float
     axial_utilisation: float
+    moment_capacity_y_kn_m: float
+    moment_capacity_z_kn_m: float
+    moment_utilisation_y: float
+    moment_utilisation_z: float
+    biaxial_interaction_utilisation: float
     status: str
-
 
 class RCColumnScreeningEngine:
     """Preliminary EC2-style column screening calculations."""
-
     def run(self, inputs: Mapping[str, float] | None = None) -> ColumnScreeningResult:
-        values = dict(inputs or {})
-        b = float(values.get("width_mm", 350.0))
-        h = float(values.get("depth_mm", 350.0))
-        l0 = float(values.get("unbraced_length_m", 3.6))
-        fck = float(values.get("fck_mpa", 30.0))
-        fyk = float(values.get("fyk_mpa", 500.0))
-        gamma_c = float(values.get("gamma_c", 1.5))
-        gamma_s = float(values.get("gamma_s", 1.15))
-        alpha_cc = float(values.get("alpha_cc", 0.85))
-        n_ed = float(values.get("n_ed_kn", 1200.0))
-        steel_area = float(values.get("steel_area_mm2", 0.0))
-
-        for name, value in {
-            "width_mm": b,
-            "depth_mm": h,
-            "unbraced_length_m": l0,
-            "fck_mpa": fck,
-            "fyk_mpa": fyk,
-            "gamma_c": gamma_c,
-            "gamma_s": gamma_s,
-        }.items():
-            if value <= 0:
-                raise ValueError(f"{name} must be greater than zero")
-        if n_ed < 0 or steel_area < 0:
-            raise ValueError("n_ed_kn and steel_area_mm2 cannot be negative")
-
-        concrete = ConcreteDesignProperties(fck, gamma_c=gamma_c, alpha_cc=alpha_cc)
-        steel = SteelDesignProperties(fyk, gamma_s=gamma_s)
-
-        ac = b * h
-        as_min = max(0.10 * n_ed * 1000.0 / steel.fyd_mpa, 0.002 * ac)
-        as_max = 0.04 * ac
-        as_used = steel_area if steel_area > 0 else as_min
-
-        iy = h / math.sqrt(12.0)
-        iz = b / math.sqrt(12.0)
-        lambda_y = l0 * 1000.0 / iy
-        lambda_z = l0 * 1000.0 / iz
-
-        n_rel = n_ed * 1000.0 / (ac * concrete.fcd_mpa) if ac * concrete.fcd_mpa > 0 else 0.0
-        lambda_lim = 20.0 * 0.7 * 1.1 * 0.7 / math.sqrt(n_rel) if n_rel > 0 else float("inf")
-
-        e0_y = max(h / 30.0, 20.0)
-        e0_z = max(b / 30.0, 20.0)
-
-        axial_capacity = ((ac - as_used) * concrete.fcd_mpa + as_used * steel.fyd_mpa) / 1000.0
-        axial_utilisation = n_ed / axial_capacity if axial_capacity > 0 else float("inf")
-
+        v = dict(inputs or {})
+        b, h, l0 = float(v.get("width_mm",350)), float(v.get("depth_mm",350)), float(v.get("unbraced_length_m",3.6))
+        fck, fyk = float(v.get("fck_mpa",30)), float(v.get("fyk_mpa",500))
+        gc, gs = float(v.get("gamma_c",1.5)), float(v.get("gamma_s",1.15))
+        alpha_cc, n_ed = float(v.get("alpha_cc",0.85)), float(v.get("n_ed_kn",1200))
+        as_used = float(v.get("steel_area_mm2",0))
+        my_ed, mz_ed = float(v.get("my_ed_kn_m",0)), float(v.get("mz_ed_kn_m",0))
+        for name, value in {"width_mm":b,"depth_mm":h,"unbraced_length_m":l0,"fck_mpa":fck,"fyk_mpa":fyk,"gamma_c":gc,"gamma_s":gs}.items():
+            if value <= 0: raise ValueError(f"{name} must be greater than zero")
+        if n_ed < 0 or as_used < 0 or my_ed < 0 or mz_ed < 0: raise ValueError("loads and steel area cannot be negative")
+        concrete, steel = ConcreteDesignProperties(fck,gamma_c=gc,alpha_cc=alpha_cc), SteelDesignProperties(fyk,gamma_s=gs)
+        ac = b*h
+        as_min = max(0.10*n_ed*1000/steel.fyd_mpa, 0.002*ac)
+        as_max = 0.04*ac
+        as_used = as_used if as_used > 0 else as_min
+        iy, iz = h/math.sqrt(12), b/math.sqrt(12)
+        ly, lz = l0*1000/iy, l0*1000/iz
+        n_rel = n_ed*1000/(ac*concrete.fcd_mpa)
+        lambda_lim = 20*0.7*1.1*0.7/math.sqrt(n_rel) if n_rel > 0 else float("inf")
+        e0_y, e0_z = max(h/30,20), max(b/30,20)
+        axial_capacity = ((ac-as_used)*concrete.fcd_mpa + as_used*steel.fyd_mpa)/1000
+        axial_u = n_ed/axial_capacity if axial_capacity else float("inf")
+        # Transparent first-order moment screening using plastic axial capacity
+        # and section modulus. Second-order amplification is intentionally not hidden here.
+        z_y = b*h*h/6.0
+        z_z = h*b*b/6.0
+        moment_capacity_y = (z_y*concrete.fcd_mpa + as_used*steel.fyd_mpa*max(h/2-e0_y,1))/1e6
+        moment_capacity_z = (z_z*concrete.fcd_mpa + as_used*steel.fyd_mpa*max(b/2-e0_z,1))/1e6
+        mu_y = my_ed/moment_capacity_y if moment_capacity_y else float("inf")
+        mu_z = mz_ed/moment_capacity_z if moment_capacity_z else float("inf")
+        biaxial = axial_u + mu_y + mu_z
         reinforcement_ok = as_min <= as_used <= as_max
-        capacity_ok = axial_utilisation <= 1.0
-        status = "PASS" if reinforcement_ok and capacity_ok else "REVIEW"
-
-        return ColumnScreeningResult(
-            width_mm=b,
-            depth_mm=h,
-            unbraced_length_m=l0,
-            concrete_area_mm2=ac,
-            steel_area_mm2=as_used,
-            concrete_design_strength_mpa=concrete.fcd_mpa,
-            steel_design_strength_mpa=steel.fyd_mpa,
-            minimum_steel_area_mm2=as_min,
-            maximum_steel_area_mm2=as_max,
-            slenderness_y=lambda_y,
-            slenderness_z=lambda_z,
-            slenderness_limit=lambda_lim,
-            is_slender_y=lambda_y > lambda_lim,
-            is_slender_z=lambda_z > lambda_lim,
-            minimum_eccentricity_y_mm=e0_y,
-            minimum_eccentricity_z_mm=e0_z,
-            axial_capacity_kn=axial_capacity,
-            axial_utilisation=axial_utilisation,
-            status=status,
-        )
-
+        status = "PASS" if reinforcement_ok and biaxial <= 1.0 else "REVIEW"
+        return ColumnScreeningResult(b,h,l0,ac,as_used,concrete.fcd_mpa,steel.fyd_mpa,as_min,as_max,ly,lz,lambda_lim,ly>lambda_lim,lz>lambda_lim,e0_y,e0_z,axial_capacity,axial_u,moment_capacity_y,moment_capacity_z,mu_y,mu_z,biaxial,status)
 
 __all__ = ["ColumnScreeningResult", "RCColumnScreeningEngine"]
