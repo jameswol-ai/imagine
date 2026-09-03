@@ -14,6 +14,7 @@ class ModuleSpec:
 MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Overview", "Overview", "PLATFORM", "__builtin__", "render_overview", True),
     ModuleSpec("System Health", "System Health", "PLATFORM", "__builtin__", "render_system_health", True),
+    ModuleSpec("Project Files", "Project Files", "PLATFORM", "modules.platform.file_center", "render", True),
     ModuleSpec("Projects", "Projects", "PROJECTS", "projects.projects.ui", "render_projects", True),
     ModuleSpec("Approvals", "Approvals", "PROJECTS", "projects.approvals.ui", "render_approvals", True),
     ModuleSpec("Revisions", "Revisions", "PROJECTS", "projects.revisions.ui", "render_revisions", True),
