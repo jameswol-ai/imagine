@@ -27,10 +27,6 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-
-# -----------------------------------------------------------------------------
-# Load registry WITHOUT importing the local ``modules`` package.
-# -----------------------------------------------------------------------------
 MODULE_SPECS: tuple[Any, ...] = ()
 ModuleSpec: Any = Any
 REGISTRY_IMPORT_ERROR: str | None = None
@@ -39,14 +35,23 @@ REGISTRY_IMPORT_ERROR: str | None = None
 def _load_registry() -> None:
     global MODULE_SPECS, ModuleSpec, REGISTRY_IMPORT_ERROR
     path = ROOT_DIR / "modules" / "enterprise_registry.py"
+    module_name = "_imagine_enterprise_registry"
     try:
         if not path.exists():
             raise FileNotFoundError(f"Registry file not found: {path}")
-        loader = importlib.util.spec_from_file_location("_imagine_enterprise_registry", path)
-        if loader is None or loader.loader is None:
+        loader_spec = importlib.util.spec_from_file_location(module_name, path)
+        if loader_spec is None or loader_spec.loader is None:
             raise ImportError("Unable to create registry module loader")
-        module = importlib.util.module_from_spec(loader)
-        loader.loader.exec_module(module)
+        module = importlib.util.module_from_spec(loader_spec)
+        # dataclasses and other introspection code expect the executing module
+        # to exist in sys.modules. This is essential when loading the registry
+        # directly and bypassing modules/__init__.py on Streamlit Cloud.
+        sys.modules[module_name] = module
+        try:
+            loader_spec.loader.exec_module(module)
+        except Exception:
+            sys.modules.pop(module_name, None)
+            raise
         ModuleSpec = module.ModuleSpec
         MODULE_SPECS = tuple(module.MODULE_SPECS)
         module.validate_registry()
@@ -56,7 +61,6 @@ def _load_registry() -> None:
 
 
 _load_registry()
-
 
 SEARCH_ALIASES = {
     "projects": ("projects", "approvals", "revisions", "workflows", "governance"),
@@ -75,12 +79,7 @@ SEARCH_ALIASES = {
 
 
 def init_session_state() -> None:
-    defaults = {
-        "active_route": "Overview",
-        "active_domain": "PLATFORM",
-        "module_search": "",
-        "recent_routes": [],
-    }
+    defaults = {"active_route": "Overview", "active_domain": "PLATFORM", "module_search": "", "recent_routes": []}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
@@ -99,10 +98,7 @@ def set_active(route: str) -> None:
         return
     st.session_state.active_route = route
     st.session_state.active_domain = spec.section
-    st.session_state.recent_routes = [
-        route,
-        *[item for item in st.session_state.recent_routes if item != route][:7],
-    ]
+    st.session_state.recent_routes = [route, *[item for item in st.session_state.recent_routes if item != route][:7]]
 
 
 def search_specs(query: str) -> list[Any]:
@@ -116,8 +112,7 @@ def search_specs(query: str) -> list[Any]:
     found: list[tuple[float, Any]] = []
     for spec in MODULE_SPECS:
         haystack = f"{spec.route} {spec.label} {spec.section} {spec.module_path or ''}".lower()
-        score = sum(term in haystack for term in terms)
-        score += 0.2 * sum(term in haystack for term in expanded)
+        score = sum(term in haystack for term in terms) + 0.2 * sum(term in haystack for term in expanded)
         if normalized in haystack:
             score += 8
         if score:
@@ -126,7 +121,6 @@ def search_specs(query: str) -> list[Any]:
 
 
 def import_renderer(spec: Any) -> tuple[Callable | None, str | None]:
-    """Import a single specialist renderer and return its exact failure."""
     if not spec.module_path or spec.module_path == "__builtin__":
         return None, "Built-in workspace"
     try:
@@ -140,43 +134,38 @@ def import_renderer(spec: Any) -> tuple[Callable | None, str | None]:
 
 
 def inject_styles() -> None:
-    st.markdown(
-        """<style>
-        .stApp{background:linear-gradient(135deg,#f7f9fc,#eef3f8 52%,#fbfcfe)}
-        .block-container{max-width:1720px;padding-top:1rem}
-        .imagine-brand-title{font-size:2rem;font-weight:950;letter-spacing:-.075em}
-        .imagine-brand-subtitle{color:#718096;font-size:.7rem;margin-bottom:1rem}
-        .imagine-header,.imagine-hero,.imagine-panel,.imagine-card{border:1px solid rgba(110,125,145,.16);border-radius:22px;background:rgba(255,255,255,.88);box-shadow:0 16px 42px rgba(30,50,75,.055)}
-        .imagine-header{padding:1.2rem 1.35rem;margin-bottom:1rem}
-        .imagine-header-title{font-size:2.25rem;font-weight:930;letter-spacing:-.06em}
-        .imagine-header-subtitle{color:#687588;margin-top:.3rem}
-        .imagine-hero{padding:1.5rem;margin-bottom:1rem}
-        .imagine-hero-title{font-size:1.7rem;font-weight:900}
-        .imagine-hero-copy{color:#647184;line-height:1.6}
-        .imagine-panel{padding:1rem;margin-bottom:.75rem}
-        .imagine-card{min-height:100px;padding:1rem}
-        .imagine-card-title{color:#687588;font-size:.6rem;font-weight:850;text-transform:uppercase;letter-spacing:.1em}
-        .imagine-card-value{font-size:1.7rem;font-weight:930;margin-top:.35rem}
-        .sidebar-heading{font-size:.59rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:#718096;margin:.7rem 0 .35rem}
-        .sidebar-result{padding:.55rem .65rem;border:1px solid rgba(110,125,145,.14);border-radius:11px;margin:.35rem 0}
-        .sidebar-result-title{font-size:.76rem;font-weight:750}
-        .sidebar-result-meta{font-size:.62rem;color:#7a8697}
-        @media(prefers-color-scheme:dark){.stApp{background:#0a1017}.imagine-header,.imagine-hero,.imagine-panel,.imagine-card{background:#121b26;border-color:#293746}.imagine-header-title,.imagine-hero-title,.imagine-card-value,.sidebar-result-title{color:#f1f5f9}.imagine-header-subtitle,.imagine-hero-copy,.imagine-card-title,.sidebar-result-meta{color:#aab5c3}.sidebar-result{background:#111b25}}
-        </style>""",
-        unsafe_allow_html=True,
-    )
+    st.markdown("""<style>
+    .stApp{background:linear-gradient(135deg,#f7f9fc,#eef3f8 52%,#fbfcfe)}
+    .block-container{max-width:1720px;padding-top:1rem}
+    .imagine-brand-title{font-size:2rem;font-weight:950;letter-spacing:-.075em}
+    .imagine-brand-subtitle{color:#718096;font-size:.7rem;margin-bottom:1rem}
+    .imagine-header,.imagine-hero,.imagine-panel,.imagine-card{border:1px solid rgba(110,125,145,.16);border-radius:22px;background:rgba(255,255,255,.88);box-shadow:0 16px 42px rgba(30,50,75,.055)}
+    .imagine-header{padding:1.2rem 1.35rem;margin-bottom:1rem}
+    .imagine-header-title{font-size:2.25rem;font-weight:930;letter-spacing:-.06em}
+    .imagine-header-subtitle{color:#687588;margin-top:.3rem}
+    .imagine-hero{padding:1.5rem;margin-bottom:1rem}
+    .imagine-hero-title{font-size:1.7rem;font-weight:900}
+    .imagine-hero-copy{color:#647184;line-height:1.6}
+    .imagine-panel{padding:1rem;margin-bottom:.75rem}
+    .imagine-card{min-height:100px;padding:1rem}
+    .imagine-card-title{color:#687588;font-size:.6rem;font-weight:850;text-transform:uppercase;letter-spacing:.1em}
+    .imagine-card-value{font-size:1.7rem;font-weight:930;margin-top:.35rem}
+    .sidebar-heading{font-size:.59rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:#718096;margin:.7rem 0 .35rem}
+    .sidebar-result{padding:.55rem .65rem;border:1px solid rgba(110,125,145,.14);border-radius:11px;margin:.35rem 0}
+    .sidebar-result-title{font-size:.76rem;font-weight:750}
+    .sidebar-result-meta{font-size:.62rem;color:#7a8697}
+    @media(prefers-color-scheme:dark){.stApp{background:#0a1017}.imagine-header,.imagine-hero,.imagine-panel,.imagine-card{background:#121b26;border-color:#293746}.imagine-header-title,.imagine-hero-title,.imagine-card-value,.sidebar-result-title{color:#f1f5f9}.imagine-header-subtitle,.imagine-hero-copy,.imagine-card-title,.sidebar-result-meta{color:#aab5c3}.sidebar-result{background:#111b25}}
+    </style>""", unsafe_allow_html=True)
 
 
 def render_sidebar() -> None:
     with st.sidebar:
         st.markdown('<div class="imagine-brand-title">IMAGINE</div><div class="imagine-brand-subtitle">Integrated Architecture, Engineering & Construction Engine</div>', unsafe_allow_html=True)
-
         if not MODULE_SPECS:
             st.error("Module registry unavailable")
             if REGISTRY_IMPORT_ERROR:
                 st.code(REGISTRY_IMPORT_ERROR, language="text")
             return
-
         domains = sorted({spec.section for spec in MODULE_SPECS if spec.section != "PLATFORM"})
         navigation = ["HOME", *domains]
         current = st.session_state.active_domain if st.session_state.active_domain in navigation else "HOME"
@@ -185,12 +174,10 @@ def render_sidebar() -> None:
             st.session_state.active_domain = chosen
             st.session_state.active_route = "Overview"
             st.rerun()
-
         if chosen == "HOME":
             labels = [spec.label for spec in specs("PLATFORM")]
         else:
             labels = ["Discipline Overview", *[spec.label for spec in specs(chosen)]]
-
         active = spec_for(st.session_state.active_route)
         active_label = active.label if active else "Overview"
         if active_label not in labels:
@@ -201,7 +188,6 @@ def render_sidebar() -> None:
             st.session_state.active_domain = chosen
         elif selected and selected != "Overview":
             set_active(selected)
-
         st.markdown('<div class="sidebar-heading">Search all workspaces</div>', unsafe_allow_html=True)
         query = st.text_input("Search", key="module_search", placeholder="Search projects, BIM, IFC, EN 1992...", label_visibility="collapsed")
         if query:
@@ -212,7 +198,6 @@ def render_sidebar() -> None:
                 if st.button("Open", key=f"search_open_{index}_{spec.route}", use_container_width=True):
                     set_active(spec.route)
                     st.rerun()
-
         if st.session_state.recent_routes:
             st.markdown('<div class="sidebar-heading">Recent</div>', unsafe_allow_html=True)
             recent = st.selectbox("Recent", st.session_state.recent_routes, key="recent_select", label_visibility="collapsed")
@@ -238,12 +223,10 @@ def render_overview() -> None:
     cols = st.columns(5)
     for col, title, value in zip(cols, ["Workspaces", "Projects", "BIM", "Structural", "Domains"], [len(all_specs), projects, bim, structural, domains]):
         col.markdown(f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div></div>', unsafe_allow_html=True)
-
     if REGISTRY_IMPORT_ERROR:
         st.warning("The registry was loaded in isolation with an error. Specialist navigation is limited until it is corrected.")
         st.code(REGISTRY_IMPORT_ERROR, language="text")
         return
-
     if all_specs:
         import pandas as pd
         import plotly.express as px
@@ -251,7 +234,6 @@ def render_overview() -> None:
         dataframe = counts.rename_axis("Domain").reset_index(name="Workspaces")
         st.subheader("Platform coverage")
         st.plotly_chart(px.bar(dataframe, x="Domain", y="Workspaces"), use_container_width=True)
-
     left, right = st.columns(2)
     with left:
         st.markdown('<div class="imagine-panel"><b>Projects → BIM</b><br><small>Project → Building → Storey → Space → Element → Assembly</small></div>', unsafe_allow_html=True)
