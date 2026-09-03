@@ -39,7 +39,6 @@ _FUNCTIONAL_ROUTES = {
     "Forecasting",
     "Reporting",
     "Eurocode Suite",
-    "Beam Design",
     "Retaining Walls",
     "HVAC",
     "Integrated MEP Analysis",
