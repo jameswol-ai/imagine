@@ -21,9 +21,6 @@ class ModuleSpec:
     implemented: bool = False
 
 
-# Keep this catalog complete even when a renderer is not yet implemented.
-# A searchable enterprise shell should expose the roadmap without eagerly
-# importing unfinished modules.
 MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Overview", "Overview", "PLATFORM", "__builtin__", "render_overview", True),
     ModuleSpec("System Health", "System Health", "PLATFORM", "__builtin__", "render_system_health", True),
@@ -34,6 +31,7 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Workflows", "Workflows", "PROJECTS", "projects.workflows.ui", "render_workflows", False),
     ModuleSpec("Governance", "Governance", "PROJECTS", "projects.governance.ui", "render_governance", False),
 
+    ModuleSpec("Architecture Assistant", "Architecture Assistant", "ARCHITECTURE", "architecture.assistant.ui", "render_architecture_assistant", True),
     ModuleSpec("Zoning", "Zoning", "ARCHITECTURE", "architecture.zoning.ui", "render_zoning", True),
     ModuleSpec("Site Planning", "Site Planning", "ARCHITECTURE", "architecture.site_planning.ui", "render_site_planning", True),
     ModuleSpec("Floor Planning", "Floor Planning", "ARCHITECTURE", "architecture.floor_planning.ui", "render_floor_planning", True),
@@ -147,7 +145,6 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Maintenance", "Maintenance", "DIGITAL TWIN", "modules.digital_twin.maintenance", "render", True),
     ModuleSpec("Predictive AI", "Predictive AI", "DIGITAL TWIN", "modules.digital_twin.predictive_ai", "render", True),
 )
-
 
 MODULES_BY_ROUTE = {spec.route: spec for spec in MODULE_SPECS}
 
