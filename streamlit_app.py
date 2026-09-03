@@ -17,12 +17,7 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-st.set_page_config(
-    page_title="IMAGINE | AEC Engine",
-    page_icon=None,
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="IMAGINE | AEC Engine", page_icon=None, layout="wide", initial_sidebar_state="expanded")
 
 SEARCH_ALIASES = {
     "structural": ("structural design handbook", "building materials", "eurocode suite", "beam design", "column design", "slab design", "stairs design", "openings design", "railings & balustrades", "structural analysis"),
@@ -63,15 +58,9 @@ def registry_snapshot() -> tuple[ModuleSpec, ...]:
 
 def init_session_state() -> None:
     defaults = {
-        "active_route": "Overview",
-        "module_search": "",
-        "module_search_domain": "All domains",
-        "active_domain": "PLATFORM",
-        "recent_routes": [],
-        "selected_project_id": None,
-        "selected_project_name": None,
-        "last_route_load_ms": None,
-        "sidebar_nav_domain": "HOME",
+        "active_route": "Overview", "module_search": "", "module_search_domain": "All domains",
+        "active_domain": "PLATFORM", "recent_routes": [], "selected_project_id": None,
+        "selected_project_name": None, "last_route_load_ms": None, "sidebar_nav_domain": "HOME",
         "sidebar_nav_workspace": "Overview",
     }
     for key, value in defaults.items():
@@ -79,48 +68,39 @@ def init_session_state() -> None:
 
 
 def inject_styles() -> None:
-    st.markdown(
-        """
-        <style>
-        .stApp{background:linear-gradient(135deg,#f6f8fb,#edf2f7 52%,#f9fbfd)}
-        .block-container{max-width:1700px;padding-top:1rem;padding-bottom:3rem}
-        [data-testid="stSidebar"]{border-right:1px solid rgba(100,115,135,.18)}
-        [data-testid="stSidebar"] .block-container{padding:1.15rem .85rem}
-        .imagine-brand-title{font-size:1.9rem;font-weight:950;letter-spacing:-.07em}
-        .imagine-brand-subtitle{color:#697689;font-size:.72rem;line-height:1.45;margin-bottom:.7rem}
-        .imagine-header,.imagine-hero,.imagine-panel,.imagine-card,.imagine-section{border:1px solid rgba(110,125,145,.17);border-radius:20px;background:rgba(255,255,255,.86);box-shadow:0 14px 38px rgba(30,50,75,.055)}
-        .imagine-header{padding:1.2rem 1.35rem;margin-bottom:1rem}
-        .imagine-header-title{font-size:2.2rem;font-weight:920;letter-spacing:-.055em}
-        .imagine-header-subtitle{color:#687588;margin-top:.3rem;line-height:1.5}
-        .imagine-breadcrumb{display:inline-block;margin-top:.7rem;padding:.3rem .65rem;border-radius:999px;background:#eef2f6;color:#566276;font-size:.67rem}
-        .imagine-hero{padding:1.5rem;margin-bottom:1rem;overflow:hidden}
-        .imagine-hero-title{font-size:1.65rem;font-weight:900;letter-spacing:-.04em}
-        .imagine-hero-copy{color:#647184;line-height:1.65;margin-top:.4rem;max-width:900px}
-        .imagine-panel{padding:1rem;margin-bottom:.75rem}
-        .imagine-panel-title{font-weight:850;font-size:1rem}
-        .imagine-panel-description{color:#687588;font-size:.75rem;margin-top:.25rem;line-height:1.45}
-        .imagine-card{min-height:108px;padding:1rem 1.05rem}
-        .imagine-card-title{color:#687588;font-size:.61rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase}
-        .imagine-card-value{font-size:1.65rem;font-weight:930;margin-top:.35rem;letter-spacing:-.04em}
-        .imagine-card-description{color:#7a8697;font-size:.7rem;margin-top:.15rem}
-        .imagine-section{padding:1.05rem;margin-bottom:1rem}
-        .imagine-section-title{font-size:1.05rem;font-weight:850}
-        .imagine-section-copy{color:#748093;font-size:.76rem;margin-top:.2rem}
-        .sidebar-heading{font-size:.61rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:#718096;margin:.7rem 0 .35rem}
-        .sidebar-result{padding:.55rem .65rem;border:1px solid rgba(110,125,145,.14);border-radius:11px;background:rgba(255,255,255,.48);margin:.35rem 0}
-        .sidebar-result-title{font-size:.76rem;font-weight:750}
-        .sidebar-result-meta{font-size:.62rem;color:#7a8697;margin-top:.12rem}
-        .imagine-footer{margin-top:2rem;padding-top:1rem;border-top:1px solid rgba(120,135,155,.2);color:#8792a1;font-size:.67rem}
-        @media(prefers-color-scheme:dark){
-          .stApp{background:#0a1017}.imagine-header,.imagine-hero,.imagine-panel,.imagine-card,.imagine-section{background:rgba(18,27,38,.9);border-color:#293746}
-          .imagine-header-title,.imagine-hero-title,.imagine-card-value,.imagine-panel-title,.imagine-section-title,.sidebar-result-title{color:#f1f5f9}
-          .imagine-header-subtitle,.imagine-hero-copy,.imagine-panel-description,.imagine-card-description,.imagine-section-copy,.imagine-brand-subtitle,.sidebar-result-meta{color:#aab5c3}
-          .imagine-breadcrumb{background:#17212c;color:#b9c4d1}.sidebar-result{background:#111b25;border-color:#2b3948}
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+    <style>
+    .stApp{background:linear-gradient(135deg,#f6f8fb,#edf2f7 52%,#f9fbfd)}
+    .block-container{max-width:1700px;padding-top:1rem;padding-bottom:3rem}
+    [data-testid="stSidebar"]{border-right:1px solid rgba(100,115,135,.18)}
+    [data-testid="stSidebar"] .block-container{padding:1.15rem .85rem}
+    .imagine-brand-title{font-size:1.9rem;font-weight:950;letter-spacing:-.07em}
+    .imagine-brand-subtitle{color:#697689;font-size:.72rem;line-height:1.45;margin-bottom:.7rem}
+    .imagine-header,.imagine-hero,.imagine-panel,.imagine-card,.imagine-section{border:1px solid rgba(110,125,145,.17);border-radius:20px;background:rgba(255,255,255,.86);box-shadow:0 14px 38px rgba(30,50,75,.055)}
+    .imagine-header{padding:1.2rem 1.35rem;margin-bottom:1rem}
+    .imagine-header-title{font-size:2.2rem;font-weight:920;letter-spacing:-.055em}
+    .imagine-header-subtitle{color:#687588;margin-top:.3rem;line-height:1.5}
+    .imagine-breadcrumb{display:inline-block;margin-top:.7rem;padding:.3rem .65rem;border-radius:999px;background:#eef2f6;color:#566276;font-size:.67rem}
+    .imagine-hero{padding:1.5rem;margin-bottom:1rem;overflow:hidden}
+    .imagine-hero-title{font-size:1.65rem;font-weight:900;letter-spacing:-.04em}
+    .imagine-hero-copy{color:#647184;line-height:1.65;margin-top:.4rem;max-width:900px}
+    .imagine-panel{padding:1rem;margin-bottom:.75rem}
+    .imagine-panel-title{font-weight:850;font-size:1rem}
+    .imagine-panel-description{color:#687588;font-size:.75rem;margin-top:.25rem;line-height:1.45}
+    .imagine-card{min-height:108px;padding:1rem 1.05rem}
+    .imagine-card-title{color:#687588;font-size:.61rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase}
+    .imagine-card-value{font-size:1.65rem;font-weight:930;margin-top:.35rem;letter-spacing:-.04em}
+    .imagine-card-description{color:#7a8697;font-size:.7rem;margin-top:.15rem}
+    .imagine-section{padding:1.05rem;margin-bottom:1rem}
+    .imagine-section-title{font-size:1.05rem;font-weight:850}
+    .imagine-section-copy{color:#748093;font-size:.76rem;margin-top:.2rem}
+    .sidebar-heading{font-size:.61rem;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:#718096;margin:.7rem 0 .35rem}
+    .sidebar-result{padding:.55rem .65rem;border:1px solid rgba(110,125,145,.14);border-radius:11px;background:rgba(255,255,255,.48);margin:.35rem 0}
+    .sidebar-result-title{font-size:.76rem;font-weight:750}.sidebar-result-meta{font-size:.62rem;color:#7a8697;margin-top:.12rem}
+    .imagine-footer{margin-top:2rem;padding-top:1rem;border-top:1px solid rgba(120,135,155,.2);color:#8792a1;font-size:.67rem}
+    @media(prefers-color-scheme:dark){.stApp{background:#0a1017}.imagine-header,.imagine-hero,.imagine-panel,.imagine-card,.imagine-section{background:rgba(18,27,38,.9);border-color:#293746}.imagine-header-title,.imagine-hero-title,.imagine-card-value,.imagine-panel-title,.imagine-section-title,.sidebar-result-title{color:#f1f5f9}.imagine-header-subtitle,.imagine-hero-copy,.imagine-panel-description,.imagine-card-description,.imagine-section-copy,.imagine-brand-subtitle,.sidebar-result-meta{color:#aab5c3}.imagine-breadcrumb{background:#17212c;color:#b9c4d1}.sidebar-result{background:#111b25;border-color:#2b3948}}
+    </style>
+    """, unsafe_allow_html=True)
 
 
 def spec_for_route(route: str) -> ModuleSpec | None:
@@ -167,8 +147,11 @@ def set_active_route(route: str) -> None:
         return
     st.session_state.active_route = route
     st.session_state.active_domain = spec.section
-    st.session_state.sidebar_nav_domain = "HOME" if spec.section == "PLATFORM" else spec.section
-    st.session_state.sidebar_nav_workspace = spec.label
+    if route != "Overview":
+        st.session_state.sidebar_nav_domain = "HOME" if spec.section == "PLATFORM" else spec.section
+        st.session_state.sidebar_nav_workspace = spec.label
+    else:
+        st.session_state.sidebar_nav_workspace = "Overview"
     recent = [r for r in st.session_state.recent_routes if r != route]
     st.session_state.recent_routes = [route, *recent][:6]
 
@@ -201,7 +184,6 @@ def render_sidebar() -> None:
     with st.sidebar:
         st.markdown('<div class="imagine-brand-title">IMAGINE</div><div class="imagine-brand-subtitle">Integrated Architecture, Engineering & Construction Engine</div>', unsafe_allow_html=True)
         st.markdown('<div class="sidebar-heading">Navigate</div>', unsafe_allow_html=True)
-
         nav_domains = ["HOME", *[d for d in domains() if d != "PLATFORM"]]
         current_domain = st.session_state.sidebar_nav_domain
         if current_domain not in nav_domains:
@@ -211,8 +193,9 @@ def render_sidebar() -> None:
             st.session_state.sidebar_nav_domain = selected_domain
             st.session_state.sidebar_nav_workspace = "Overview" if selected_domain == "HOME" else ""
             set_active_route("Overview")
+            st.session_state.sidebar_nav_domain = selected_domain
+            st.session_state.sidebar_nav_workspace = "Overview"
             st.rerun()
-
         domain = "PLATFORM" if selected_domain == "HOME" else selected_domain
         pages = domain_specs(domain)
         page_labels = [p.label + ("" if p.implemented else " · Registered") for p in pages]
@@ -225,7 +208,6 @@ def render_sidebar() -> None:
             if chosen.route != st.session_state.active_route:
                 set_active_route(chosen.route)
                 st.rerun()
-
         st.markdown('<div class="sidebar-heading">Search all workspaces</div>', unsafe_allow_html=True)
         st.text_input("Search", key="module_search", placeholder="Search stairs, EN 1992, BIM...", label_visibility="collapsed")
         query = st.session_state.module_search.strip()
@@ -237,14 +219,12 @@ def render_sidebar() -> None:
             else:
                 for index, spec in enumerate(matches[:15]):
                     st.markdown(f'<div class="sidebar-result"><div class="sidebar-result-title">{spec.label}</div><div class="sidebar-result-meta">{spec.section} · {"Ready" if spec.implemented else "Registered"}</div></div>', unsafe_allow_html=True)
-                    if spec.implemented:
-                        if st.button("Open", key=f"sidebar_search_open_{index}_{spec.route}", use_container_width=True):
-                            set_active_route(spec.route)
-                            st.session_state.module_search = ""
-                            st.rerun()
-                    else:
+                    if spec.implemented and st.button("Open", key=f"sidebar_search_open_{index}_{spec.route}", use_container_width=True):
+                        set_active_route(spec.route)
+                        st.session_state.module_search = ""
+                        st.rerun()
+                    elif not spec.implemented:
                         st.caption("Registered, renderer pending")
-
         st.markdown('<div class="sidebar-heading">Recent workspaces</div>', unsafe_allow_html=True)
         recent = [r for r in st.session_state.recent_routes if r != st.session_state.active_route and spec_for_route(r)]
         if recent:
@@ -254,7 +234,6 @@ def render_sidebar() -> None:
                     st.rerun()
         else:
             st.caption("Recently opened workspaces will appear here.")
-
         st.divider()
         st.caption("Navigation stays in the sidebar. Search is global and selected workspaces open in the main area.")
 
@@ -299,18 +278,11 @@ def render_discipline_dashboard(domain: str) -> None:
     coverage = round(100 * len(ready) / len(group), 1) if group else 0
     render_header(f"{domain.title()} Dashboard", f"Discipline command center for {domain.title()} workspaces", f"Home / {domain.title()}")
     st.markdown(f'<div class="imagine-hero"><div class="imagine-hero-title">{domain.title()} at a glance.</div><div class="imagine-hero-copy">This dashboard changes with the selected discipline. Use the workspace selector for direct navigation, or choose a ready workspace below to move into the detailed tool.</div></div>', unsafe_allow_html=True)
-
-    cards = [
-        ("Workspaces", len(group), "Registered in this discipline"),
-        ("Ready", len(ready), "Executable renderers"),
-        ("Coverage", f"{coverage}%", "Renderer readiness"),
-        ("Pending", len(pending), "Registered but not connected"),
-    ]
+    cards = [("Workspaces", len(group), "Registered in this discipline"), ("Ready", len(ready), "Executable renderers"), ("Coverage", f"{coverage}%", "Renderer readiness"), ("Pending", len(pending), "Registered but not connected")]
     cols = st.columns(4)
     for i, (title, value, description) in enumerate(cards):
         with cols[i]:
             st.markdown(f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div><div class="imagine-card-description">{description}</div></div>', unsafe_allow_html=True)
-
     status_df = pd.DataFrame({"Status": ["Ready", "Pending"], "Count": [len(ready), len(pending)]})
     left, right = st.columns([1.15, 1.85])
     with left:
@@ -322,7 +294,6 @@ def render_discipline_dashboard(domain: str) -> None:
         st.markdown('<div class="imagine-section"><div class="imagine-section-title">Workspace portfolio</div><div class="imagine-section-copy">The discipline registry and current execution state.</div></div>', unsafe_allow_html=True)
         portfolio = pd.DataFrame([{"Workspace": s.label, "Status": "Ready" if s.implemented else "Pending", "Route": s.route} for s in group])
         st.dataframe(portfolio, use_container_width=True, hide_index=True, height=310)
-
     st.markdown('<div class="imagine-section"><div class="imagine-section-title">Key workspaces</div><div class="imagine-section-copy">Open the most useful ready tools directly from the command center.</div></div>', unsafe_allow_html=True)
     featured = ready[:8]
     if not featured:
@@ -343,31 +314,22 @@ def render_overview() -> None:
     if selected_domain not in {"HOME", ""}:
         render_discipline_dashboard(selected_domain)
         return
-
     ready = sum(s.implemented for s in specs)
     registered = len(specs)
     coverage = round(100 * ready / registered, 1) if registered else 0
     render_header("Home", "IMAGINE Integrated Architecture, Engineering & Construction Engine", "Home / Command Center")
     st.markdown('<div class="imagine-hero"><div class="imagine-hero-title">Design intelligence, organized as one workspace.</div><div class="imagine-hero-copy">Use the sidebar to select a discipline, then use its workspace menu. The Home dashboard becomes a discipline command center when a discipline is selected, while the global search finds specialist tools across the entire platform.</div></div>', unsafe_allow_html=True)
-
-    cards = [
-        ("Workspaces", registered, "Central enterprise registry"),
-        ("Ready", ready, f"{coverage}% renderer coverage"),
-        ("Disciplines", len([d for d in domains() if d != "PLATFORM"]), "Architecture to Digital Twin"),
-        ("Recent", len(st.session_state.recent_routes), "Recently opened workspaces"),
-    ]
+    cards = [("Workspaces", registered, "Central enterprise registry"), ("Ready", ready, f"{coverage}% renderer coverage"), ("Disciplines", len([d for d in domains() if d != "PLATFORM"]), "Architecture to Digital Twin"), ("Recent", len(st.session_state.recent_routes), "Recently opened workspaces")]
     cols = st.columns(4)
     for i, (title, value, description) in enumerate(cards):
         with cols[i]:
             st.markdown(f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div><div class="imagine-card-description">{description}</div></div>', unsafe_allow_html=True)
-
     rows = []
     for domain in domains():
         group = [s for s in specs if s.section == domain]
         ready_count = sum(s.implemented for s in group)
         rows.append({"Domain": "Home" if domain == "PLATFORM" else domain.title(), "Ready": ready_count, "Registered": len(group), "Coverage %": round(100 * ready_count / len(group), 1) if group else 0})
     df = pd.DataFrame(rows)
-
     st.markdown('<div class="imagine-section"><div class="imagine-section-title">Platform coverage</div><div class="imagine-section-copy">A compact view of how much of each discipline is connected to an executable renderer.</div></div>', unsafe_allow_html=True)
     left, right = st.columns([1.05, 1.35])
     with left:
@@ -377,7 +339,6 @@ def render_overview() -> None:
         fig.update_traces(texttemplate="%{text:.0f}%", textposition="outside", cliponaxis=False)
         fig.update_layout(margin=dict(l=10, r=10, t=25, b=100), yaxis=dict(range=[0, 110]), xaxis_tickangle=-35, showlegend=False)
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
     st.markdown('<div class="imagine-section"><div class="imagine-section-title">Discipline snapshot</div><div class="imagine-section-copy">Select a discipline in the sidebar to transform Home into its command center.</div></div>', unsafe_allow_html=True)
     cols = st.columns(4)
     for i, domain in enumerate([d for d in domains() if d != "PLATFORM"]):
@@ -394,9 +355,7 @@ def render_system_health() -> None:
     ready = sum(row["Status"] == "Ready" for row in rows)
     errors = sum(row["Status"] != "Ready" for row in rows)
     a, b, c = st.columns(3)
-    a.metric("Registered", len(registry_snapshot()))
-    b.metric("Ready renderers", ready)
-    c.metric("Import / renderer issues", errors)
+    a.metric("Registered", len(registry_snapshot())); b.metric("Ready renderers", ready); c.metric("Import / renderer issues", errors)
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=560) if rows else st.info("No external renderers available to probe.")
 
 
@@ -429,9 +388,7 @@ def render_selected_module(route: str) -> None:
 
 
 def main() -> None:
-    init_session_state()
-    inject_styles()
-    render_sidebar()
+    init_session_state(); inject_styles(); render_sidebar()
     query = st.session_state.module_search.strip()
     if query and st.session_state.active_route == "Overview":
         render_search_landing()
