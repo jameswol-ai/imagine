@@ -2,7 +2,7 @@
 from __future__ import annotations
 import pandas as pd
 import streamlit as st
-from modules.structural.ec8 import SeismicInput, distribute_storey_forces_kn
+from modules.structural.ec8 import SeismicInput, base_shear_kn, distribute_storey_forces_kn
 
 
 def render() -> None:
@@ -21,8 +21,8 @@ def render() -> None:
         heights = [float(x.strip()) for x in heights_text.split(",") if x.strip()]
         if len(masses) != len(heights) or not masses:
             raise ValueError("Mass and height lists must have the same non-zero length.")
-        seismic = SeismicInput(coefficient=coefficient, mass=sum(masses), q=q, importance=importance)
-        base_shear = seismic.design_base_shear_kn()
+        seismic = SeismicInput(coefficient, sum(masses), q, importance)
+        base_shear = base_shear_kn(seismic)
         forces = distribute_storey_forces_kn(base_shear, masses, heights)
         table = pd.DataFrame({"Storey": range(1, len(masses) + 1), "Mass (t)": masses, "Height (m)": heights, "Force (kN)": forces})
         a, b = st.columns(2)
