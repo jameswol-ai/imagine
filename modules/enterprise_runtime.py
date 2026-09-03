@@ -1,8 +1,7 @@
 """Shared runtime for registered IMAGINE enterprise modules.
 
-This runtime gives every registered module a usable workspace while its
-specialist implementation is being connected. It deliberately avoids emojis
-and keeps transient workspace data in Streamlit session state.
+Every registered module has a usable workspace. Specialist modules can later
+replace this renderer without changing navigation or persistence contracts.
 """
 
 from __future__ import annotations
@@ -19,21 +18,83 @@ def _active_route() -> str:
     return str(st.session_state.get("active_route", "Enterprise Module"))
 
 
-def _workspace_key(route: str) -> str:
-    return f"enterprise_workspace_{route}"
-
-
-def _records(route: str) -> list[dict[str, Any]]:
-    key = _workspace_key(route)
+def _session_records(route: str) -> list[dict[str, Any]]:
+    key = f"enterprise_workspace_{route}"
     if key not in st.session_state:
         st.session_state[key] = []
     return st.session_state[key]
 
 
+def _load_records(route: str) -> tuple[list[dict[str, Any]], bool]:
+    """Load persistent records, falling back to session storage if unavailable."""
+    try:
+        from database.bootstrap import ensure_schema
+        from database.connection import SessionLocal
+        from database.models.module_workspace import ModuleWorkspaceRecord
+
+        ensure_schema()
+        with SessionLocal() as db:
+            rows = (
+                db.query(ModuleWorkspaceRecord)
+                .filter(ModuleWorkspaceRecord.module_route == route)
+                .order_by(ModuleWorkspaceRecord.created_at.desc())
+                .all()
+            )
+            records = [
+                {
+                    "id": row.id,
+                    "name": row.name,
+                    "description": row.description or "",
+                    "value": float(row.value or 0.0),
+                    "metadata": json.dumps(row.metadata_json or {}, ensure_ascii=False),
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else "",
+                }
+                for row in rows
+            ]
+        return records, True
+    except Exception:
+        return list(_session_records(route)), False
+
+
+def _save_record(route: str, name: str, description: str, value: float, metadata: dict[str, Any]) -> None:
+    try:
+        from database.bootstrap import ensure_schema
+        from database.connection import SessionLocal
+        from database.models.module_workspace import ModuleWorkspaceRecord
+
+        ensure_schema()
+        now = datetime.now(timezone.utc)
+        with SessionLocal() as db:
+            db.add(
+                ModuleWorkspaceRecord(
+                    module_route=route,
+                    name=name,
+                    description=description,
+                    value=float(value),
+                    metadata_json=metadata,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            db.commit()
+        return
+    except Exception:
+        records = _session_records(route)
+        records.append(
+            {
+                "name": name,
+                "description": description,
+                "value": float(value),
+                "metadata": json.dumps(metadata, ensure_ascii=False),
+                "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }
+        )
+
+
 def render_module() -> None:
-    """Render a functional generic workspace for a registered module."""
+    """Render a functional persistent workspace for a registered module."""
     route = _active_route()
-    records = _records(route)
+    records, persistent = _load_records(route)
 
     st.subheader(f"{route} Workspace")
     st.caption("Enterprise module workspace")
@@ -43,8 +104,8 @@ def render_module() -> None:
     with overview:
         a, b, c = st.columns(3)
         a.metric("Records", len(records))
-        b.metric("Workspace", "Ready")
-        c.metric("Last Update", records[-1]["updated_at"] if records else "None")
+        b.metric("Persistence", "Database" if persistent else "Session fallback")
+        c.metric("Last Update", records[0]["updated_at"] if records else "None")
 
         if records:
             st.dataframe(pd.DataFrame(records), use_container_width=True, hide_index=True)
@@ -59,7 +120,7 @@ def render_module() -> None:
             metadata_text = st.text_area(
                 "Additional metadata (JSON)",
                 value="{}",
-                help="Enter a JSON object for module-specific temporary data.",
+                help="Enter a JSON object for module-specific workspace data.",
             )
             submitted = st.form_submit_button("Save Record", use_container_width=True)
 
@@ -70,24 +131,11 @@ def render_module() -> None:
                     raise ValueError("Metadata must be a JSON object.")
                 if not name.strip():
                     raise ValueError("Record name is required.")
-                timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
-                records.append(
-                    {
-                        "name": name.strip(),
-                        "description": description.strip(),
-                        "value": float(value),
-                        "metadata": json.dumps(metadata, ensure_ascii=False),
-                        "updated_at": timestamp,
-                    }
-                )
-                st.success("Record saved to the current workspace.")
+                _save_record(route, name.strip(), description.strip(), float(value), metadata)
+                st.success("Record saved successfully.")
                 st.rerun()
             except (ValueError, json.JSONDecodeError) as exc:
                 st.error(str(exc))
-
-        if records and st.button("Clear Workspace Records", use_container_width=True):
-            st.session_state[_workspace_key(route)] = []
-            st.rerun()
 
     with export:
         if records:
