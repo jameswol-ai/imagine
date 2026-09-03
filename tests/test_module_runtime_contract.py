@@ -19,6 +19,11 @@ def test_every_registered_route_has_a_renderer_contract() -> None:
         assert callable(renderer), f"Missing renderer for {spec.route}"
 
 
+def test_no_implemented_registry_entry_is_missing_a_module_path() -> None:
+    broken = [spec.route for spec in MODULE_SPECS if spec.implemented and not spec.module_path]
+    assert broken == []
+
+
 def test_enterprise_route_workspaces_are_executable() -> None:
     routes = {
         "Finite Element Analysis", "Elements", "COBie", "BIM Digital Twin", "Energy",
@@ -30,6 +35,29 @@ def test_enterprise_route_workspaces_are_executable() -> None:
             assert spec.module_path == "modules.enterprise_missing"
             assert spec.renderer_name == "render"
             assert spec.implemented is True
+
+
+def test_core_structural_workspaces_are_importable() -> None:
+    expected = {
+        "Beam Design": "modules.structural.beam_design",
+        "Column Design": "modules.structural.column_design",
+        "Slab Design": "modules.structural.slab_design",
+        "Foundation Design": "modules.structural.foundation_design",
+        "Punching Shear": "modules.structural.punching_shear",
+        "Stairs Design": "modules.structural.stairs_design",
+        "Openings Design": "modules.structural.openings_design",
+        "Railings & Balustrades": "modules.structural.railings_design",
+        "Load Combinations": "modules.structural.load_combinations",
+        "Wind Actions": "modules.structural.wind_actions",
+        "Seismic Actions": "modules.structural.seismic_actions",
+        "RC Detailing": "modules.structural.rc_detailing",
+    }
+    by_route = {spec.route: spec for spec in MODULE_SPECS}
+    for route, module_path in expected.items():
+        spec = by_route[route]
+        assert spec.module_path == module_path
+        module = importlib.import_module(module_path)
+        assert callable(getattr(module, "render", None))
 
 
 def test_beam_design_uses_the_specialist_renderer() -> None:
