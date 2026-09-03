@@ -1,8 +1,7 @@
 """Pure preliminary reinforced-concrete slab design engine.
 
-This module keeps engineering calculations independent from Streamlit. It is a
-screening engine inspired by EN 1992-1-1. The simplified two-way coefficients,
-span/depth deflection screening and shear model are not a substitute for a
+Screening implementation inspired by EN 1992-1-1. The simplified two-way
+coefficients, span/depth screening and shear model are not a substitute for a
 project-specific EC2 design, National Annex, detailing checks or professional
 verification.
 """
@@ -14,15 +13,12 @@ from typing import Literal
 
 from modules.structural.ec0 import LoadSet, build_sls_combinations, build_uls_combinations, governing_combination
 from modules.structural.ec2 import (
-    ConcreteDesignProperties,
-    SteelDesignProperties,
     effective_depth_mm,
     minimum_tension_reinforcement_mm2,
     provided_bar_area_mm2,
     required_flexural_reinforcement_mm2,
     vrdc_mpa,
 )
-
 
 SlabType = Literal["One-Way Slab", "Two-Way Rectangular Slab"]
 SupportCondition = Literal["Simply Supported", "One End Continuous", "Both Ends Continuous", "Cantilever"]
@@ -97,6 +93,8 @@ class SlabDesignResult:
     flexure_y_ok: bool
     shear_ok: bool
     deflection_ok: bool
+    governing_uls_name: str
+    governing_sls_name: str
 
     @property
     def overall_ok(self) -> bool:
@@ -115,33 +113,37 @@ class RCSLabDesignEngine:
 
     @classmethod
     def run(cls, inputs: SlabDesignInput) -> SlabDesignResult:
-        concrete = ConcreteDesignProperties(inputs.fck_mpa, inputs.gamma_c, inputs.alpha_cc)
-        steel = SteelDesignProperties(inputs.fyk_mpa, inputs.gamma_s)
-
+        steel_fyd = inputs.fyk_mpa / inputs.gamma_s
         self_weight = inputs.thickness_mm / 1000.0 * inputs.slab_density_kn_m3
         permanent = inputs.permanent_load_kn_m2 + self_weight
         actions = LoadSet(permanent=permanent, leading_variable=inputs.imposed_load_kn_m2)
-        uls = governing_combination(build_uls_combinations(actions, psi0=inputs.psi0))
-        sls = governing_combination(build_sls_combinations(actions, psi0=inputs.psi0))
+        uls_name, uls = governing_combination(build_uls_combinations(actions, psi0=inputs.psi0))
+        sls_name, sls = governing_combination(build_sls_combinations(actions, psi0=inputs.psi0))
 
-        dx = effective_depth_mm(inputs.thickness_mm, inputs.cover_mm, 0.0 + 0.01, inputs.bar_dia_x_mm)
-        # A nominal 10 mm distribution allowance gives a transparent screening depth.
+        # effective_depth_mm expects the reinforcement diameter in mm.
+        dx = effective_depth_mm(inputs.thickness_mm, inputs.cover_mm, 0.0, inputs.bar_dia_x_mm)
         dy = max(dx - inputs.bar_dia_x_mm / 2.0 - inputs.bar_dia_y_mm / 2.0, 1.0)
         ratio = inputs.ly_m / inputs.lx_m
 
         one_way = inputs.slab_type == "One-Way Slab" or ratio > 2.0
         if one_way:
-            factor = {"Simply Supported": 8.0, "One End Continuous": 10.0, "Both Ends Continuous": 12.0, "Cantilever": 2.0}[inputs.support_condition]
-            mx = uls / factor * inputs.lx_m**2
+            factor = {
+                "Simply Supported": 8.0,
+                "One End Continuous": 10.0,
+                "Both Ends Continuous": 12.0,
+                "Cantilever": 2.0,
+            }[inputs.support_condition]
+            mx = uls * inputs.lx_m**2 / factor
             my = 0.20 * mx
         else:
-            vx = 1.0 / (1.0 + ratio**4)
-            vy = ratio**4 / (1.0 + ratio**4)
+            ratio4 = ratio**4
+            vx = 1.0 / (1.0 + ratio4)
+            vy = ratio4 / (1.0 + ratio4)
             mx = vx * uls * inputs.lx_m**2 / 8.0
             my = vy * uls * inputs.lx_m**2 / 8.0
 
-        as_req_x = required_flexural_reinforcement_mm2(mx, inputs.unit_width_mm, dx, steel.fyd_mpa)
-        as_req_y = required_flexural_reinforcement_mm2(my, inputs.unit_width_mm, dy, steel.fyd_mpa)
+        as_req_x = required_flexural_reinforcement_mm2(mx, inputs.unit_width_mm, dx, steel_fyd)
+        as_req_y = required_flexural_reinforcement_mm2(my, inputs.unit_width_mm, dy, steel_fyd)
         as_min_x = minimum_tension_reinforcement_mm2(inputs.unit_width_mm, dx, inputs.fck_mpa, inputs.fyk_mpa)
         as_min_y = minimum_tension_reinforcement_mm2(inputs.unit_width_mm, dy, inputs.fck_mpa, inputs.fyk_mpa)
         as_provided_x = provided_bar_area_mm2(inputs.bar_dia_x_mm, inputs.spacing_x_mm, inputs.unit_width_mm)
@@ -152,10 +154,12 @@ class RCSLabDesignEngine:
         vrdc = vrdc_mpa(inputs.fck_mpa, inputs.unit_width_mm, dx, as_provided_x, inputs.gamma_c)
 
         basic_ld = 20.0 * cls._K_SYS[inputs.support_condition]
-        modification = min(1.5, as_provided_x / as_req_x) if as_req_x > 0 else 1.0
+        modification = min(1.5, as_provided_x / max(as_req_x, 1e-9))
         allowable_ld = basic_ld * modification
         actual_ld = inputs.lx_m * 1000.0 / dx
 
+        req_x = max(as_req_x, as_min_x)
+        req_y = max(as_req_y, as_min_y)
         return SlabDesignResult(
             aspect_ratio=ratio,
             effective_depth_x_mm=dx,
@@ -167,8 +171,8 @@ class RCSLabDesignEngine:
             sls_load_kn_m2=sls,
             moment_x_kn_m=mx,
             moment_y_kn_m=my,
-            as_required_x_mm2_m=max(as_req_x, as_min_x),
-            as_required_y_mm2_m=max(as_req_y, as_min_y),
+            as_required_x_mm2_m=req_x,
+            as_required_y_mm2_m=req_y,
             as_min_x_mm2_m=as_min_x,
             as_min_y_mm2_m=as_min_y,
             as_provided_x_mm2_m=as_provided_x,
@@ -178,10 +182,12 @@ class RCSLabDesignEngine:
             shear_stress_mpa=shear_stress,
             actual_ld=actual_ld,
             allowable_ld=allowable_ld,
-            flexure_x_ok=as_provided_x >= max(as_req_x, as_min_x),
-            flexure_y_ok=as_provided_y >= max(as_req_y, as_min_y),
+            flexure_x_ok=as_provided_x >= req_x,
+            flexure_y_ok=as_provided_y >= req_y,
             shear_ok=shear_stress <= vrdc,
             deflection_ok=actual_ld <= allowable_ld,
+            governing_uls_name=uls_name,
+            governing_sls_name=sls_name,
         )
 
 
