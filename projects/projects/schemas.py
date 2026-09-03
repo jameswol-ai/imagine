@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, UUID4
 
 
 class ProjectStatus(str, Enum):
@@ -23,7 +23,6 @@ class ProjectBase(BaseModel):
     progress: float = Field(default=0.0, ge=0.0, le=100.0)
     start_date: Optional[str] = None
     end_date: Optional[str] = None
-    # organizations.id is Integer in the canonical database model.
     client_id: Optional[int] = Field(default=None, ge=1)
 
 
@@ -43,7 +42,7 @@ class ProjectUpdate(BaseModel):
 
 
 class ProjectResponse(ProjectBase):
-    id: str
+    id: UUID4
     created_at: datetime
     updated_at: Optional[datetime] = None
 
