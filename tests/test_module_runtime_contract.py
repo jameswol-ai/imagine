@@ -22,9 +22,13 @@ FUNCTIONAL_ROUTES = {
     "Forecasting",
     "Reporting",
     "Eurocode Suite",
-    "Beam Design",
     "Retaining Walls",
     "HVAC",
+    "Integrated MEP Analysis",
+    "Ventilation",
+    "Chilled Water",
+    "Energy Simulation",
+    "Electrical Load Analysis",
     "BOQ",
     "Quantity Takeoff",
     "Procurement",
@@ -70,6 +74,13 @@ def test_legacy_demo_routes_use_the_shared_functional_workspace() -> None:
             assert spec.module_path == "modules.functional_workspace"
             assert spec.renderer_name == "render_module"
             assert spec.implemented is True
+
+
+def test_beam_design_uses_the_specialist_renderer() -> None:
+    beam = next(spec for spec in MODULE_SPECS if spec.route == "Beam Design")
+    assert beam.module_path == "modules.structural.beam_design"
+    assert beam.renderer_name == "render"
+    assert beam.implemented is True
 
 
 def test_shared_fallback_is_available() -> None:
