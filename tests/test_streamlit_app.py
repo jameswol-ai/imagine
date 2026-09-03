@@ -1,5 +1,4 @@
 """Tests for the searchable IMAGINE Streamlit application shell."""
-
 from __future__ import annotations
 
 import inspect
@@ -16,34 +15,19 @@ def test_enterprise_registry_is_available() -> None:
 def test_expected_core_routes_are_registered() -> None:
     routes = {spec.route for spec in streamlit_app.registry_snapshot()}
     expected = {
-        "Overview",
-        "System Health",
-        "Projects",
-        "Approvals",
-        "Revisions",
-        "Zoning",
-        "Site Planning",
-        "Floor Planning",
-        "Room Programming",
-        "Compliance",
-        "Generative Design",
-        "Eurocode Suite",
-        "Beam Design",
-        "Column Design",
-        "Buildings",
-        "HVAC",
-        "BOQ",
-        "RFIs",
-        "Drawings",
-        "IMAGINE Architect",
-        "Dashboards",
-        "Assets",
+        "Overview", "System Health", "Projects", "Approvals", "Revisions", "Zoning",
+        "Site Planning", "Floor Planning", "Room Programming", "Compliance",
+        "Generative Design", "Eurocode Suite", "Beam Design", "Column Design",
+        "Buildings", "HVAC", "BOQ", "RFIs", "Drawings", "IMAGINE Architect",
+        "Dashboards", "Assets", "Project Files",
     }
     assert expected.issubset(routes)
 
 
-def test_default_route_is_overview() -> None:
-    assert streamlit_app.st.session_state.get("active_route", "Overview") == "Overview"
+def test_default_route_can_be_initialized_to_overview() -> None:
+    streamlit_app.st.session_state.pop("active_route", None)
+    streamlit_app.init_session_state()
+    assert streamlit_app.st.session_state.get("active_route") == "Overview"
 
 
 def test_search_finds_modules_globally() -> None:
@@ -58,18 +42,18 @@ def test_search_can_filter_by_domain() -> None:
     assert all(spec.section == "ARCHITECTURE" for spec in results)
 
 
-def test_unimplemented_modules_remain_searchable() -> None:
+def test_implemented_eurocode_modules_are_searchable() -> None:
     results = streamlit_app.search_specs("EN 1990", "STRUCTURAL")
     assert results
     assert results[0].label == "EN 1990"
-    assert results[0].implemented is False
+    assert results[0].implemented is True
 
 
 def test_sidebar_no_longer_renders_static_module_radio() -> None:
     source = inspect.getsource(streamlit_app.render_sidebar)
     assert "st.radio" not in source
     assert "Quick Navigation" not in source
-    assert "Search Modules" in source
+    assert "Search modules" in source
 
 
 def test_render_selected_module_is_isolated() -> None:
