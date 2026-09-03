@@ -45,6 +45,18 @@ DOMAIN_DESCRIPTIONS = {
     "DIGITAL TWIN": "Assets, sensors, telemetry, maintenance and predictive intelligence.",
 }
 
+SEARCH_ALIASES = {
+    "concrete": ("beam", "column", "slab", "foundation", "punching", "en 1992"),
+    "rc": ("beam", "column", "slab", "foundation", "punching"),
+    "steel": ("steel members", "steel connections", "section shapes", "en 1993"),
+    "bim": ("buildings", "storeys", "spaces", "ifc", "cobie", "digital twin"),
+    "mep": ("integrated mep analysis", "hvac", "ventilation", "electrical load analysis", "water supply", "drainage"),
+    "cost": ("boq", "quantity takeoff", "procurement", "forex", "inflation / escalation", "risk analysis"),
+    "construction": ("planning", "scheduling", "rfis", "submittals", "snagging", "site diaries"),
+    "documents": ("drawing management", "document register", "specifications", "contracts", "version control", "transmittals"),
+    "ai": ("imagine architect", "imagine engineer", "imagine mep", "imagine qs", "imagine pm"),
+}
+
 
 def registry_snapshot() -> tuple[ModuleSpec, ...]:
     validate_registry()
@@ -55,10 +67,10 @@ def init_session_state() -> None:
     defaults = {
         "active_route": "Overview",
         "module_search": "",
-        "module_search_domain": "All domains",
         "last_route_load_ms": None,
         "recent_routes": [],
-        "show_diagnostics": False,
+        "selected_project_id": None,
+        "selected_project_name": None,
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -69,7 +81,7 @@ def inject_styles() -> None:
         """
         <style>
         .stApp { background: linear-gradient(135deg, #f7f9fc 0%, #eef3f8 52%, #f8fafc 100%); }
-        .block-container { max-width: 1600px; padding-top: 1.1rem; padding-bottom: 3rem; }
+        .block-container { max-width: 1600px; padding-top: 1rem; padding-bottom: 3rem; }
         .imagine-brand { padding: .25rem .15rem .8rem; }
         .imagine-brand-title { font-size: 1.8rem; font-weight: 900; letter-spacing: -.06em; }
         .imagine-brand-subtitle { margin-top: .25rem; color: #687588; font-size: .74rem; line-height: 1.45; }
@@ -88,17 +100,22 @@ def inject_styles() -> None:
         .imagine-panel { padding: 1.2rem 1.3rem; border: 1px solid rgba(120,135,155,.17); border-radius: 16px; background: rgba(255,255,255,.78); box-shadow: 0 10px 30px rgba(35,55,80,.045); }
         .imagine-panel-title { font-size: 1.08rem; font-weight: 800; }
         .imagine-panel-description { margin-top: .3rem; color: #687588; font-size: .82rem; line-height: 1.6; }
+        .imagine-search-hint { padding: .75rem .85rem; margin-top: .55rem; border: 1px dashed rgba(120,135,155,.35); border-radius: 12px; color: #687588; font-size: .76rem; line-height: 1.5; }
         .imagine-footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid rgba(120,135,155,.2); color: #8792a1; font-size: .68rem; }
         div.stButton > button { min-height: 2.35rem; border-radius: 10px; font-weight: 680; transition: transform .16s ease, box-shadow .16s ease; }
         div.stButton > button:hover { transform: translateY(-1px); box-shadow: 0 7px 18px rgba(35,55,80,.12); }
         @keyframes imagine-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes imagine-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes imagine-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+        @media (prefers-reduced-motion: reduce) {
+            .imagine-header, .imagine-hero, .imagine-card { animation: none; }
+            div.stButton > button { transition: none; }
+        }
         @media (prefers-color-scheme: dark) {
             .stApp { background: radial-gradient(circle at top right, #172231 0%, #0b1118 55%, #0b1118 100%); }
             .imagine-header, .imagine-hero, .imagine-card, .imagine-panel { background: rgba(19,28,39,.82); border-color: #293746; }
             .imagine-brand-title, .imagine-header-title, .imagine-hero-title, .imagine-card-value, .imagine-panel-title { color: #f1f5f9; }
-            .imagine-brand-subtitle, .imagine-header-subtitle, .imagine-hero-copy, .imagine-panel-description, .imagine-card-description { color: #aab5c3; }
+            .imagine-brand-subtitle, .imagine-header-subtitle, .imagine-hero-copy, .imagine-panel-description, .imagine-card-description, .imagine-search-hint { color: #aab5c3; }
             .imagine-breadcrumb { background: #17212c; border-color: #2b3948; color: #b9c4d1; }
             .imagine-label, .imagine-card-title { color: #aab5c3; }
             .imagine-footer { border-top-color: #293746; }
@@ -113,26 +130,30 @@ def spec_for_route(route: str) -> ModuleSpec | None:
     return next((spec for spec in registry_snapshot() if spec.route == route), None)
 
 
-def search_specs(query: str, section: str = "All domains") -> list[ModuleSpec]:
+def search_specs(query: str) -> list[ModuleSpec]:
     normalized = query.strip().casefold()
     if not normalized:
         return []
     candidates = registry_snapshot()
-    if section != "All domains":
-        candidates = tuple(spec for spec in candidates if spec.section == section)
     terms = normalized.split()
     scored: list[tuple[int, ModuleSpec]] = []
     for spec in candidates:
         haystack = " ".join((spec.route, spec.label, spec.section, spec.module_path or "")).casefold()
-        if not all(term in haystack for term in terms):
+        expanded = haystack
+        for alias, routes in SEARCH_ALIASES.items():
+            if alias in normalized and any(route.casefold() in haystack for route in routes):
+                expanded += f" {alias}"
+        if not all(term in expanded for term in terms):
             continue
         score = 10 if spec.implemented else 0
         if spec.label.casefold().startswith(normalized):
-            score += 100
+            score += 120
         elif normalized in spec.label.casefold():
-            score += 50
+            score += 70
+        elif normalized in spec.section.casefold():
+            score += 35
         if spec.section.casefold() == normalized:
-            score += 40
+            score += 30
         scored.append((score, spec))
     scored.sort(key=lambda item: (-item[0], item[1].section, item[1].label))
     return [spec for _, spec in scored]
@@ -175,27 +196,45 @@ def probe_renderers() -> list[dict[str, str]]:
     return rows
 
 
+def get_project_summary() -> tuple[list[object], str]:
+    try:
+        from database.bootstrap import database_health
+        from database.connection import SessionLocal
+        health = database_health()
+        if not health.get("ok"):
+            return [], "Unavailable"
+        from projects.projects.service import ProjectService
+        with SessionLocal() as db:
+            return ProjectService.get_all_sync(db=db, skip=0, limit=10000), "Connected"
+    except Exception:
+        return [], "Unavailable"
+
+
 def render_sidebar() -> None:
     with st.sidebar:
         st.markdown('<div class="imagine-brand"><div class="imagine-brand-title">IMAGINE</div><div class="imagine-brand-subtitle">Integrated Architecture, Engineering & Construction Engine</div></div>', unsafe_allow_html=True)
         st.divider()
         st.markdown('<div class="imagine-label">Workspace search</div>', unsafe_allow_html=True)
-        st.text_input("Search modules", key="module_search", placeholder="Try beam, zoning, BIM, project...", label_visibility="collapsed")
-        st.selectbox("Search domain", ["All domains", *DOMAIN_DESCRIPTIONS.keys()], key="module_search_domain", label_visibility="collapsed")
-
+        st.text_input(
+            "Search modules",
+            key="module_search",
+            placeholder="Search beam, zoning, BIM, project...",
+            label_visibility="collapsed",
+        )
         query = st.session_state.module_search.strip()
-        matches = search_specs(query, st.session_state.module_search_domain) if query else []
+        matches = search_specs(query) if query else []
         if query:
             st.caption(f"{len(matches)} workspace(s) found")
             for spec in matches[:20]:
-                label = f"{spec.label} · {'Ready' if spec.implemented else 'Registered'}"
+                status = "Ready" if spec.implemented else "Registered"
+                label = f"{spec.label} · {status}"
                 if st.button(label, key=f"search_{spec.route}", use_container_width=True, disabled=not spec.implemented):
                     set_active_route(spec.route)
                     st.rerun()
             if len(matches) > 20:
                 st.caption(f"Showing 20 of {len(matches)} results. Refine the search.")
         else:
-            st.info("Search is the primary module navigation. Type a workspace name, discipline or function above.")
+            st.markdown('<div class="imagine-search-hint">Search by workspace, discipline or function. Examples: <b>beam</b>, <b>structural</b>, <b>BIM</b>, <b>cost</b>, <b>RFIs</b>, <b>architecture</b>.</div>', unsafe_allow_html=True)
 
         st.divider()
         recent = [r for r in st.session_state.get("recent_routes", []) if spec_for_route(r)]
@@ -213,25 +252,23 @@ def render_sidebar() -> None:
         if st.button("System Health", use_container_width=True):
             set_active_route("System Health")
             st.rerun()
-        st.caption("All registered modules remain discoverable through search. Unready modules are intentionally hidden from direct execution until their renderer is connected.")
 
 
 def render_header(title: str, subtitle: str, breadcrumb: str) -> None:
     st.markdown(f'<div class="imagine-header"><div class="imagine-header-title">{title}</div><div class="imagine-header-subtitle">{subtitle}</div><div class="imagine-breadcrumb">{breadcrumb}</div></div>', unsafe_allow_html=True)
 
 
-def get_project_summary() -> tuple[list[object], str]:
-    try:
-        from database.bootstrap import database_health
-        from database.connection import SessionLocal
-        health = database_health()
-        if not health.get("ok"):
-            return [], "Unavailable"
-        from projects.projects.service import ProjectService
-        with SessionLocal() as db:
-            return ProjectService.get_all_sync(db=db, skip=0, limit=10000), "Connected"
-    except Exception:
-        return [], "Unavailable"
+def render_project_context(projects: list[object]) -> None:
+    if not projects:
+        return
+    options = {getattr(project, "name", f"Project {getattr(project, 'id', '')}"): getattr(project, "id", None) for project in projects}
+    names = list(options)
+    current = st.session_state.get("selected_project_name")
+    if current not in names:
+        current = names[0]
+    selected = st.selectbox("Active project context", names, index=names.index(current), key="active_project_selector")
+    st.session_state.selected_project_name = selected
+    st.session_state.selected_project_id = options[selected]
 
 
 def render_overview() -> None:
@@ -241,7 +278,10 @@ def render_overview() -> None:
     ready = sum(spec.implemented for spec in specs)
     coverage = round(ready / len(specs) * 100, 1) if specs else 0
 
-    st.markdown('<div class="imagine-hero"><div class="imagine-hero-title">Design. Engineer. Build. Operate.</div><div class="imagine-hero-copy">A unified AEC workspace for project delivery, engineering decision support, BIM coordination, cost control, construction management and operational intelligence. Use the search panel to move directly to the workspace you need.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="imagine-hero"><div class="imagine-hero-title">Design. Engineer. Build. Operate.</div><div class="imagine-hero-copy">A unified AEC workspace for project delivery, engineering decision support, BIM coordination, cost control, construction management and operational intelligence. Search the workspace you need, then work directly inside its domain module.</div></div>', unsafe_allow_html=True)
+
+    if projects:
+        render_project_context(projects)
 
     cards = [
         ("Workspaces", len(specs), "Enterprise registry"),
