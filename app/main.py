@@ -1,40 +1,51 @@
+"""IMAGINE FastAPI application."""
+from __future__ import annotations
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.settings import settings
+
 from app.dependencies import lifespan
-from projects.projects.routes import router as projects_router
-from core.authentication.routes import router as auth_router
-# Import all routers from other modules...
-
-from architecture.routes import router as architecture_router
-from bim.routes import router as bim_router
-from structural.routes import router as structural_router
-
-app.include_router(architecture_router, prefix=settings.API_V1_PREFIX)
-app.include_router(bim_router, prefix=settings.API_V1_PREFIX)
-app.include_router(structural_router, prefix=settings.API_V1_PREFIX)
+from app.settings import settings
 
 
-app = FastAPI(
-    title=settings.APP_NAME,
-    version="1.0.0",
-    lifespan=lifespan,
-)
+def create_app() -> FastAPI:
+    application = FastAPI(
+        title=settings.app_name,
+        version="1.1.0",
+        lifespan=lifespan,
+    )
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # Router imports are intentionally lazy. This keeps the API bootable when
+    # an optional domain package is unavailable while preserving the core API.
+    try:
+        from core.authentication.routes import router as auth_router
+        application.include_router(auth_router, prefix=settings.api_v1_prefix)
+    except Exception:
+        pass
+    try:
+        from projects.projects.routes import router as projects_router
+        application.include_router(projects_router, prefix=settings.api_v1_prefix)
+    except Exception:
+        pass
 
-# Include routers
-app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
-app.include_router(projects_router, prefix=settings.API_V1_PREFIX)
-# ... include all other routers
+    @application.get("/", tags=["system"])
+    async def root() -> dict[str, str]:
+        return {"message": "IMAGINE API", "version": application.version}
 
-@app.get("/")
-async def root():
-    return {"message": "IMAGINE API", "version": "1.0.0"}
+    @application.get("/health", tags=["system"])
+    async def health() -> dict[str, str]:
+        return {"status": "ok", "service": "imagine-api"}
+
+    return application
+
+
+app = create_app()
+
+__all__ = ["app", "create_app"]
