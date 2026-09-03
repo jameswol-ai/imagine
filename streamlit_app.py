@@ -38,6 +38,12 @@ SEARCH_ALIASES = {
     "project": ("projects", "approvals", "revisions", "workflows", "governance"),
     "analysis": ("structural analysis", "finite element analysis", "eurocode suite"),
     "ec": ("en1990-1998", "eurocode suite", "design standards"),
+    "architecture": ("architecture assistant", "design standards", "zoning", "site planning", "floor planning", "room programming", "compliance", "generative design"),
+    "roof": ("roof design",),
+    "energy": ("energy", "hvac", "chilled water", "energy simulation"),
+    "digital": ("digital twin", "assets", "sensors", "telemetry", "energy", "maintenance", "predictive ai"),
+    "regional": ("uganda", "kenya", "tanzania", "rwanda", "south sudan", "codes", "zoning laws"),
+    "integration": ("microsoft", "autocad", "revit", "archicad", "tekla", "ifcopenshell", "arcgis", "azure", "mapbox"),
 }
 
 
@@ -272,6 +278,23 @@ def render_project_context(projects: list[object]) -> None:
     st.session_state.selected_project_id = options[selected]
 
 
+def render_domain_summary(specs: tuple[ModuleSpec, ...]) -> None:
+    st.subheader("Engineering Workspace Coverage")
+    rows = []
+    for section in sorted({spec.section for spec in specs}):
+        domain_specs = [spec for spec in specs if spec.section == section]
+        ready = sum(spec.implemented for spec in domain_specs)
+        rows.append({"Domain": section, "Ready": ready, "Registered": len(domain_specs), "Coverage": round(ready / len(domain_specs) * 100, 1)})
+    frame = pd.DataFrame(rows)
+    left, right = st.columns([1.15, 1])
+    with left:
+        st.dataframe(frame, use_container_width=True, hide_index=True, column_config={"Coverage": st.column_config.NumberColumn(format="%.1f%%")})
+    with right:
+        fig = px.bar(frame, x="Domain", y="Coverage", height=330)
+        fig.update_layout(margin=dict(l=10, r=10, t=15, b=90), yaxis_title="Ready coverage (%)", xaxis_tickangle=-35)
+        st.plotly_chart(fig, use_container_width=True)
+
+
 def render_overview() -> None:
     render_header("IMAGINE", "Integrated Architecture, Engineering & Construction Engine", "Overview / Enterprise Workspace")
     specs = registry_snapshot()
@@ -325,6 +348,8 @@ def render_overview() -> None:
         fig = px.bar(pd.DataFrame(rows), x="Domain", y=["Ready", "Registered"], barmode="group", height=390)
         fig.update_layout(margin=dict(l=10, r=10, t=15, b=95), legend_title_text="", xaxis_tickangle=-35)
         st.plotly_chart(fig, use_container_width=True)
+
+    render_domain_summary(specs)
 
     st.subheader("Recent Workspaces")
     recent = [r for r in st.session_state.get("recent_routes", []) if spec_for_route(r)]
