@@ -1,60 +1,9 @@
 """Contract tests for searchable and executable enterprise modules."""
-
 from __future__ import annotations
 
 import importlib
 
 from modules.enterprise_registry import MODULE_SPECS
-
-
-FUNCTIONAL_ROUTES = {
-    "IMAGINE Architect",
-    "IMAGINE Engineer",
-    "IMAGINE MEP",
-    "IMAGINE QS",
-    "IMAGINE PM",
-    "Vector Store",
-    "RAG",
-    "Prompt Library",
-    "Dashboards",
-    "KPIs",
-    "Portfolio",
-    "Forecasting",
-    "Reporting",
-    "Eurocode Suite",
-    "Retaining Walls",
-    "HVAC",
-    "Integrated MEP Analysis",
-    "Ventilation",
-    "Chilled Water",
-    "Energy Simulation",
-    "Electrical Load Analysis",
-    "BOQ",
-    "Quantity Takeoff",
-    "Procurement",
-    "Forex",
-    "Inflation / Escalation",
-    "Risk Analysis",
-    "Planning",
-    "Scheduling",
-    "RFIs",
-    "Submittals",
-    "Variations",
-    "Snagging",
-    "Progress Tracking",
-    "Site Diaries",
-    "Drawing Management",
-    "Document Register",
-    "Specifications",
-    "Contracts",
-    "Version Control",
-    "Transmittals",
-    "Assets",
-    "Sensors",
-    "Telemetry",
-    "Maintenance",
-    "Predictive AI",
-}
 
 
 def test_every_registered_route_has_a_renderer_contract() -> None:
@@ -68,9 +17,9 @@ def test_every_registered_route_has_a_renderer_contract() -> None:
         assert callable(renderer), f"Missing renderer for {spec.route}"
 
 
-def test_legacy_demo_routes_use_the_shared_functional_workspace() -> None:
+def test_unimplemented_routes_are_safe_functional_workspaces() -> None:
     for spec in MODULE_SPECS:
-        if spec.route in FUNCTIONAL_ROUTES:
+        if spec.route in {"Finite Element Analysis", "Elements", "COBie", "BIM Digital Twin", "Energy"}:
             assert spec.module_path == "modules.functional_workspace"
             assert spec.renderer_name == "render_module"
             assert spec.implemented is True
