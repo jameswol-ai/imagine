@@ -15,8 +15,20 @@ _enterprise_registry = importlib.import_module("modules.enterprise_registry")
 from modules.enterprise_registry import ModuleSpec
 
 
+# Complete the Eurocode navigation set without forcing the large registry file
+# to become coupled to renderer imports.
+_existing_routes = {spec.route for spec in _enterprise_registry.MODULE_SPECS}
+_extra_specs = tuple(
+    spec
+    for spec in (
+        ModuleSpec("EN 1994", "EN 1994", "STRUCTURAL", "modules.functional_workspace", "render_module", True),
+        ModuleSpec("EN 1996", "EN 1996", "STRUCTURAL", "modules.functional_workspace", "render_module", True),
+    )
+    if spec.route not in _existing_routes
+)
+
 _NORMALIZED_SPECS = []
-for _spec in _enterprise_registry.MODULE_SPECS:
+for _spec in (*_enterprise_registry.MODULE_SPECS, *_extra_specs):
     if _spec.implemented and _spec.module_path:
         _NORMALIZED_SPECS.append(_spec)
     else:
