@@ -1,5 +1,9 @@
 """IMAGINE Streamlit module package."""
 
+from __future__ import annotations
+
+import importlib
+
 from modules.ui_sanitizer import install_emoji_free_ui
 
 install_emoji_free_ui()
@@ -7,7 +11,7 @@ install_emoji_free_ui()
 # Preload and normalize the enterprise registry before streamlit_app imports it.
 # Specialist renderers remain untouched. Routes without a specialist renderer
 # receive the shared persistent workspace so no registered route is dead.
-from modules import enterprise_registry as _enterprise_registry
+_enterprise_registry = importlib.import_module("modules.enterprise_registry")
 from modules.enterprise_registry import ModuleSpec
 
 
