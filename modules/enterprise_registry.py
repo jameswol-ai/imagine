@@ -12,6 +12,7 @@ class ModuleSpec:
     implemented: bool = False
 
 FALLBACK = "modules.enterprise_missing"
+STRUCTURAL_WORKBENCH = "modules.structural.workspaces"
 
 MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Overview", "Overview", "PLATFORM", "__builtin__", "render_overview", True),
@@ -31,7 +32,7 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Room Programming", "Room Programming", "ARCHITECTURE", "architecture.room_programming.ui", "render_room_programming", True),
     ModuleSpec("Compliance", "Compliance", "ARCHITECTURE", "architecture.compliance.ui", "render_compliance", True),
     ModuleSpec("Generative Design", "Generative Design", "ARCHITECTURE", "architecture.generative_design.ui", "render_generative_design", True),
-
+    ModuleSpec("Structural Engineering Dashboard", "Structural Engineering Dashboard", "STRUCTURAL", "modules.structural.design_dashboard", "render", True),
     ModuleSpec("Structural Design Handbook", "Structural Design Handbook", "STRUCTURAL", "modules.structural.handbook", "render", True),
     ModuleSpec("Building Materials", "Building Materials", "STRUCTURAL", "modules.structural.building_materials", "render", True),
     ModuleSpec("Load Combinations", "Load Combinations", "STRUCTURAL", "modules.structural.load_combinations", "render", True),
@@ -42,29 +43,28 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("EN 1990", "EN 1990", "STRUCTURAL", "modules.structural.eurocode", "render", True),
     ModuleSpec("EN 1991", "EN 1991", "STRUCTURAL", "modules.structural.eurocode", "render", True),
     ModuleSpec("EN 1992", "EN 1992", "STRUCTURAL", "modules.structural.eurocode", "render", True),
-    ModuleSpec("EN 1993", "EN 1993", "STRUCTURAL", "modules.structural.eurocode_1993", "render", True),
-    ModuleSpec("EN 1994", "EN 1994", "STRUCTURAL", "modules.structural.eurocode_1994", "render", True),
-    ModuleSpec("EN 1995", "EN 1995", "STRUCTURAL", "modules.structural.handbook", "render", True),
-    ModuleSpec("EN 1996", "EN 1996", "STRUCTURAL", "modules.structural.eurocode_1996", "render", True),
-    ModuleSpec("EN 1997", "EN 1997", "STRUCTURAL", "modules.structural.eurocode_1997", "render", True),
-    ModuleSpec("EN 1998", "EN 1998", "STRUCTURAL", "modules.structural.eurocode_1998", "render", True),
-    ModuleSpec("EN 1999", "EN 1999", "STRUCTURAL", "modules.structural.handbook", "render", True),
+    ModuleSpec("EN 1993", "EN 1993", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("EN 1994", "EN 1994", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("EN 1995", "EN 1995", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("EN 1996", "EN 1996", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("EN 1997", "EN 1997", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("EN 1998", "EN 1998", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("EN 1999", "EN 1999", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
     ModuleSpec("Beam Design", "Beam Design", "STRUCTURAL", "modules.structural.beam_design", "render", True),
     ModuleSpec("Column Design", "Column Design", "STRUCTURAL", "modules.structural.column_design", "render", True),
     ModuleSpec("Slab Design", "Slab Design", "STRUCTURAL", "modules.structural.slab_design", "render", True),
-    ModuleSpec("Foundation Design", "Foundation Design", "STRUCTURAL", "modules.structural.foundation_design", "render", True),
+    ModuleSpec("Foundation Design", "Foundation Design", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
     ModuleSpec("Retaining Walls", "Retaining Walls", "STRUCTURAL", "modules.structural.retaining_walls", "render", True),
-    ModuleSpec("Punching Shear", "Punching Shear", "STRUCTURAL", "modules.structural.punching_shear", "render", True),
-    ModuleSpec("Steel Members", "Steel Members", "STRUCTURAL", "modules.structural.steel_members", "render", True),
-    ModuleSpec("Steel Connections", "Steel Connections", "STRUCTURAL", "modules.structural.steel_connections", "render", True),
-    ModuleSpec("Section Shapes", "Section Shapes", "STRUCTURAL", "modules.structural.shape_design", "render", True),
+    ModuleSpec("Punching Shear", "Punching Shear", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("Steel Members", "Steel Members", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("Steel Connections", "Steel Connections", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
+    ModuleSpec("Section Shapes", "Section Shapes", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
     ModuleSpec("Roof Design", "Roof Design", "STRUCTURAL", "modules.structural.roof_design", "render", True),
     ModuleSpec("Stairs Design", "Stairs Design", "STRUCTURAL", "modules.structural.stairs_design", "render", True),
     ModuleSpec("Openings Design", "Openings Design", "STRUCTURAL", "modules.structural.openings_design", "render", True),
     ModuleSpec("Railings & Balustrades", "Railings & Balustrades", "STRUCTURAL", "modules.structural.railings_design", "render", True),
     ModuleSpec("Structural Analysis", "Structural Analysis", "STRUCTURAL", "modules.structural.structural_analysis", "render", True),
-    ModuleSpec("Finite Element Analysis", "Finite Element Analysis", "STRUCTURAL", FALLBACK, "render", True),
-
+    ModuleSpec("Finite Element Analysis", "Finite Element Analysis", "STRUCTURAL", STRUCTURAL_WORKBENCH, "render", True),
     ModuleSpec("Buildings", "Buildings", "BIM", "modules.bim.buildings", "render", True),
     ModuleSpec("Storeys", "Storeys", "BIM", "modules.bim.storeys", "render", True),
     ModuleSpec("Spaces", "Spaces", "BIM", "modules.bim.spaces", "render", True),
@@ -109,42 +109,18 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Portfolio", "Portfolio", "ANALYTICS", "modules.analytics.portfolio", "render", True),
     ModuleSpec("Forecasting", "Forecasting", "ANALYTICS", "modules.analytics.forecasting", "render", True),
     ModuleSpec("Reporting", "Reporting", "ANALYTICS", "modules.analytics.reporting", "render", True),
-    ModuleSpec("Uganda", "Uganda", "REGIONAL", FALLBACK, "render", True),
-    ModuleSpec("Kenya", "Kenya", "REGIONAL", FALLBACK, "render", True),
-    ModuleSpec("Tanzania", "Tanzania", "REGIONAL", FALLBACK, "render", True),
-    ModuleSpec("Rwanda", "Rwanda", "REGIONAL", FALLBACK, "render", True),
-    ModuleSpec("South Sudan", "South Sudan", "REGIONAL", FALLBACK, "render", True),
-    ModuleSpec("Codes", "Codes", "REGIONAL", FALLBACK, "render", True),
-    ModuleSpec("Zoning Laws", "Zoning Laws", "REGIONAL", FALLBACK, "render", True),
-    ModuleSpec("Microsoft", "Microsoft", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("AutoCAD", "AutoCAD", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("Revit", "Revit", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("Archicad", "Archicad", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("Tekla", "Tekla", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("IfcOpenShell", "IfcOpenShell", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("ArcGIS", "ArcGIS", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("Azure", "Azure", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("Mapbox", "Mapbox", "INTEGRATIONS", FALLBACK, "render", True),
-    ModuleSpec("Assets", "Assets", "DIGITAL TWIN", "modules.digital_twin.assets", "render", True),
-    ModuleSpec("Sensors", "Sensors", "DIGITAL TWIN", "modules.digital_twin.sensors", "render", True),
-    ModuleSpec("Telemetry", "Telemetry", "DIGITAL TWIN", "modules.digital_twin.telemetry", "render", True),
-    ModuleSpec("Energy", "Energy", "DIGITAL TWIN", FALLBACK, "render", True),
-    ModuleSpec("Maintenance", "Maintenance", "DIGITAL TWIN", "modules.digital_twin.maintenance", "render", True),
-    ModuleSpec("Predictive AI", "Predictive AI", "DIGITAL TWIN", "modules.digital_twin.predictive_ai", "render", True),
+    ModuleSpec("Uganda", "Uganda", "REGIONAL", FALLBACK, "render", True), ModuleSpec("Kenya", "Kenya", "REGIONAL", FALLBACK, "render", True), ModuleSpec("Tanzania", "Tanzania", "REGIONAL", FALLBACK, "render", True), ModuleSpec("Rwanda", "Rwanda", "REGIONAL", FALLBACK, "render", True), ModuleSpec("South Sudan", "South Sudan", "REGIONAL", FALLBACK, "render", True), ModuleSpec("Codes", "Codes", "REGIONAL", FALLBACK, "render", True), ModuleSpec("Zoning Laws", "Zoning Laws", "REGIONAL", FALLBACK, "render", True),
+    ModuleSpec("Microsoft", "Microsoft", "INTEGRATIONS", FALLBACK, "render", True), ModuleSpec("AutoCAD", "AutoCAD", "INTEGRATIONS", FALLBACK, "render", True), ModuleSpec("Revit", "Revit", "INTEGRATIONS", FALLBACK, "render", True), ModuleSpec("Archicad", "Archicad", "INTEGRATIONS", FALLBACK, "render", True), ModuleSpec("Tekla", "Tekla", "INTEGRATIONS", FALLBACK, "render", True), ModuleSpec("IfcOpenShell", "IfcOpenShell", "INTEGRATIONS", FALLBACK, "render", True), ModuleSpec("ArcGIS", "ArcGIS", "INTEGRATIONS", FALLBACK, "render", True), ModuleSpec("Azure", "Azure", "INTEGRATIONS", FALLBACK, "render", True), ModuleSpec("Mapbox", "Mapbox", "INTEGRATIONS", FALLBACK, "render", True),
+    ModuleSpec("Assets", "Assets", "DIGITAL TWIN", "modules.digital_twin.assets", "render", True), ModuleSpec("Sensors", "Sensors", "DIGITAL TWIN", "modules.digital_twin.sensors", "render", True), ModuleSpec("Telemetry", "Telemetry", "DIGITAL TWIN", "modules.digital_twin.telemetry", "render", True), ModuleSpec("Energy", "Energy", "DIGITAL TWIN", FALLBACK, "render", True), ModuleSpec("Maintenance", "Maintenance", "DIGITAL TWIN", "modules.digital_twin.maintenance", "render", True), ModuleSpec("Predictive AI", "Predictive AI", "DIGITAL TWIN", "modules.digital_twin.predictive_ai", "render", True),
 )
-
 MODULES_BY_ROUTE = {spec.route: spec for spec in MODULE_SPECS}
 
 def validate_registry() -> None:
     routes = [s.route for s in MODULE_SPECS]
     duplicates = sorted({r for r in routes if routes.count(r) > 1})
-    if duplicates:
-        raise RuntimeError(f"Duplicate module routes detected: {duplicates}")
+    if duplicates: raise RuntimeError(f"Duplicate module routes detected: {duplicates}")
     for spec in MODULE_SPECS:
-        if not spec.route.strip() or not spec.label.strip() or not spec.section.strip():
-            raise RuntimeError(f"Invalid module specification: {spec!r}")
-        if spec.implemented and not spec.module_path:
-            raise RuntimeError(f"Implemented module has no module path: {spec.route}")
-
+        if not spec.route.strip() or not spec.label.strip() or not spec.section.strip(): raise RuntimeError(f"Invalid module specification: {spec!r}")
+        if spec.implemented and not spec.module_path: raise RuntimeError(f"Implemented module has no module path: {spec.route}")
 validate_registry()
-__all__ = ["ModuleSpec", "MODULE_SPECS", "MODULES_BY_ROUTE", "validate_registry"]
+__all__=["ModuleSpec","MODULE_SPECS","MODULES_BY_ROUTE","validate_registry"]
