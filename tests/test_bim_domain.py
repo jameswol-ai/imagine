@@ -1,4 +1,4 @@
-"""Regression tests for BIM navigation and shared data contracts."""
+"""Regression tests for BIM navigation, contracts and persistence wiring."""
 from modules.enterprise_registry import MODULES_BY_ROUTE, validate_registry
 from modules.bim.core import BIMElement, asdict_element
 
@@ -31,3 +31,16 @@ def test_bim_module_imports_expose_render():
     from modules.bim import dashboard, elements, assemblies, cobie, coordination, quantities, costing_handoff, digital_twin
     for module in (dashboard, elements, assemblies, cobie, coordination, quantities, costing_handoff, digital_twin):
         assert callable(module.render)
+
+
+def test_bim_persistence_maps_the_hierarchy_models():
+    from bim.models import Building, Storey, Space, Element
+    from modules.bim.persistence import MODEL_BY_KEY
+
+    assert MODEL_BY_KEY["bim_buildings"] is Building
+    assert MODEL_BY_KEY["bim_storeys"] is Storey
+    assert MODEL_BY_KEY["bim_spaces"] is Space
+    assert MODEL_BY_KEY["bim_elements"] is Element
+    assert Storey.building_id.property.columns[0].nullable is False
+    assert Space.storey_id.property.columns[0].nullable is False
+    assert Element.storey_id.property.columns[0].nullable is True
