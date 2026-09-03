@@ -19,66 +19,17 @@ class ProjectStatus(str, enum.Enum):
 class Project(BaseModel):
     __tablename__ = "projects"
 
-    name = Column(
-        String,
-        index=True,
-        nullable=False,
-    )
+    name = Column(String, index=True, nullable=False)
+    description = Column(String, nullable=True)
+    status = Column(Enum(ProjectStatus), default=ProjectStatus.PLANNING, nullable=False)
+    budget = Column(Float, default=0.0, nullable=False)
+    progress = Column(Float, default=0.0, nullable=False)
+    start_date = Column(String, nullable=True)
+    end_date = Column(String, nullable=True)
 
-    description = Column(
-        String,
-        nullable=True,
-    )
+    client_id = Column(ForeignKey("organizations.id"), nullable=True)
+    client = relationship("Organization", foreign_keys=[client_id])
 
-    status = Column(
-        Enum(ProjectStatus),
-        default=ProjectStatus.PLANNING,
-        nullable=False,
-    )
-
-    budget = Column(
-        Float,
-        default=0.0,
-        nullable=False,
-    )
-
-    progress = Column(
-        Float,
-        default=0.0,
-        nullable=False,
-    )
-
-    start_date = Column(
-        String,
-        nullable=True,
-    )
-
-    end_date = Column(
-        String,
-        nullable=True,
-    )
-
-    # Organization.id is Integer.
-    client_id = Column(
-        ForeignKey("organizations.id"),
-        nullable=True,
-    )
-
-    client = relationship(
-        "Organization",
-        foreign_keys=[client_id],
-    )
-
-    # These relationship targets are registered by
-    # projects.model_registry before ORM queries execute.
-    approvals = relationship(
-        "Approval",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
-
-    revisions = relationship(
-        "Revision",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
+    approvals = relationship("Approval", back_populates="project", cascade="all, delete-orphan")
+    revisions = relationship("Revision", back_populates="project", cascade="all, delete-orphan")
+    workflows = relationship("Workflow", back_populates="project", cascade="all, delete-orphan")
