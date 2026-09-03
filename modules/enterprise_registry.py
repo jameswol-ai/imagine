@@ -13,6 +13,7 @@ class ModuleSpec:
 
 FALLBACK = "modules.enterprise_missing"
 STRUCTURAL_WORKBENCH = "modules.structural.workspaces"
+EUROCODE_SUITE = "modules.structural.eurocode_suite"
 
 MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Overview", "Overview", "PLATFORM", "__builtin__", "render_overview", True),
@@ -39,7 +40,7 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Wind Actions", "Wind Actions", "STRUCTURAL", "modules.structural.wind_actions", "render", True),
     ModuleSpec("Seismic Actions", "Seismic Actions", "STRUCTURAL", "modules.structural.seismic_actions", "render", True),
     ModuleSpec("RC Detailing", "RC Detailing", "STRUCTURAL", "modules.structural.rc_detailing", "render", True),
-    ModuleSpec("Eurocode Suite", "Eurocode Suite", "STRUCTURAL", "modules.structural.eurocode", "render", True),
+    ModuleSpec("Eurocode Suite", "Eurocode Suite", "STRUCTURAL", EUROCODE_SUITE, "render", True),
     ModuleSpec("EN 1990", "EN 1990", "STRUCTURAL", "modules.structural.eurocode", "render", True),
     ModuleSpec("EN 1991", "EN 1991", "STRUCTURAL", "modules.structural.eurocode", "render", True),
     ModuleSpec("EN 1992", "EN 1992", "STRUCTURAL", "modules.structural.eurocode", "render", True),
