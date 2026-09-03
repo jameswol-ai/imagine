@@ -1,152 +1,109 @@
-"""
-architecture/site_planning/ui.py
---------------------------------
-Site planning and land development module.
-Exposes zero-argument `render_site_planning()` required by streamlit_app.py.
-"""
+"""Preliminary site planning and land-development workspace."""
 
 from __future__ import annotations
 
+import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 
+def _brief_value(name: str, default):
+    brief = st.session_state.get("architecture_brief")
+    return getattr(brief, name, default) if brief is not None else default
+
+
 def render_site_planning() -> None:
-    """Zero-argument Streamlit renderer for Site Planning & Land Development."""
+    """Render a traceable site-envelope study using explicit site dimensions."""
+    st.title("Site Planning & Land Development")
+    st.caption("Preliminary site envelope, setbacks, orientation and land-allocation study. Survey, cadastral and authority data are required for real site design.")
 
-    st.title("📐 Site Planning & Land Development")
-    st.caption("Site geometry analysis, setback optimization, orientation, and land utilization.")
+    width_default = float(_brief_value("site_width_m", 50.0))
+    depth_default = float(_brief_value("site_depth_m", 100.0))
+    area_default = float(_brief_value("site_area_m2", width_default * depth_default))
 
-    st.divider()
+    left, right = st.columns([1, 2], gap="large")
+    with left:
+        plot_area = st.number_input("Plot area (m²)", min_value=100.0, value=area_default, step=100.0, key="site_plan_area")
+        site_width = st.number_input("Site width (m)", min_value=5.0, value=width_default, step=1.0, key="site_plan_width")
+        site_depth = st.number_input("Site depth (m)", min_value=5.0, value=depth_default, step=1.0, key="site_plan_depth")
+        front = st.number_input("Front setback (m)", min_value=0.0, value=float(_brief_value("front_setback_m", 6.0)), step=0.5, key="site_plan_sb_front")
+        rear = st.number_input("Rear setback (m)", min_value=0.0, value=float(_brief_value("rear_setback_m", 4.0)), step=0.5, key="site_plan_sb_rear")
+        side_a = st.number_input("Side A setback (m)", min_value=0.0, value=float(_brief_value("side_setback_m", 3.0)), step=0.5, key="site_plan_sb_side_a")
+        side_b = st.number_input("Side B setback (m)", min_value=0.0, value=float(_brief_value("side_setback_m", 3.0)), step=0.5, key="site_plan_sb_side_b")
+        north = st.slider("North axis orientation (°)", 0.0, 359.0, float(_brief_value("north_angle_deg", 0.0)), 1.0, key="site_plan_north_angle")
+        terrain = st.selectbox("Terrain profile", ["Flat (<2% slope)", "Gentle slope (2–8%)", "Moderate slope (8–15%)", "Steep slope (>15%)"], key="site_plan_terrain")
+        analyze = st.button("Calculate buildable envelope", type="primary", use_container_width=True, key="site_plan_calc_btn")
 
-    col_params, col_main = st.columns([1, 2], gap="large")
+    if site_width * site_depth <= 0 or plot_area <= 0:
+        st.error("Site dimensions and area must be positive.")
+        return
+    if front + rear >= site_depth:
+        st.error("Front and rear setbacks leave no buildable depth. Reduce setbacks or increase site depth.")
+        return
+    if side_a + side_b >= site_width:
+        st.error("Side setbacks leave no buildable width. Reduce setbacks or increase site width.")
+        return
 
-    with col_params:
-        st.subheader("Site Boundary & Setbacks")
+    footprint = (site_width - side_a - side_b) * (site_depth - front - rear)
+    stated_rectangle_area = site_width * site_depth
+    area_factor = plot_area / stated_rectangle_area
+    adjusted_footprint = footprint * area_factor if area_factor > 0 else 0.0
+    coverage = 100.0 * adjusted_footprint / plot_area
+    setback_area = max(0.0, plot_area - adjusted_footprint)
 
-        plot_area = st.number_input(
-            "Total Plot Area (m²)",
-            min_value=500,
-            max_value=500000,
-            value=8500,
-            step=500,
-            key="site_plan_area",
-        )
+    if analyze:
+        st.session_state["site_plan_result"] = {
+            "plot_area_m2": plot_area,
+            "site_width_m": site_width,
+            "site_depth_m": site_depth,
+            "buildable_width_m": site_width - side_a - side_b,
+            "buildable_depth_m": site_depth - front - rear,
+            "buildable_area_m2": adjusted_footprint,
+            "coverage_pct": coverage,
+            "north_angle_deg": north,
+        }
 
-        st.markdown("**Boundary Setbacks (m)**")
-        c1, c2 = st.columns(2)
-        with c1:
-            front_setback = st.number_input("Front", min_value=0.0, value=6.0, step=0.5, key="site_plan_sb_front")
-            rear_setback = st.number_input("Rear", min_value=0.0, value=4.0, step=0.5, key="site_plan_sb_rear")
-        with c2:
-            side_a_setback = st.number_input("Side A", min_value=0.0, value=3.0, step=0.5, key="site_plan_sb_side_a")
-            side_b_setback = st.number_input("Side B", min_value=0.0, value=3.0, step=0.5, key="site_plan_sb_side_b")
+    with right:
+        if analyze:
+            st.success("Buildable envelope calculated from the supplied dimensions and setbacks.")
+        else:
+            st.info("Review the envelope below. Click Calculate buildable envelope to store the current result for the architecture workflow.")
 
-        st.markdown("**Topography & Environment**")
-        terrain_type = st.selectbox(
-            "Terrain Profile",
-            ["Flat (<2% slope)", "Gentle Slope (2–8%)", "Moderate Slope (8–15%)", "Steep Slope (>15%)"],
-            key="site_plan_terrain",
-        )
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Plot Area", f"{plot_area:,.0f} m²")
+        m2.metric("Buildable Footprint", f"{adjusted_footprint:,.0f} m²")
+        m3.metric("Coverage", f"{coverage:.1f}%")
+        m4.metric("Open / Setback Area", f"{setback_area:,.0f} m²")
 
-        north_orientation = st.slider(
-            "North Axis Orientation (°)",
-            min_value=0,
-            max_value=359,
-            value=45,
-            key="site_plan_north_angle",
-        )
+        tab_map, tab_allocation, tab_terrain = st.tabs(["Envelope Plan", "Land Allocation", "Terrain & Orientation"])
+        with tab_map:
+            fig = go.Figure()
+            fig.add_shape(type="rect", x0=0, y0=0, x1=site_width, y1=site_depth, line_width=2)
+            fig.add_shape(type="rect", x0=side_a, y0=front, x1=site_width - side_b, y1=site_depth - rear, line_width=2)
+            fig.add_annotation(x=site_width / 2, y=site_depth / 2, text="BUILDABLE ENVELOPE", showarrow=False)
+            fig.add_annotation(x=site_width / 2, y=site_depth + max(site_depth * 0.04, 2), text=f"NORTH {north:.0f}°", showarrow=False)
+            fig.update_xaxes(title="Width (m)", range=[-site_width * 0.05, site_width * 1.05], scaleanchor="y", scaleratio=1)
+            fig.update_yaxes(title="Depth (m)", range=[-site_depth * 0.05, site_depth * 1.1])
+            fig.update_layout(height=480, margin=dict(l=20, r=20, t=35, b=20), title="Dimension-based site envelope")
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(pd.DataFrame([
+                {"Parameter": "Buildable width", "Value": f"{site_width - side_a - side_b:.2f} m"},
+                {"Parameter": "Buildable depth", "Value": f"{site_depth - front - rear:.2f} m"},
+                {"Parameter": "Buildable area", "Value": f"{adjusted_footprint:,.2f} m²"},
+            ]), use_container_width=True, hide_index=True)
 
-        st.divider()
+        with tab_allocation:
+            allocation = pd.DataFrame([
+                {"Category": "Buildable footprint", "Area (m²)": adjusted_footprint, "Share (%)": coverage},
+                {"Category": "Setback / open area", "Area (m²)": setback_area, "Share (%)": 100.0 - coverage},
+            ])
+            st.dataframe(allocation.round(2), use_container_width=True, hide_index=True)
+            st.caption("Roads, parking, landscape and drainage should be allocated from an actual site plan. They are not deducted from the envelope automatically.")
 
-        analyze_btn = st.button(
-            "📐 Calculate Buildable Envelope",
-            type="primary",
-            use_container_width=True,
-            key="site_plan_calc_btn",
-        )
+        with tab_terrain:
+            suitability = {"Flat (<2% slope)": "High", "Gentle slope (2–8%)": "Moderate", "Moderate slope (8–15%)": "Requires grading study", "Steep slope (>15%)": "Specialist geotechnical/grading study"}[terrain]
+            st.metric("Terrain screening", suitability)
+            st.metric("North orientation", f"{north:.0f}°")
+            st.warning("Earthwork quantities are not estimated from footprint alone. Reliable cut/fill requires surveyed levels, proposed grades and a terrain surface model.")
 
-    with col_main:
-        if "site_plan_analyzed" not in st.session_state:
-            st.session_state.site_plan_analyzed = False
-
-        if analyze_btn:
-            st.session_state.site_plan_analyzed = True
-
-        # Preliminary spatial envelope math (assuming ~1:1.5 plot aspect ratio)
-        est_width = (plot_area / 1.5) ** 0.5
-        est_length = est_width * 1.5
-        buildable_width = max(0.0, est_width - side_a_setback - side_b_setback)
-        buildable_length = max(0.0, est_length - front_setback - rear_setback)
-        buildable_area = buildable_width * buildable_length
-        coverage_pct = round((buildable_area / plot_area) * 100, 1) if plot_area > 0 else 0
-
-        tab_envelope, tab_coverage, tab_earthwork = st.tabs([
-            "🗺️ Buildable Envelope",
-            "📊 Coverage & Density",
-            "🚜 Earthworks & Grading",
-        ])
-
-        with tab_envelope:
-            if not st.session_state.site_plan_analyzed:
-                st.info(
-                    "Define boundary parameters on the left and click "
-                    "**Calculate Buildable Envelope** to run site layout analysis."
-                )
-            else:
-                st.success("Buildable footprint envelope calculated successfully.")
-
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Plot Area", f"{plot_area:,} m²")
-                m2.metric("Max Footprint", f"{int(buildable_area):,} m²")
-                m3.metric("Footprint Ratio", f"{coverage_pct}%")
-
-                st.markdown("### Site Layout Viewport")
-                st.markdown(
-                    f"""
-                    <div style="
-                        background-color: rgba(128, 128, 128, 0.08);
-                        border: 1px dashed rgba(128, 128, 128, 0.3);
-                        border-radius: 12px;
-                        padding: 3.5rem 1.5rem;
-                        text-align: center;
-                        margin-bottom: 1.5rem;
-                    ">
-                        <h4 style="margin: 0;">2D Site Boundary Map</h4>
-                        <p style="color: #777; font-size: 0.85rem; margin-top: 0.5rem;">
-                            North Angle: {north_orientation}° | Terrain: {terrain_type}
-                        </p>
-                        <p style="color: #777; font-size: 0.8rem;">
-                            [ Vector GIS / Setback Envelope Overlay ]
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-        with tab_coverage:
-            st.markdown("### Land Allocation Breakdown")
-
-            allocation_data = [
-                {"Category": "Max Building Footprint", "Area (m²)": int(buildable_area), "Percentage": f"{coverage_pct}%"},
-                {"Category": "Setback Buffers", "Area (m²)": int(plot_area - buildable_area), "Percentage": f"{round(100 - coverage_pct, 1)}%"},
-                {"Category": "Paved & Access Roads (Est.)", "Area (m²)": int(plot_area * 0.15), "Percentage": "15.0%"},
-                {"Category": "Green Space / Softscape (Min.)", "Area (m²)": int(plot_area * 0.25), "Percentage": "25.0%"},
-            ]
-            st.dataframe(allocation_data, use_container_width=True, hide_index=True)
-
-        with tab_earthwork:
-            st.markdown("### Earthwork & Terrain Suitability")
-
-            e1, e2 = st.columns(2)
-            with e1:
-                st.markdown("**Foundation Suitability**")
-                suitability = 0.88 if "Flat" in terrain_type or "Gentle" in terrain_type else 0.45
-                st.progress(suitability, text=f"{terrain_type}")
-
-                st.markdown("**Solar Exposure Optimization**")
-                st.progress(0.82, text=f"82% efficiency score at {north_orientation}° N")
-
-            with e2:
-                st.markdown("**Estimated Cut/Fill Volume**")
-                st.metric("Estimated Excavation Volume", f"{int(buildable_area * 1.2):,} m³")
-                st.caption("Based on site envelope area and terrain slope variance.")
+    st.warning("This is a preliminary geometric envelope. It is not a cadastral boundary, GIS survey, planning approval or permit-ready site plan.")
