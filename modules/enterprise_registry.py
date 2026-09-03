@@ -1,15 +1,7 @@
-"""Central metadata registry for IMAGINE Streamlit navigation.
-
-The registry is intentionally metadata-only. It never imports renderers, ORM
-models, services, or third-party integrations. The Streamlit shell can
-therefore search and display the complete module catalog without importing
-all of IMAGINE at startup.
-"""
+"""Central metadata registry for IMAGINE Streamlit navigation."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
-
 
 @dataclass(frozen=True, slots=True)
 class ModuleSpec:
@@ -20,17 +12,14 @@ class ModuleSpec:
     renderer_name: str = "render"
     implemented: bool = False
 
-
 MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Overview", "Overview", "PLATFORM", "__builtin__", "render_overview", True),
     ModuleSpec("System Health", "System Health", "PLATFORM", "__builtin__", "render_system_health", True),
-
     ModuleSpec("Projects", "Projects", "PROJECTS", "projects.projects.ui", "render_projects", True),
     ModuleSpec("Approvals", "Approvals", "PROJECTS", "projects.approvals.ui", "render_approvals", True),
     ModuleSpec("Revisions", "Revisions", "PROJECTS", "projects.revisions.ui", "render_revisions", True),
     ModuleSpec("Workflows", "Workflows", "PROJECTS", "projects.workflows.ui", "render_workflows", False),
     ModuleSpec("Governance", "Governance", "PROJECTS", "projects.governance.ui", "render_governance", False),
-
     ModuleSpec("Architecture Assistant", "Architecture Assistant", "ARCHITECTURE", "architecture.assistant.ui", "render_architecture_assistant", True),
     ModuleSpec("Zoning", "Zoning", "ARCHITECTURE", "architecture.zoning.ui", "render_zoning", True),
     ModuleSpec("Site Planning", "Site Planning", "ARCHITECTURE", "architecture.site_planning.ui", "render_site_planning", True),
@@ -38,23 +27,25 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Room Programming", "Room Programming", "ARCHITECTURE", "architecture.room_programming.ui", "render_room_programming", True),
     ModuleSpec("Compliance", "Compliance", "ARCHITECTURE", "architecture.compliance.ui", "render_compliance", True),
     ModuleSpec("Generative Design", "Generative Design", "ARCHITECTURE", "architecture.generative_design.ui", "render_generative_design", True),
-
     ModuleSpec("Eurocode Suite", "Eurocode Suite", "STRUCTURAL", "modules.structural.eurocode", "render", True),
-    ModuleSpec("EN 1990", "EN 1990", "STRUCTURAL", None, "render", False),
-    ModuleSpec("EN 1991", "EN 1991", "STRUCTURAL", None, "render", False),
-    ModuleSpec("EN 1992", "EN 1992", "STRUCTURAL", None, "render", False),
-    ModuleSpec("EN 1993", "EN 1993", "STRUCTURAL", None, "render", False),
-    ModuleSpec("EN 1995", "EN 1995", "STRUCTURAL", None, "render", False),
-    ModuleSpec("EN 1997", "EN 1997", "STRUCTURAL", None, "render", False),
-    ModuleSpec("EN 1998", "EN 1998", "STRUCTURAL", None, "render", False),
+    ModuleSpec("EN 1990", "EN 1990", "STRUCTURAL", "modules.structural.eurocode", "render", True),
+    ModuleSpec("EN 1991", "EN 1991", "STRUCTURAL", "modules.structural.eurocode", "render", True),
+    ModuleSpec("EN 1992", "EN 1992", "STRUCTURAL", "modules.structural.eurocode", "render", True),
+    ModuleSpec("EN 1993", "EN 1993", "STRUCTURAL", "modules.structural.ec3", "render", True),
+    ModuleSpec("EN 1994", "EN 1994", "STRUCTURAL", "modules.structural.eurocode_1994", "render", True),
+    ModuleSpec("EN 1995", "EN 1995", "STRUCTURAL", "modules.structural.eurocode", "render", True),
+    ModuleSpec("EN 1996", "EN 1996", "STRUCTURAL", "modules.structural.eurocode_1996", "render", True),
+    ModuleSpec("EN 1997", "EN 1997", "STRUCTURAL", "modules.structural.ec7", "render", True),
+    ModuleSpec("EN 1998", "EN 1998", "STRUCTURAL", "modules.structural.ec8", "render", True),
     ModuleSpec("Beam Design", "Beam Design", "STRUCTURAL", "modules.structural.beam_design", "render", True),
     ModuleSpec("Column Design", "Column Design", "STRUCTURAL", "modules.structural.column_design", "render", True),
     ModuleSpec("Slab Design", "Slab Design", "STRUCTURAL", "modules.structural.slab_design", "render", True),
     ModuleSpec("Foundation Design", "Foundation Design", "STRUCTURAL", "modules.structural.foundation_design", "render", True),
     ModuleSpec("Retaining Walls", "Retaining Walls", "STRUCTURAL", "modules.structural.retaining_walls", "render", True),
     ModuleSpec("Steel Connections", "Steel Connections", "STRUCTURAL", "modules.structural.steel_connections", "render", True),
+    ModuleSpec("Section Shapes", "Section Shapes", "STRUCTURAL", "modules.structural.shape_design", "render", True),
+    ModuleSpec("Structural Analysis", "Structural Analysis", "STRUCTURAL", "modules.structural.fea_engine", "render", False),
     ModuleSpec("Finite Element Analysis", "Finite Element Analysis", "STRUCTURAL", None, "render", False),
-
     ModuleSpec("Buildings", "Buildings", "BIM", "modules.bim.buildings", "render", True),
     ModuleSpec("Storeys", "Storeys", "BIM", "modules.bim.storeys", "render", True),
     ModuleSpec("Spaces", "Spaces", "BIM", "modules.bim.spaces", "render", True),
@@ -62,7 +53,6 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("IFC", "IFC", "BIM", "modules.bim.ifc_export", "render", True),
     ModuleSpec("COBie", "COBie", "BIM", None, "render", False),
     ModuleSpec("BIM Digital Twin", "BIM Digital Twin", "BIM", None, "render", False),
-
     ModuleSpec("Integrated MEP Analysis", "Integrated MEP Analysis", "MEP", "modules.mep.analysis", "render", True),
     ModuleSpec("HVAC", "HVAC", "MEP", "modules.mep.hvac", "render", True),
     ModuleSpec("Ventilation", "Ventilation", "MEP", "modules.mep.analysis", "render", True),
@@ -78,7 +68,6 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Stormwater", "Stormwater", "MEP", None, "render", False),
     ModuleSpec("Sewer Networks", "Sewer Networks", "MEP", None, "render", False),
     ModuleSpec("Firefighting", "Firefighting", "MEP", None, "render", False),
-
     ModuleSpec("BOQ", "BOQ", "COSTING", "modules.costing.boq", "render", True),
     ModuleSpec("Quantity Takeoff", "Quantity Takeoff", "COSTING", "modules.costing.boq", "render", True),
     ModuleSpec("Procurement", "Procurement", "COSTING", "modules.costing.procurement", "render", True),
@@ -86,7 +75,6 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Inflation / Escalation", "Inflation / Escalation", "COSTING", "modules.costing.escalation", "render", True),
     ModuleSpec("Risk Analysis", "Risk Analysis", "COSTING", "modules.costing.risk_analysis", "render", True),
     ModuleSpec("Cashflow", "Cashflow", "COSTING", None, "render", False),
-
     ModuleSpec("Planning", "Planning", "CONSTRUCTION", "modules.construction.progress_tracking", "render", True),
     ModuleSpec("Scheduling", "Scheduling", "CONSTRUCTION", "modules.construction.progress_tracking", "render", True),
     ModuleSpec("RFIs", "RFIs", "CONSTRUCTION", "modules.construction.rfis", "render", True),
@@ -95,7 +83,6 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Snagging", "Snagging", "CONSTRUCTION", "modules.construction.snagging", "render", True),
     ModuleSpec("Progress Tracking", "Progress Tracking", "CONSTRUCTION", "modules.construction.progress_tracking", "render", True),
     ModuleSpec("Site Diaries", "Site Diaries", "CONSTRUCTION", "modules.construction.site_diary", "render", True),
-
     ModuleSpec("Drawing Management", "Drawing Management", "DOCUMENTS", "modules.documents.drawing_register", "render", True),
     ModuleSpec("Document Register", "Document Register", "DOCUMENTS", "modules.documents.documents", "render", True),
     ModuleSpec("Specifications", "Specifications", "DOCUMENTS", "modules.documents.specifications", "render", True),
@@ -104,7 +91,6 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Version Control", "Version Control", "DOCUMENTS", "modules.documents.revisions", "render", True),
     ModuleSpec("Transmittals", "Transmittals", "DOCUMENTS", "modules.documents.transmittals", "render", True),
     ModuleSpec("Archives", "Archives", "DOCUMENTS", None, "render", False),
-
     ModuleSpec("IMAGINE Architect", "IMAGINE Architect", "AI", "modules.ai.architect", "render", True),
     ModuleSpec("IMAGINE Engineer", "IMAGINE Engineer", "AI", "modules.ai.engineer", "render", True),
     ModuleSpec("IMAGINE MEP", "IMAGINE MEP", "AI", "modules.ai.mep", "render", True),
@@ -113,56 +99,23 @@ MODULE_SPECS: tuple[ModuleSpec, ...] = (
     ModuleSpec("Vector Store", "Vector Store", "AI", None, "render", False),
     ModuleSpec("RAG", "RAG", "AI", None, "render", False),
     ModuleSpec("Prompt Library", "Prompt Library", "AI", None, "render", False),
-
     ModuleSpec("Dashboards", "Dashboards", "ANALYTICS", "modules.dashboard.dashboard", "render", True),
     ModuleSpec("KPIs", "KPIs", "ANALYTICS", "modules.analytics.kpis", "render", True),
     ModuleSpec("Portfolio", "Portfolio", "ANALYTICS", "modules.analytics.portfolio", "render", True),
     ModuleSpec("Forecasting", "Forecasting", "ANALYTICS", "modules.analytics.forecasting", "render", True),
     ModuleSpec("Reporting", "Reporting", "ANALYTICS", "modules.analytics.reporting", "render", True),
-
-    ModuleSpec("Uganda", "Uganda", "REGIONAL", None, "render", False),
-    ModuleSpec("Kenya", "Kenya", "REGIONAL", None, "render", False),
-    ModuleSpec("Tanzania", "Tanzania", "REGIONAL", None, "render", False),
-    ModuleSpec("Rwanda", "Rwanda", "REGIONAL", None, "render", False),
-    ModuleSpec("South Sudan", "South Sudan", "REGIONAL", None, "render", False),
-    ModuleSpec("Codes", "Codes", "REGIONAL", None, "render", False),
-    ModuleSpec("Zoning Laws", "Zoning Laws", "REGIONAL", None, "render", False),
-
-    ModuleSpec("Microsoft", "Microsoft", "INTEGRATIONS", None, "render", False),
-    ModuleSpec("AutoCAD", "AutoCAD", "INTEGRATIONS", None, "render", False),
-    ModuleSpec("Revit", "Revit", "INTEGRATIONS", None, "render", False),
-    ModuleSpec("Archicad", "Archicad", "INTEGRATIONS", None, "render", False),
-    ModuleSpec("Tekla", "Tekla", "INTEGRATIONS", None, "render", False),
-    ModuleSpec("IfcOpenShell", "IfcOpenShell", "INTEGRATIONS", None, "render", False),
-    ModuleSpec("ArcGIS", "ArcGIS", "INTEGRATIONS", None, "render", False),
-    ModuleSpec("Azure", "Azure", "INTEGRATIONS", None, "render", False),
-    ModuleSpec("Mapbox", "Mapbox", "INTEGRATIONS", None, "render", False),
-
-    ModuleSpec("Assets", "Assets", "DIGITAL TWIN", "modules.digital_twin.assets", "render", True),
-    ModuleSpec("Sensors", "Sensors", "DIGITAL TWIN", "modules.digital_twin.sensors", "render", True),
-    ModuleSpec("Telemetry", "Telemetry", "DIGITAL TWIN", "modules.digital_twin.telemetry", "render", True),
-    ModuleSpec("Energy", "Energy", "DIGITAL TWIN", None, "render", False),
-    ModuleSpec("Maintenance", "Maintenance", "DIGITAL TWIN", "modules.digital_twin.maintenance", "render", True),
-    ModuleSpec("Predictive AI", "Predictive AI", "DIGITAL TWIN", "modules.digital_twin.predictive_ai", "render", True),
+    ModuleSpec("Uganda", "Uganda", "REGIONAL", None, "render", False), ModuleSpec("Kenya", "Kenya", "REGIONAL", None, "render", False), ModuleSpec("Tanzania", "Tanzania", "REGIONAL", None, "render", False), ModuleSpec("Rwanda", "Rwanda", "REGIONAL", None, "render", False), ModuleSpec("South Sudan", "South Sudan", "REGIONAL", None, "render", False), ModuleSpec("Codes", "Codes", "REGIONAL", None, "render", False), ModuleSpec("Zoning Laws", "Zoning Laws", "REGIONAL", None, "render", False),
+    ModuleSpec("Microsoft", "Microsoft", "INTEGRATIONS", None, "render", False), ModuleSpec("AutoCAD", "AutoCAD", "INTEGRATIONS", None, "render", False), ModuleSpec("Revit", "Revit", "INTEGRATIONS", None, "render", False), ModuleSpec("Archicad", "Archicad", "INTEGRATIONS", None, "render", False), ModuleSpec("Tekla", "Tekla", "INTEGRATIONS", None, "render", False), ModuleSpec("IfcOpenShell", "IfcOpenShell", "INTEGRATIONS", None, "render", False), ModuleSpec("ArcGIS", "ArcGIS", "INTEGRATIONS", None, "render", False), ModuleSpec("Azure", "Azure", "INTEGRATIONS", None, "render", False), ModuleSpec("Mapbox", "Mapbox", "INTEGRATIONS", None, "render", False),
+    ModuleSpec("Assets", "Assets", "DIGITAL TWIN", "modules.digital_twin.assets", "render", True), ModuleSpec("Sensors", "Sensors", "DIGITAL TWIN", "modules.digital_twin.sensors", "render", True), ModuleSpec("Telemetry", "Telemetry", "DIGITAL TWIN", "modules.digital_twin.telemetry", "render", True), ModuleSpec("Energy", "Energy", "DIGITAL TWIN", None, "render", False), ModuleSpec("Maintenance", "Maintenance", "DIGITAL TWIN", "modules.digital_twin.maintenance", "render", True), ModuleSpec("Predictive AI", "Predictive AI", "DIGITAL TWIN", "modules.digital_twin.predictive_ai", "render", True),
 )
-
 MODULES_BY_ROUTE = {spec.route: spec for spec in MODULE_SPECS}
 
-
 def validate_registry() -> None:
-    """Fail fast on duplicate or malformed route metadata."""
     routes = [spec.route for spec in MODULE_SPECS]
     duplicates = sorted({route for route in routes if routes.count(route) > 1})
-    if duplicates:
-        raise RuntimeError(f"Duplicate module routes detected: {duplicates}")
-
+    if duplicates: raise RuntimeError(f"Duplicate module routes detected: {duplicates}")
     for spec in MODULE_SPECS:
-        if not spec.route.strip() or not spec.label.strip() or not spec.section.strip():
-            raise RuntimeError(f"Invalid module specification: {spec!r}")
-        if spec.implemented and not spec.module_path:
-            raise RuntimeError(f"Implemented module has no module path: {spec.route}")
-
-
+        if not spec.route.strip() or not spec.label.strip() or not spec.section.strip(): raise RuntimeError(f"Invalid module specification: {spec!r}")
+        if spec.implemented and not spec.module_path: raise RuntimeError(f"Implemented module has no module path: {spec.route}")
 validate_registry()
-
 __all__ = ["ModuleSpec", "MODULE_SPECS", "MODULES_BY_ROUTE", "validate_registry"]
