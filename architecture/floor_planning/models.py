@@ -9,14 +9,28 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.models.base import Base
 
 
 class FloorPlan(Base):
-    """Proposed building floor-plan configuration."""
+    """
+    Proposed building floor-plan configuration.
+
+    Planning constraints are resolved by the service layer from
+    the associated Site Plan and Zoning records.
+    """
 
     __tablename__ = "floor_plans"
 
@@ -34,11 +48,16 @@ class FloorPlan(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     plan_code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft")
-    gross_floor_area_m2: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
-    net_floor_area_m2: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
-    storeys: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    circulation_pct: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    status: Mapped[str] = mapped_column(String(30), default="Draft", nullable=False)
+    building_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    number_of_floors: Mapped[int] = mapped_column(Integer, nullable=False)
+    floor_area_m2: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    building_footprint_m2: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    gross_floor_area_m2: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    front_setback_m: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
+    rear_setback_m: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
+    side_setback_m: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
