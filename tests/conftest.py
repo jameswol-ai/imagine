@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,6 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("DATABASE_URL", "sqlite:///./imagine_ci_test.db")
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-import sys
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
@@ -26,7 +26,6 @@ def setup_database():
     import projects.model_registry  # noqa: F401
     import architecture.models  # noqa: F401
     import architecture.zoning.models  # noqa: F401
-    import architecture.site_planning.models  # noqa: F401
     import architecture.floor_planning.models  # noqa: F401
     import bim.models  # noqa: F401
     import structural.models  # noqa: F401
