@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
+from enum import Enum
+
 from modules.enterprise_runtime import _active_route, _records, render_module
 from modules.ui_sanitizer import strip_emoji
+
+
+class SampleStatus(str, Enum):
+    active = "active"
+    on_hold = "on_hold"
 
 
 def test_strip_emoji_removes_common_ui_glyphs() -> None:
     assert strip_emoji("Hello 📐 World") == "Hello  World"
     assert strip_emoji(["A 🏠", "B ✨"]) == ["A", "B"]
+
+
+def test_strip_emoji_preserves_enum_instances() -> None:
+    value = SampleStatus.on_hold
+    assert strip_emoji(value) is value
+    assert strip_emoji([SampleStatus.active])[0] is SampleStatus.active
 
 
 def test_workspace_storage_is_session_backed() -> None:
