@@ -13,6 +13,7 @@ from modules.structural.ec2 import (
     required_flexural_reinforcement_mm2,
     vrdc_mpa,
 )
+from modules.structural.rc_column import RCColumnScreeningEngine
 
 
 def test_ec0_governing_uls_is_deterministic():
@@ -77,3 +78,21 @@ def test_beam_engine_uses_shared_ec2_layer():
     assert result.fyd_mpa == 500.0 / 1.15
     assert result.as_required_mm2 > 0
     assert result.shear_capacity_mpa > 0
+
+
+def test_column_engine_returns_deterministic_screening_values():
+    result = RCColumnScreeningEngine().run()
+    assert result.concrete_area_mm2 == 350.0 * 350.0
+    assert result.steel_area_mm2 >= result.minimum_steel_area_mm2
+    assert result.maximum_steel_area_mm2 == 0.04 * 350.0 * 350.0
+    assert result.axial_capacity_kn > 0
+    assert result.axial_utilisation > 0
+
+
+def test_column_engine_rejects_invalid_geometry():
+    try:
+        RCColumnScreeningEngine().run({"width_mm": 0})
+    except ValueError as exc:
+        assert "width_mm" in str(exc)
+    else:
+        raise AssertionError("invalid column geometry should fail")
