@@ -1,9 +1,8 @@
 """IMAGINE AEC Engine Streamlit application shell.
 
-The shell provides a compact enterprise workspace without rendering the
-entire module catalog in the sidebar. Users navigate by domain and search
-for modules globally. Renderers remain lazy-loaded and isolated so one broken
-module cannot take down the application.
+The application shell keeps renderer imports lazy, provides searchable domain
+navigation, and gives the enterprise workspace a consistent overview. Heavy
+engineering calculations remain inside the dedicated module engines.
 """
 
 from __future__ import annotations
@@ -13,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 from modules.enterprise_registry import MODULE_SPECS, ModuleSpec, validate_registry
@@ -22,7 +23,6 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-
 st.set_page_config(
     page_title="IMAGINE | Integrated AEC Engine",
     page_icon=None,
@@ -30,234 +30,30 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
 DOMAIN_DESCRIPTIONS = {
-    "PLATFORM": "Enterprise workspace and diagnostics.",
+    "PLATFORM": "Enterprise workspace, registry validation and diagnostics.",
     "PROJECTS": "Project lifecycle, approvals, revisions, workflows and governance.",
     "ARCHITECTURE": "Zoning, site planning, floor planning, programming and generative design.",
-    "STRUCTURAL": "Structural engineering workflows and Eurocode design.",
-    "BIM": "Buildings, storeys, spaces, elements and OpenBIM.",
-    "MEP": "Mechanical, electrical and plumbing engineering.",
+    "STRUCTURAL": "Structural analysis, reinforced concrete, steel and Eurocode workflows.",
+    "BIM": "Buildings, storeys, spaces, elements and OpenBIM workflows.",
+    "MEP": "Mechanical, electrical, plumbing and energy engineering.",
     "COSTING": "BOQ, quantity takeoff, procurement and financial analysis.",
     "CONSTRUCTION": "Planning, scheduling, RFIs, submittals and site management.",
-    "DOCUMENTS": "Drawings, documents, specifications, contracts and revision control.",
-    "AI": "Architecture, engineering, MEP, QS and project management AI.",
+    "DOCUMENTS": "Drawings, specifications, contracts and revision control.",
+    "AI": "Architecture, engineering, MEP, QS and project-management AI.",
     "ANALYTICS": "Portfolio analytics, KPIs, forecasting and reporting.",
     "REGIONAL": "Regional codes, regulations and zoning requirements.",
     "INTEGRATIONS": "AEC software, GIS, cloud and interoperability integrations.",
     "DIGITAL TWIN": "Assets, sensors, telemetry, maintenance and predictive AI.",
 }
 
-
-SECTION_ORDER = (
-    "PLATFORM",
-    "PROJECTS",
-    "ARCHITECTURE",
-    "STRUCTURAL",
-    "BIM",
-    "MEP",
-    "COSTING",
-    "CONSTRUCTION",
-    "DOCUMENTS",
-    "AI",
-    "ANALYTICS",
-    "REGIONAL",
-    "INTEGRATIONS",
-    "DIGITAL TWIN",
-)
+SECTION_ORDER = tuple(DOMAIN_DESCRIPTIONS)
 
 
 @st.cache_data(show_spinner=False)
 def registry_snapshot() -> tuple[ModuleSpec, ...]:
-    """Return the immutable module catalog after validation."""
     validate_registry()
     return MODULE_SPECS
-
-
-def inject_styles() -> None:
-    st.markdown(
-        """
-        <style>
-        .stApp { background: #f5f7fa; }
-        .block-container {
-            max-width: 1550px;
-            padding-top: 1.6rem;
-            padding-bottom: 3rem;
-            padding-left: 2rem;
-            padding-right: 2rem;
-        }
-        section[data-testid="stSidebar"] {
-            width: 320px !important;
-            background: #ffffff;
-            border-right: 1px solid #dfe4ea;
-        }
-        section[data-testid="stSidebar"] > div { padding-top: 1rem; }
-        section[data-testid="stSidebar"] .block-container {
-            padding-left: 1rem;
-            padding-right: 1rem;
-        }
-        .imagine-sidebar-brand { padding: 0.4rem 0.25rem 0.9rem; }
-        .imagine-sidebar-brand-title {
-            font-size: 1.55rem;
-            font-weight: 800;
-            letter-spacing: -0.035em;
-            color: #162033;
-        }
-        .imagine-sidebar-brand-subtitle {
-            margin-top: 0.3rem;
-            color: #687386;
-            font-size: 0.76rem;
-            line-height: 1.45;
-        }
-        .imagine-sidebar-label {
-            margin-top: 0.8rem;
-            margin-bottom: 0.35rem;
-            color: #697587;
-            font-size: 0.68rem;
-            font-weight: 750;
-            letter-spacing: 0.09em;
-            text-transform: uppercase;
-        }
-        .imagine-sidebar-status {
-            margin-top: 1rem;
-            padding: 0.8rem;
-            border: 1px solid #dfe4ea;
-            border-radius: 9px;
-            background: #f8fafc;
-        }
-        .imagine-sidebar-status-title {
-            color: #687386;
-            font-size: 0.68rem;
-            font-weight: 750;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-        .imagine-sidebar-status-value {
-            margin-top: 0.25rem;
-            color: #172033;
-            font-size: 0.84rem;
-            font-weight: 700;
-        }
-        .imagine-header { margin-bottom: 1.2rem; }
-        .imagine-header-title {
-            margin: 0;
-            color: #172033;
-            font-size: 2.15rem;
-            line-height: 1.1;
-            font-weight: 800;
-            letter-spacing: -0.04em;
-        }
-        .imagine-header-subtitle {
-            margin-top: 0.4rem;
-            color: #687386;
-            font-size: 0.92rem;
-            line-height: 1.45;
-        }
-        .imagine-breadcrumb {
-            display: inline-block;
-            margin-top: 0.85rem;
-            padding: 0.38rem 0.7rem;
-            border: 1px solid #dfe4ea;
-            border-radius: 7px;
-            background: #eef2f6;
-            color: #566276;
-            font-size: 0.75rem;
-        }
-        .imagine-card {
-            min-height: 118px;
-            padding: 1.05rem;
-            border: 1px solid #dfe4ea;
-            border-radius: 10px;
-            background: #ffffff;
-        }
-        .imagine-card-title {
-            color: #687386;
-            font-size: 0.7rem;
-            font-weight: 750;
-            letter-spacing: 0.07em;
-            text-transform: uppercase;
-        }
-        .imagine-card-value {
-            margin-top: 0.45rem;
-            color: #172033;
-            font-size: 1.65rem;
-            font-weight: 800;
-        }
-        .imagine-card-description {
-            margin-top: 0.25rem;
-            color: #7b8798;
-            font-size: 0.75rem;
-        }
-        .imagine-module-panel {
-            margin-bottom: 1rem;
-            padding: 1.25rem 1.35rem;
-            border: 1px solid #dfe4ea;
-            border-radius: 10px;
-            background: #ffffff;
-        }
-        .imagine-module-title {
-            color: #172033;
-            font-size: 1.3rem;
-            font-weight: 760;
-        }
-        .imagine-module-description {
-            margin-top: 0.35rem;
-            color: #687386;
-            font-size: 0.86rem;
-            line-height: 1.5;
-        }
-        div.stButton > button {
-            min-height: 2.35rem;
-            border-radius: 7px;
-            font-weight: 650;
-        }
-        .imagine-footer {
-            margin-top: 3rem;
-            padding-top: 1rem;
-            border-top: 1px solid #dfe4ea;
-            color: #8791a0;
-            font-size: 0.72rem;
-        }
-        @media (prefers-color-scheme: dark) {
-            .stApp { background: #0d131b; }
-            section[data-testid="stSidebar"] {
-                background: #111821;
-                border-right-color: #293441;
-            }
-            .imagine-sidebar-brand-title,
-            .imagine-header-title,
-            .imagine-card-value,
-            .imagine-module-title,
-            .imagine-sidebar-status-value { color: #f1f4f8; }
-            .imagine-sidebar-brand-subtitle,
-            .imagine-header-subtitle,
-            .imagine-module-description,
-            .imagine-card-description { color: #a5afbd; }
-            .imagine-sidebar-status {
-                background: #151d27;
-                border-color: #2b3745;
-            }
-            .imagine-sidebar-status-title,
-            .imagine-card-title { color: #a5afbd; }
-            .imagine-breadcrumb {
-                background: #1a2330;
-                border-color: #2b3745;
-                color: #b8c1ce;
-            }
-            .imagine-card,
-            .imagine-module-panel {
-                background: #141b24;
-                border-color: #2b3745;
-            }
-            .imagine-footer {
-                border-top-color: #2b3745;
-                color: #7e8998;
-            }
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def init_session_state() -> None:
@@ -265,36 +61,76 @@ def init_session_state() -> None:
         "active_route": "Overview",
         "module_search": "",
         "module_search_domain": "All domains",
+        "sidebar_domain": "PLATFORM",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
 
+def inject_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        .stApp { background: #f5f7fa; }
+        .block-container { max-width: 1550px; padding-top: 1.4rem; padding-bottom: 3rem; }
+        section[data-testid="stSidebar"] { width: 330px !important; }
+        .imagine-brand { padding: .3rem .2rem .8rem; }
+        .imagine-brand-title { font-size: 1.65rem; font-weight: 850; letter-spacing: -.045em; }
+        .imagine-brand-subtitle { margin-top: .25rem; color: #697587; font-size: .76rem; line-height: 1.4; }
+        .imagine-label { margin: .75rem 0 .35rem; color: #697587; font-size: .67rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+        .imagine-header { margin-bottom: 1rem; }
+        .imagine-header-title { margin: 0; font-size: 2.15rem; line-height: 1.05; font-weight: 850; letter-spacing: -.045em; }
+        .imagine-header-subtitle { margin-top: .4rem; color: #687386; font-size: .92rem; }
+        .imagine-breadcrumb { display: inline-block; margin-top: .75rem; padding: .35rem .65rem; border: 1px solid #dfe4ea; border-radius: 7px; background: #eef2f6; color: #566276; font-size: .73rem; }
+        .imagine-card { min-height: 112px; padding: 1rem; border: 1px solid #dfe4ea; border-radius: 10px; background: #fff; }
+        .imagine-card-title { color: #687386; font-size: .68rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+        .imagine-card-value { margin-top: .4rem; font-size: 1.55rem; font-weight: 850; }
+        .imagine-card-description { margin-top: .2rem; color: #7b8798; font-size: .73rem; }
+        .imagine-panel { padding: 1.15rem 1.25rem; border: 1px solid #dfe4ea; border-radius: 10px; background: #fff; }
+        .imagine-panel-title { font-size: 1.15rem; font-weight: 780; }
+        .imagine-panel-description { margin-top: .3rem; color: #687386; font-size: .82rem; line-height: 1.5; }
+        .imagine-footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #dfe4ea; color: #8791a0; font-size: .7rem; }
+        div.stButton > button { min-height: 2.25rem; border-radius: 7px; font-weight: 650; }
+        @media (prefers-color-scheme: dark) {
+            .stApp { background: #0d131b; }
+            .imagine-brand-title, .imagine-header-title, .imagine-card-value, .imagine-panel-title { color: #f1f4f8; }
+            .imagine-brand-subtitle, .imagine-header-subtitle, .imagine-panel-description, .imagine-card-description { color: #a5afbd; }
+            .imagine-breadcrumb { background: #1a2330; border-color: #2b3745; color: #b8c1ce; }
+            .imagine-card, .imagine-panel { background: #141b24; border-color: #2b3745; }
+            .imagine-card-title, .imagine-label { color: #a5afbd; }
+            .imagine-footer { border-top-color: #2b3745; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def specs_for_section(section: str) -> list[ModuleSpec]:
     return [spec for spec in registry_snapshot() if spec.section == section]
 
 
-def search_specs(query: str, section: str) -> list[ModuleSpec]:
+def search_specs(query: str, section: str = "All domains") -> list[ModuleSpec]:
     normalized = query.strip().casefold()
+    if not normalized:
+        return []
     candidates = registry_snapshot()
     if section != "All domains":
         candidates = tuple(spec for spec in candidates if spec.section == section)
-    if not normalized:
-        return []
+
     terms = normalized.split()
     scored: list[tuple[int, ModuleSpec]] = []
     for spec in candidates:
-        haystack = " ".join(
-            [spec.route, spec.label, spec.section, spec.module_path or ""]
-        ).casefold()
+        haystack = " ".join((spec.route, spec.label, spec.section, spec.module_path or "")).casefold()
         if all(term in haystack for term in terms):
             score = 0
             if spec.label.casefold().startswith(normalized):
                 score += 100
             if spec.section.casefold() == normalized:
                 score += 50
-            score += max(0, 30 - len(spec.label))
+            if spec.implemented:
+                score += 10
             scored.append((score, spec))
     scored.sort(key=lambda item: (-item[0], item[1].section, item[1].label))
     return [spec for _, spec in scored]
@@ -309,32 +145,25 @@ def render_sidebar() -> None:
     with st.sidebar:
         st.markdown(
             """
-            <div class="imagine-sidebar-brand">
-                <div class="imagine-sidebar-brand-title">IMAGINE</div>
-                <div class="imagine-sidebar-brand-subtitle">
-                    Integrated Architecture, Engineering & Construction Engine
-                </div>
+            <div class="imagine-brand">
+                <div class="imagine-brand-title">IMAGINE</div>
+                <div class="imagine-brand-subtitle">Integrated Architecture, Engineering & Construction Engine</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
         st.divider()
 
-        st.markdown(
-            '<div class="imagine-sidebar-label">Search Modules</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="imagine-label">Module Search</div>', unsafe_allow_html=True)
         st.text_input(
             "Search modules",
             key="module_search",
-            placeholder="Search projects, zoning, beam design...",
+            placeholder="Try beam, zoning, BIM, project...",
             label_visibility="collapsed",
         )
-
-        domain_options = ["All domains", *SECTION_ORDER]
         st.selectbox(
             "Search domain",
-            options=domain_options,
+            ["All domains", *SECTION_ORDER],
             key="module_search_domain",
             label_visibility="collapsed",
         )
@@ -342,49 +171,49 @@ def render_sidebar() -> None:
         query = st.session_state.module_search.strip()
         if query:
             matches = search_specs(query, st.session_state.module_search_domain)
-            st.caption(f"{len(matches)} module result(s)")
+            st.caption(f"{len(matches)} result(s)")
             if not matches:
                 st.info("No matching modules found.")
-            else:
-                for spec in matches[:12]:
-                    status = "Ready" if spec.implemented else "Registered"
-                    label = f"{spec.label}  ·  {spec.section}"
-                    if st.button(
-                        label,
-                        key=f"search_result_{spec.route}",
-                        use_container_width=True,
-                    ):
-                        set_active_route(spec.route)
-                        st.rerun()
+            for spec in matches[:12]:
+                status = "Ready" if spec.implemented else "Registered"
+                if st.button(
+                    f"{spec.label} · {status}",
+                    key=f"search_{spec.route}",
+                    use_container_width=True,
+                ):
+                    set_active_route(spec.route)
+                    st.rerun()
         else:
-            st.caption("Search is global. Enter a module name, discipline, or keyword.")
+            st.caption("Search the full enterprise module catalog.")
 
         st.divider()
-        st.markdown(
-            '<div class="imagine-sidebar-label">Current Workspace</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="imagine-label">Domains</div>', unsafe_allow_html=True)
+        for section in SECTION_ORDER:
+            specs = specs_for_section(section)
+            ready = sum(spec.implemented for spec in specs)
+            label = f"{section}  ·  {ready}/{len(specs)}"
+            with st.expander(label, expanded=(section == st.session_state.sidebar_domain)):
+                st.caption(DOMAIN_DESCRIPTIONS[section])
+                for spec in specs[:10]:
+                    if st.button(
+                        spec.label,
+                        key=f"domain_{section}_{spec.route}",
+                        use_container_width=True,
+                        disabled=not spec.implemented,
+                    ):
+                        st.session_state.sidebar_domain = section
+                        set_active_route(spec.route)
+                        st.rerun()
+                if len(specs) > 10:
+                    st.caption(f"Use search to find the remaining {len(specs) - 10} modules.")
 
+        st.divider()
         active = next(
             (spec for spec in registry_snapshot() if spec.route == st.session_state.active_route),
             registry_snapshot()[0],
         )
-
-        st.markdown(
-            f"**{active.label}**  \n"
-            f"{active.section}  ·  {'Ready' if active.implemented else 'Registered'}"
-        )
-
-        st.divider()
-        st.markdown(
-            f"""
-            <div class="imagine-sidebar-status">
-                <div class="imagine-sidebar-status-title">Navigation Status</div>
-                <div class="imagine-sidebar-status-value">Search-driven navigation</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="imagine-label">Current Workspace</div>', unsafe_allow_html=True)
+        st.markdown(f"**{active.label}**  \n{active.section} · {'Ready' if active.implemented else 'Registered'}")
         st.caption(f"{len(registry_snapshot())} registered modules")
 
 
@@ -401,18 +230,7 @@ def render_header(title: str, subtitle: str, breadcrumb: str) -> None:
     )
 
 
-def render_overview() -> None:
-    render_header(
-        "IMAGINE",
-        "Integrated Architecture, Engineering & Construction Engine",
-        "Overview / Enterprise Workspace",
-    )
-
-    project_count = 0
-    active_count = 0
-    completed_count = 0
-    database_status = "Not checked"
-
+def get_project_summary() -> tuple[list[object], str]:
     try:
         from database.bootstrap import database_health
         health = database_health()
@@ -423,30 +241,35 @@ def render_overview() -> None:
     try:
         from projects.projects.service import ProjectService
         projects = ProjectService.get_all_sync()
-        project_count = len(projects)
-        active_count = sum(1 for project in projects if str(project.status).lower().endswith("active"))
-        completed_count = sum(1 for project in projects if str(project.status).lower().endswith("completed"))
+        return projects, database_status
     except Exception:
-        projects = []
+        return [], database_status
+
+
+def render_overview() -> None:
+    render_header(
+        "IMAGINE",
+        "Integrated Architecture, Engineering & Construction Engine",
+        "Overview / Enterprise Workspace",
+    )
+
+    projects, database_status = get_project_summary()
+    project_count = len(projects)
+    active_count = sum(1 for project in projects if str(project.status).lower().endswith("active"))
+    completed_count = sum(1 for project in projects if str(project.status).lower().endswith("completed"))
+    ready_count = sum(spec.implemented for spec in registry_snapshot())
 
     cards = [
-        ("Registered Modules", len(registry_snapshot()), "Searchable enterprise catalog"),
+        ("Registered Modules", len(registry_snapshot()), "Full searchable enterprise catalog"),
+        ("Ready Modules", ready_count, "Connected renderers"),
         ("Projects", project_count, "Database project records"),
-        ("Active Projects", active_count, "Current project portfolio"),
-        ("Database", database_status, "Runtime database status"),
+        ("Database", database_status, "Runtime connectivity"),
     ]
-
-    columns = st.columns(4)
-    for column, (title, value, description) in zip(columns, cards):
-        with column:
+    cols = st.columns(4)
+    for col, (title, value, description) in zip(cols, cards):
+        with col:
             st.markdown(
-                f"""
-                <div class="imagine-card">
-                    <div class="imagine-card-title">{title}</div>
-                    <div class="imagine-card-value">{value}</div>
-                    <div class="imagine-card-description">{description}</div>
-                </div>
-                """,
+                f'<div class="imagine-card"><div class="imagine-card-title">{title}</div><div class="imagine-card-value">{value}</div><div class="imagine-card-description">{description}</div></div>',
                 unsafe_allow_html=True,
             )
 
@@ -454,40 +277,65 @@ def render_overview() -> None:
     left, right = st.columns([1.25, 1])
     with left:
         st.markdown(
-            """
-            <div class="imagine-module-panel">
-                <div class="imagine-module-title">Enterprise Workspace</div>
-                <div class="imagine-module-description">
-                    The sidebar now uses search-driven module discovery. The long
-                    module list has been removed from the sidebar while the full
-                    enterprise catalog remains registered and searchable.
-                </div>
-            </div>
-            """,
+            '<div class="imagine-panel"><div class="imagine-panel-title">Engineering Workspace</div><div class="imagine-panel-description">Use the searchable sidebar to open Architecture, Structural, BIM, MEP, Costing and Construction workflows. Structural calculation modules are loaded lazily so one renderer failure does not stop the application shell.</div></div>',
             unsafe_allow_html=True,
         )
-        st.markdown("### Project Portfolio")
+        st.write("")
+        st.subheader("Portfolio Snapshot")
         if projects:
-            for project in projects[:10]:
-                st.write(
-                    f"**{project.name}**  |  {project.status.value if hasattr(project.status, 'value') else project.status}"
-                )
+            rows = []
+            for project in projects[:20]:
+                status = project.status.value if hasattr(project.status, "value") else str(project.status)
+                rows.append({"Project": project.name, "Status": status})
+            df_projects = pd.DataFrame(rows)
+            st.dataframe(df_projects, use_container_width=True, hide_index=True)
         else:
             st.info("No database project records are currently available.")
 
     with right:
-        st.markdown("### Domains")
+        st.subheader("Domain Readiness")
+        domain_rows = []
         for section in SECTION_ORDER:
             specs = specs_for_section(section)
-            ready = sum(1 for spec in specs if spec.implemented)
-            st.write(f"**{section}**  |  {ready}/{len(specs)} connected")
-            st.caption(DOMAIN_DESCRIPTIONS.get(section, ""))
+            ready = sum(spec.implemented for spec in specs)
+            domain_rows.append({"Domain": section, "Ready": ready, "Registered": len(specs)})
+        df_domains = pd.DataFrame(domain_rows)
+        fig = px.bar(
+            df_domains,
+            x="Domain",
+            y=["Ready", "Registered"],
+            barmode="group",
+            height=360,
+        )
+        fig.update_layout(margin=dict(l=10, r=10, t=20, b=80), legend_title_text="")
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(f"Portfolio: {active_count} active, {completed_count} completed project record(s).")
+
+    st.subheader("Structural Quick Access")
+    structural_routes = [
+        "Beam Design",
+        "Column Design",
+        "Slab Design",
+        "Foundation Design",
+        "Retaining Walls",
+        "Steel Connections",
+        "Eurocode Suite",
+    ]
+    quick_cols = st.columns(4)
+    for index, route in enumerate(structural_routes):
+        spec = next((item for item in registry_snapshot() if item.route == route), None)
+        if spec is None:
+            continue
+        with quick_cols[index % 4]:
+            if st.button(spec.label, key=f"quick_{route}", use_container_width=True, disabled=not spec.implemented):
+                set_active_route(route)
+                st.rerun()
 
 
 def render_system_health() -> None:
     render_header(
         "System Health",
-        "Module availability, registry validation and database diagnostics",
+        "Registry validation, renderer availability and database diagnostics",
         "Platform / System Health",
     )
 
@@ -505,32 +353,30 @@ def render_system_health() -> None:
     except Exception as exc:
         db_health = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
-    a, b, c = st.columns(3)
-    a.metric("Registered Modules", len(registry_snapshot()))
-    b.metric("Registry", "Healthy" if registry_ok else "Failed")
-    c.metric("Database", "Connected" if db_health.get("ok") else "Unavailable")
+    ready = sum(spec.implemented for spec in registry_snapshot())
+    a, b, c, d = st.columns(4)
+    a.metric("Registered", len(registry_snapshot()))
+    b.metric("Ready", ready)
+    c.metric("Registry", "Healthy" if registry_ok else "Failed")
+    d.metric("Database", "Connected" if db_health.get("ok") else "Unavailable")
 
     if not registry_ok:
         st.error(registry_error)
-
     if db_health.get("ok"):
         st.success("Database connectivity check passed.")
     else:
         st.warning(db_health.get("error", "Database connectivity check failed."))
 
-    st.divider()
-    st.markdown("### Registered Modules")
-    rows = []
-    for spec in registry_snapshot():
-        rows.append(
-            {
-                "Module": spec.label,
-                "Domain": spec.section,
-                "Status": "Ready" if spec.implemented else "Registered",
-                "Renderer": spec.module_path or "Pending",
-            }
-        )
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    rows = [
+        {
+            "Module": spec.label,
+            "Domain": spec.section,
+            "Status": "Ready" if spec.implemented else "Registered",
+            "Renderer": spec.module_path or "Pending",
+        }
+        for spec in registry_snapshot()
+    ]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 def load_renderer(spec: ModuleSpec) -> Callable[[], object]:
@@ -541,28 +387,14 @@ def load_renderer(spec: ModuleSpec) -> Callable[[], object]:
     if renderer is None:
         renderer = getattr(module, "render", None)
     if not callable(renderer):
-        raise AttributeError(
-            f"Module '{spec.module_path}' does not expose a callable renderer."
-        )
+        raise AttributeError(f"Module '{spec.module_path}' does not expose a callable renderer.")
     return renderer
 
 
 def render_placeholder(spec: ModuleSpec) -> None:
-    render_header(
-        spec.label,
-        f"{spec.section} workspace",
-        f"{spec.section} / {spec.label}",
-    )
+    render_header(spec.label, f"{spec.section} workspace", f"{spec.section} / {spec.label}")
     st.markdown(
-        f"""
-        <div class="imagine-module-panel">
-            <div class="imagine-module-title">Module Registered</div>
-            <div class="imagine-module-description">
-                {spec.label} is present in the enterprise registry and remains
-                searchable, but its dedicated renderer is not connected yet.
-            </div>
-        </div>
-        """,
+        f'<div class="imagine-panel"><div class="imagine-panel-title">Module Registered</div><div class="imagine-panel-description">{spec.label} is present in the enterprise registry and remains searchable, but its dedicated renderer is not connected yet.</div></div>',
         unsafe_allow_html=True,
     )
 
@@ -573,25 +405,17 @@ def render_selected_module(route: str) -> None:
         st.session_state.active_route = "Overview"
         render_overview()
         return
-
     if route == "Overview":
         render_overview()
         return
-
     if route == "System Health":
         render_system_health()
         return
-
     if not spec.implemented or not spec.module_path:
         render_placeholder(spec)
         return
 
-    render_header(
-        spec.label,
-        f"IMAGINE {spec.section.title()} Workspace",
-        f"{spec.section} / {spec.label}",
-    )
-
+    render_header(spec.label, f"IMAGINE {spec.section.title()} Workspace", f"{spec.section} / {spec.label}")
     try:
         renderer = load_renderer(spec)
         renderer()
@@ -624,18 +448,14 @@ def render_selected_module(route: str) -> None:
 
 def render_footer() -> None:
     st.markdown(
-        """
-        <div class="imagine-footer">
-            IMAGINE AEC Engine | Integrated Architecture, Engineering & Construction Platform
-        </div>
-        """,
+        '<div class="imagine-footer">IMAGINE AEC Engine | Integrated Architecture, Engineering & Construction Platform</div>',
         unsafe_allow_html=True,
     )
 
 
 def main() -> None:
-    inject_styles()
     init_session_state()
+    inject_styles()
     render_sidebar()
     render_selected_module(st.session_state.active_route)
     render_footer()
