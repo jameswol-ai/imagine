@@ -1,139 +1,83 @@
-"""
-IMAGINE Site Planning repository.
-"""
+"""IMAGINE Site Planning repository."""
 
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import SitePlan
 
 
 class SitePlanningRepository:
-    """
-    Persistence layer for Site Planning.
+    """Async persistence layer for Site Planning."""
 
-    The repository deliberately receives a SQLAlchemy session
-    rather than creating its own connection.
-    """
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
 
-    def __init__(
+    async def list(
         self,
-        db: Session | None = None,
-    ) -> None:
-
-        self.db = db
-
-    # ========================================================
-    # SESSION
-    # ========================================================
-
-    def _require_db(self) -> Session:
-
-        if self.db is None:
-
-            raise RuntimeError(
-                "SitePlanningRepository requires a database session."
-            )
-
-        return self.db
-
-    # ========================================================
-    # LIST
-    # ========================================================
-
-    def list(
-        self,
+        project_id: UUID | None = None,
+        active_only: bool = False,
     ) -> list[SitePlan]:
+        statement = select(SitePlan).order_by(SitePlan.created_at.desc())
+        if project_id is not None:
+            statement = statement.where(SitePlan.project_id == project_id)
+        if active_only:
+            statement = statement.where(SitePlan.active.is_(True))
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
-        db = self._require_db()
+    async def get(self, site_plan_id: UUID) -> SitePlan | None:
+        return await self.session.get(SitePlan, site_plan_id)
 
-        statement = (
-            select(SitePlan)
-            .order_by(SitePlan.id)
-        )
+    async def get_by_code(self, site_code: str) -> SitePlan | None:
+        statement = select(SitePlan).where(SitePlan.site_code == site_code.strip().upper())
+        result = await self.session.execute(statement)
+        return result.scalar_one_or_none()
 
-        return list(
-            db.scalars(statement).all()
-        )
-
-    # ========================================================
-    # GET
-    # ========================================================
-
-    def get(
-        self,
-        site_plan_id: Any,
-    ) -> SitePlan | None:
-
-        db = self._require_db()
-
-        return db.get(
-            SitePlan,
-            site_plan_id,
-        )
-
-    # ========================================================
-    # CREATE
-    # ========================================================
-
-    def create(
-        self,
-        site_plan: SitePlan,
-    ) -> SitePlan:
-
-        db = self._require_db()
-
-        db.add(site_plan)
-
-        db.commit()
-
-        db.refresh(site_plan)
-
+    async def create(self, site_plan: SitePlan) -> SitePlan:
+        self.session.add(site_plan)
+        await self.session.flush()
+        await self.session.refresh(site_plan)
         return site_plan
 
-    # ========================================================
-    # UPDATE
-    # ========================================================
-
-    def update(
-        self,
-        site_plan: SitePlan,
-        values: dict[str, Any],
-    ) -> SitePlan:
-
-        db = self._require_db()
-
+    async def update(self, site_plan: SitePlan, values: dict[str, Any]) -> SitePlan:
         for key, value in values.items():
-
             if hasattr(site_plan, key):
-
-                setattr(
-                    site_plan,
-                    key,
-                    value,
-                )
-
-        db.commit()
-
-        db.refresh(site_plan)
-
+                setattr(site_plan, key, value)
+        await self.session.flush()
+        await self.session.refresh(site_plan)
         return site_plan
 
-    # ========================================================
-    # DELETE
-    # ========================================================
+    async def delete(self, site_plan: SitePlan) -> None:
+        await self.session.delete(site_plan)
+        await self.session.flush()
 
-    def delete(
-        self,
-        site_plan: SitePlan,
-    ) -> None:
+    async def summary(self) -> dict[str, Any]:
+        result = await self.session.execute(
+            select(
+                func.count(SitePlan.id),
+                func.sum(func.cast(SitePlan.active, 1)),
+                func.sum(func.cast(SitePlan.status == "Approved", 1)),
+                func.coalesce(func.sum(SitePlan.site_area_m2), 0),
+                func.coalesce(func.sum(SitePlan.landscape_area_m2), 0),
+            )
+        )
+        total, active, approved, site_area, landscape = result.one()
+        return {
+            "total_plans": int(total or 0),
+            "active_plans": int(active or 0),
+            "approved_plans": int(approved or 0),
+            "total_site_area_m2": site_area or 0,
+            "total_landscaped_area_m2": landscape or 0,
+        }
 
-        db = self._require_db()
 
-        db.delete(site_plan)
+# Backward-compatible name retained for existing imports and tests.
+SitePlanRepository = SitePlanningRepository
 
-        db.commit()
+
+__all__ = ["SitePlanningRepository", "SitePlanRepository"]
