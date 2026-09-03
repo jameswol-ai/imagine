@@ -25,10 +25,24 @@ if str(ROOT_DIR) not in sys.path:
 st.set_page_config(page_title="IMAGINE | AEC Engine", page_icon=None, layout="wide", initial_sidebar_state="expanded")
 
 SEARCH_ALIASES = {
-    "concrete": ("beam", "column", "slab", "foundation", "punching", "en 1992"),
+    "concrete": ("beam", "column", "slab", "foundation", "punching", "en 1992", "building materials"),
     "rc": ("beam", "column", "slab", "foundation", "punching", "en 1992"),
     "reinforced": ("beam", "column", "slab", "foundation", "punching"),
-    "steel": ("steel members", "steel connections", "section shapes", "en 1993"),
+    "steel": ("steel members", "steel connections", "section shapes", "en 1993", "en 1994"),
+    "timber": ("en 1995", "structural design handbook", "building materials"),
+    "masonry": ("en 1996", "structural design handbook", "building materials"),
+    "aluminium": ("en 1999", "structural design handbook", "building materials"),
+    "aluminum": ("en 1999", "structural design handbook", "building materials"),
+    "geotechnical": ("en 1997", "foundation design", "retaining walls"),
+    "seismic": ("en 1998", "structural analysis"),
+    "earthquake": ("en 1998", "structural analysis"),
+    "composite": ("en 1994", "steel members", "beam design", "slab design"),
+    "materials": ("building materials", "concrete", "steel", "timber", "masonry", "aluminium"),
+    "structural handbook": ("structural design handbook", "building materials", "eurocode suite"),
+    "handbook": ("structural design handbook", "architectural design handbook"),
+    "eurocode": ("eurocode suite", "en 1990", "en 1991", "en 1992", "en 1993", "en 1994", "en 1995", "en 1996", "en 1997", "en 1998", "en 1999"),
+    "en": ("en 1990", "en 1991", "en 1992", "en 1993", "en 1994", "en 1995", "en 1996", "en 1997", "en 1998", "en 1999"),
+    "ec": ("en 1990", "en 1991", "en 1992", "en 1993", "en 1994", "en 1995", "en 1996", "en 1997", "en 1998", "en 1999", "eurocode suite"),
     "bim": ("buildings", "storeys", "spaces", "elements", "ifc", "cobie", "digital twin"),
     "mep": ("integrated mep analysis", "hvac", "ventilation", "chilled water", "electrical load analysis", "water supply", "drainage"),
     "cost": ("boq", "quantity takeoff", "procurement", "forex", "inflation / escalation", "risk analysis"),
@@ -37,8 +51,7 @@ SEARCH_ALIASES = {
     "ai": ("imagine architect", "imagine engineer", "imagine mep", "imagine qs", "imagine pm"),
     "project": ("projects", "approvals", "revisions", "workflows", "governance"),
     "analysis": ("structural analysis", "finite element analysis", "eurocode suite"),
-    "ec": ("en1990-1998", "eurocode suite", "design standards"),
-    "architecture": ("architecture assistant", "design standards", "zoning", "site planning", "floor planning", "room programming", "compliance", "generative design"),
+    "architecture": ("architecture assistant", "design standards", "architectural design handbook", "zoning", "site planning", "floor planning", "room programming", "compliance", "generative design"),
     "roof": ("roof design",),
     "energy": ("energy", "hvac", "chilled water", "energy simulation"),
     "digital": ("digital twin", "assets", "sensors", "telemetry", "energy", "maintenance", "predictive ai"),
@@ -192,7 +205,7 @@ def render_sidebar() -> None:
         st.markdown('<div class="imagine-brand"><div class="imagine-brand-title">IMAGINE</div><div class="imagine-brand-subtitle">Integrated Architecture, Engineering & Construction Engine</div></div>', unsafe_allow_html=True)
         st.divider()
         st.markdown('<div class="imagine-label">Workspace search</div>', unsafe_allow_html=True)
-        st.text_input("Search modules", key="module_search", placeholder="Search beam, zoning, BIM, files...", label_visibility="collapsed")
+        st.text_input("Search modules", key="module_search", placeholder="Search beam, EN 1992, handbook, BIM...", label_visibility="collapsed")
         domains_for_search = ["All domains", *domains()]
         current = st.session_state.get("module_search_domain", "All domains")
         if current not in domains_for_search:
@@ -218,13 +231,7 @@ def render_navigation() -> None:
 
     menu_col, page_col, status_col = st.columns([1.15, 2.25, 1.0])
     with menu_col:
-        selected_label = st.selectbox(
-            "Discipline",
-            domain_labels,
-            index=domain_labels.index(current_label),
-            key="menu_domain_selector",
-            label_visibility="collapsed",
-        )
+        selected_label = st.selectbox("Discipline", domain_labels, index=domain_labels.index(current_label), key="menu_domain_selector", label_visibility="collapsed")
     selected_domain = "PLATFORM" if selected_label == "HOME" else selected_label
 
     pages = domain_specs(selected_domain)
@@ -233,13 +240,7 @@ def render_navigation() -> None:
     active_index = next((i for i, spec in enumerate(pages) if spec.route == active_route), 0)
 
     with page_col:
-        selected_page = st.selectbox(
-            "Workspace",
-            page_labels,
-            index=active_index,
-            key=f"menu_page_selector_{selected_domain}",
-            label_visibility="collapsed",
-        )
+        selected_page = st.selectbox("Workspace", page_labels, index=active_index, key=f"menu_page_selector_{selected_domain}", label_visibility="collapsed")
     selected_spec = pages[page_labels.index(selected_page)] if pages else None
 
     with status_col:
@@ -288,7 +289,7 @@ def render_search_results() -> bool:
     st.subheader("Workspace Search")
     st.caption(f"{len(matches)} result(s) for '{query}' · {domain}")
     if not matches:
-        st.info("No matching workspace was found. Try beam, BIM, HVAC, BOQ, RFIs, files or a discipline name.")
+        st.info("No matching workspace was found. Try beam, EN 1992, handbook, materials, BIM, HVAC, BOQ, RFIs, files or a discipline name.")
         return True
     cols = st.columns(3)
     for index, spec in enumerate(matches[:30]):
