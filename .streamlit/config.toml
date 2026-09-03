@@ -7,3 +7,4 @@ gatherUsageStats = false
 
 [client]
 showErrorDetails = "full"
+showSidebarNavigation = false
