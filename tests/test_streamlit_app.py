@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import inspect
 
+import pandas as pd
+
 import streamlit_app
 
 
@@ -61,6 +63,15 @@ def test_sidebar_uses_single_global_search() -> None:
 def test_discipline_dashboard_is_available() -> None:
     assert callable(streamlit_app.render_discipline_dashboard)
     assert "STRUCTURAL" in streamlit_app.domains()
+
+
+def test_home_dashboard_helpers_are_available() -> None:
+    specs = streamlit_app.registry_snapshot()
+    coverage = streamlit_app._coverage_frame(specs)
+    assert isinstance(coverage, pd.DataFrame)
+    assert {"Domain", "Ready", "Registered", "Coverage"}.issubset(coverage.columns)
+    assert callable(streamlit_app.render_platform_insights)
+    assert callable(streamlit_app.render_home_actions)
 
 
 def test_render_selected_module_is_isolated() -> None:
