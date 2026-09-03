@@ -50,12 +50,16 @@ def _category_for(name: str) -> str:
     return mapping.get(suffix, "Other")
 
 
+def _upload_key(name: str, payload: bytes) -> tuple[str, int, str]:
+    """Build a deterministic key from filename, size and content."""
+    return name, len(payload), hashlib.sha256(payload).hexdigest()
+
+
 def _database_session():
     """Return a database session when persistent storage is available."""
     try:
         from database.bootstrap import ensure_schema
         from database.connection import SessionLocal
-
         ensure_schema()
         return SessionLocal()
     except Exception:
@@ -71,15 +75,9 @@ def _row_to_file(row: Any) -> ProjectFile:
     else:
         uploaded_text = str(uploaded)
     return ProjectFile(
-        id=str(row.id),
-        name=row.name,
-        size_bytes=int(row.size_bytes),
-        file_type=row.file_type,
-        uploaded_at=uploaded_text,
-        project=row.project,
-        category=row.category,
-        data=bytes(row.content),
-        checksum=row.checksum,
+        id=str(row.id), name=row.name, size_bytes=int(row.size_bytes), file_type=row.file_type,
+        uploaded_at=uploaded_text, project=row.project, category=row.category,
+        data=bytes(row.content), checksum=row.checksum,
     )
 
 
@@ -115,19 +113,13 @@ def _add_uploads(files: list[Any], project: str, category: str) -> tuple[int, in
             if checksum in existing:
                 skipped += 1
                 continue
-            records.append(
-                ProjectFile(
-                    id=checksum[:36],
-                    name=uploaded.name,
-                    size_bytes=len(payload),
-                    file_type=(uploaded.name.rsplit(".", 1)[-1].upper() if "." in uploaded.name else "FILE"),
-                    uploaded_at=now,
-                    project=project.strip() or "Unassigned",
-                    category=category if category != "Auto" else _category_for(uploaded.name),
-                    data=payload,
-                    checksum=checksum,
-                )
-            )
+            records.append(ProjectFile(
+                id=checksum[:36], name=uploaded.name, size_bytes=len(payload),
+                file_type=(uploaded.name.rsplit(".", 1)[-1].upper() if "." in uploaded.name else "FILE"),
+                uploaded_at=now, project=project.strip() or "Unassigned",
+                category=category if category != "Auto" else _category_for(uploaded.name),
+                data=payload, checksum=checksum,
+            ))
             existing.add(checksum)
             added += 1
         return added, skipped, False
@@ -142,13 +134,11 @@ def _add_uploads(files: list[Any], project: str, category: str) -> tuple[int, in
                 skipped += 1
                 continue
             db.add(ProjectFileRecord(
-                name=uploaded.name,
-                size_bytes=len(payload),
+                name=uploaded.name, size_bytes=len(payload),
                 file_type=(uploaded.name.rsplit(".", 1)[-1].upper() if "." in uploaded.name else "FILE"),
                 project=project.strip() or "Unassigned",
                 category=category if category != "Auto" else _category_for(uploaded.name),
-                checksum=checksum,
-                content=payload,
+                checksum=checksum, content=payload,
             ))
             added += 1
         db.commit()
@@ -167,8 +157,7 @@ def _preview(file: ProjectFile) -> None:
             if suffix == "csv":
                 st.dataframe(pd.read_csv(BytesIO(file.data)), use_container_width=True, hide_index=True)
             else:
-                text = file.data.decode("utf-8", errors="replace")
-                st.code(text[:12000], language="json" if suffix == "json" else None)
+                st.code(file.data.decode("utf-8", errors="replace")[:12000], language="json" if suffix == "json" else None)
         except Exception as exc:
             st.warning(f"Preview unavailable: {type(exc).__name__}: {exc}")
     elif suffix in {"png", "jpg", "jpeg"}:
@@ -202,7 +191,6 @@ def _delete_file(file: ProjectFile) -> bool:
 def render() -> None:
     st.subheader("Project File Center")
     st.caption("Persistent project document, drawing, BIM and data workspace.")
-
     records, persistent = _load_records()
     if persistent:
         st.success("Persistent database storage is active.")
@@ -210,15 +198,13 @@ def render() -> None:
         st.warning("Database storage is unavailable. Files are currently held only in this Streamlit session.")
 
     upload_tab, library_tab, preview_tab = st.tabs(["Upload", "Library", "Preview"])
-
     with upload_tab:
         project = st.text_input("Project", value=st.session_state.get("selected_project_name") or "Unassigned", key="file_project")
         category = st.selectbox("Category", ["Auto", "Documents", "Drawings", "BIM", "Data", "Images", "Other"], key="file_category")
         uploads = st.file_uploader(
             "Add project files",
             type=["pdf", "doc", "docx", "txt", "md", "csv", "xls", "xlsx", "ifc", "dwg", "dxf", "rvt", "json", "png", "jpg", "jpeg"],
-            accept_multiple_files=True,
-            key="project_file_uploader",
+            accept_multiple_files=True, key="project_file_uploader",
             help="Files are stored in the application database when database storage is available.",
         )
         if uploads and st.button("Save files", type="primary", use_container_width=True):
@@ -259,9 +245,9 @@ def render() -> None:
                                 if _delete_file(item):
                                     st.rerun()
                                 st.error("File could not be removed.")
-
             table = pd.DataFrame([
-                {"File": item.name, "Type": item.file_type, "Category": item.category, "Project": item.project, "Size": _human_size(item.size_bytes), "Uploaded": item.uploaded_at}
+                {"File": item.name, "Type": item.file_type, "Category": item.category, "Project": item.project,
+                 "Size": _human_size(item.size_bytes), "Uploaded": item.uploaded_at}
                 for item in filtered
             ])
             with st.expander("Table view", expanded=False):
@@ -286,7 +272,8 @@ def render() -> None:
              "Checksum": item.checksum}
             for item in records
         ])
-        st.download_button("Export file manifest", metadata.to_csv(index=False).encode("utf-8"), "imagine_file_manifest.csv", "text/csv", key="export_file_manifest")
+        st.download_button("Export file manifest", metadata.to_csv(index=False).encode("utf-8"),
+                           "imagine_file_manifest.csv", "text/csv", key="export_file_manifest")
 
 
 __all__ = ["ProjectFile", "render", "_category_for", "_human_size", "_upload_key"]
