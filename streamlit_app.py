@@ -20,16 +20,19 @@ if str(ROOT_DIR) not in sys.path:
 st.set_page_config(page_title="IMAGINE | AEC Engine", page_icon=None, layout="wide", initial_sidebar_state="expanded")
 
 SEARCH_ALIASES = {
-    "structural": ("structural design handbook", "building materials", "eurocode suite", "beam design", "column design", "slab design", "stairs design", "openings design", "railings & balustrades", "structural analysis"),
-    "concrete": ("beam", "column", "slab", "foundation", "punching", "en 1992", "building materials"),
-    "rc": ("beam", "column", "slab", "foundation", "punching", "en 1992"),
+    "structural": ("structural design handbook", "building materials", "load combinations", "wind actions", "seismic actions", "rc detailing", "eurocode suite", "beam design", "column design", "slab design", "stairs design", "openings design", "railings & balustrades", "structural analysis"),
+    "concrete": ("beam", "column", "slab", "foundation", "punching", "rc detailing", "en 1992", "building materials"),
+    "rc": ("beam", "column", "slab", "foundation", "punching", "rc detailing", "en 1992"),
     "steel": ("steel members", "steel connections", "section shapes", "en 1993"),
     "timber": ("en 1995", "roof design", "building materials"),
     "masonry": ("en 1996", "building materials"),
     "aluminium": ("en 1999", "building materials"),
     "aluminum": ("en 1999", "building materials"),
     "geotechnical": ("en 1997", "foundation design", "retaining walls"),
-    "seismic": ("en 1998", "structural analysis"),
+    "seismic": ("seismic actions", "en 1998", "structural analysis"),
+    "wind": ("wind actions", "en 1991", "structural analysis"),
+    "loads": ("load combinations", "wind actions", "seismic actions", "en 1990", "en 1991"),
+    "detailing": ("rc detailing", "beam design", "column design", "slab design"),
     "composite": ("en 1994", "steel members", "beam design", "slab design"),
     "materials": ("building materials", "concrete", "steel", "timber", "masonry", "aluminium"),
     "handbook": ("structural design handbook", "architectural design handbook"),
@@ -171,7 +174,6 @@ def render_sidebar() -> None:
             st.session_state.sidebar_nav_domain = selected_domain
             st.session_state.sidebar_nav_workspace = "Overview" if selected_domain == "HOME" else "Discipline Overview"
             st.rerun()
-
         domain = "PLATFORM" if selected_domain == "HOME" else selected_domain
         pages = domain_specs(domain)
         page_labels = (["Discipline Overview"] if selected_domain != "HOME" else []) + [p.label + ("" if p.implemented else " · Registered") for p in pages]
@@ -189,7 +191,6 @@ def render_sidebar() -> None:
             if chosen.route != st.session_state.active_route:
                 set_active_route(chosen.route)
                 st.rerun()
-
         st.markdown('<div class="sidebar-heading">Search all workspaces</div>', unsafe_allow_html=True)
         st.text_input("Search", key="module_search", placeholder="Search stairs, EN 1992, BIM...", label_visibility="collapsed")
         query = st.session_state.module_search.strip()
