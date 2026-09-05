@@ -11,7 +11,7 @@ class ModuleSpec:
     renderer_name: str = "render"
     implemented: bool = False
 
-FALLBACK = "modules.enterprise_missing"
+FALLBACK = "modules.enterprise_workspace"
 STRUCTURAL_WORKBENCH = "modules.structural.workspaces"
 EUROCODE_SUITE = "modules.structural.eurocode_suite"
 DESIGN_BASIS = "modules.structural.design_basis"
