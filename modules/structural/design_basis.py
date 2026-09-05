@@ -13,6 +13,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from modules.structural.context import ActionCase, get_context
 from structural.eurocode.config import NATIONAL_ANNEX_DEFAULTS
 
 
@@ -82,6 +83,11 @@ def set_design_basis(**changes: Any) -> DesignBasis:
             setattr(basis, key, value)
     basis.updated_at = datetime.now(timezone.utc).isoformat()
     st.session_state.imagine_design_basis = basis
+    context = get_context()
+    context.project_id = basis.project_id
+    context.project_name = basis.project_name
+    context.pipeline["Design Basis"] = "Configured"
+    context.touch()
     return basis
 
 
@@ -108,6 +114,8 @@ def update_pipeline(stage: str, status: str) -> None:
     if stage not in PIPELINE_STAGES:
         raise KeyError(stage)
     _state()["pipeline"][stage] = status
+    get_context().pipeline[stage] = status
+    get_context().touch()
 
 
 def pipeline_frame() -> pd.DataFrame:
@@ -123,6 +131,7 @@ def export_contract() -> dict[str, Any]:
         "design_basis": asdict(state["basis"]),
         "records": [asdict(record) for record in state["records"]],
         "pipeline": dict(state["pipeline"]),
+        "structural_context": get_context().to_dict(),
     }
 
 
@@ -168,6 +177,7 @@ def _actions_ui() -> None:
         submitted = st.form_submit_button("Add action")
     if submitted and name.strip():
         add_design_record("Actions", name.strip(), value, unit, source, "Draft")
+        get_context().add_action(ActionCase(name.strip(), category, value, unit, leading=category == "Variable", source=source))
         update_pipeline("Actions", "Configured")
         st.success(f"Action '{name.strip()}' added to the shared context.")
     actions = records_for("Actions")
