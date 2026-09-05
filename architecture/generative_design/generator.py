@@ -1,486 +1,133 @@
-"""
-IMAGINE
-Generative Architecture & Civil Engine
+"""Pure deterministic generator for architectural massing candidates.
 
-Main Streamlit application entry point.
+This module is intentionally UI-free. It is imported by the generative-design
+service and therefore must never call Streamlit page configuration or render UI.
+The generated geometry is preliminary design-assistance output and must be
+validated against the adopted planning, structural, fire, accessibility and
+other project requirements before use.
 """
-
 from __future__ import annotations
 
-from typing import Any, Callable
+from dataclasses import dataclass, field
+from typing import Any
 
-import streamlit as st
-
-
-# ============================================================
-# PAGE CONFIG
-# ============================================================
-
-st.set_page_config(
-    page_title="IMAGINE",
-    page_icon="🏗️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+from .schemas import DesignConstraints
 
 
-# ============================================================
-# TYPES
-# ============================================================
+@dataclass
+class DesignCandidate:
+    """Generated design option shared by generation, scoring and persistence."""
 
-RenderFunction = Callable[[], Any]
+    name: str
+    geometry: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    status: str = "generated"
+    rank: int | None = None
+    score: float = 0.0
+    evaluation: dict[str, Any] = field(default_factory=dict)
 
 
-# ============================================================
-# SAFE IMPORT HELPERS
-# ============================================================
+def _program_area(constraints: DesignConstraints) -> float:
+    return sum(
+        room.area * room.quantity
+        for room in constraints.program.rooms
+        if room.required
+    ) * (1.0 + constraints.program.circulation_ratio)
 
-def _safe_import(
-    module_name: str,
-    function_name: str,
-) -> RenderFunction | None:
-    """
-    Import a renderer without allowing an optional module
-    failure to crash the entire Streamlit application.
-    """
 
-    try:
-        module = __import__(
-            module_name,
-            fromlist=[function_name],
+def _buildable_dimensions(constraints: DesignConstraints) -> tuple[float, float]:
+    site = constraints.site
+    width = site.width - site.setback_left - site.setback_right
+    depth = site.depth - site.setback_front - site.setback_rear
+    if width <= 0 or depth <= 0:
+        raise ValueError("Site setbacks leave no buildable footprint.")
+    return width, depth
+
+
+def _candidate_scale(index: int, count: int) -> float:
+    if count <= 1:
+        return 0.82
+    low, high = 0.55, 0.95
+    return low + (high - low) * (index / (count - 1))
+
+
+def generate_candidates(
+    constraints: DesignConstraints,
+    count: int = 5,
+) -> list[DesignCandidate]:
+    """Generate deterministic rectangular massing options from validated inputs."""
+    if count < 1:
+        raise ValueError("count must be at least 1")
+
+    build_w, build_d = _buildable_dimensions(constraints)
+    site_area = constraints.site.width * constraints.site.depth
+    max_footprint = site_area * constraints.zoning.max_site_coverage
+    max_gfa = site_area * constraints.zoning.max_far
+    program_gfa = _program_area(constraints)
+
+    candidates: list[DesignCandidate] = []
+    for index in range(count):
+        scale = _candidate_scale(index, count)
+        footprint = min(build_w * build_d * scale, max_footprint)
+        footprint = max(1.0, footprint)
+
+        required_storeys = max(1, int((program_gfa + footprint - 1e-9) // footprint))
+        if program_gfa > footprint:
+            required_storeys = int((program_gfa / footprint) + 0.999999)
+        storeys = min(constraints.zoning.max_storeys, required_storeys)
+        if max_gfa > 0:
+            storeys = min(storeys, max(1, int(max_gfa / footprint)))
+        storeys = max(1, storeys)
+
+        gross_floor_area = footprint * storeys
+        coverage = footprint / site_area
+        far = gross_floor_area / site_area
+        height = gross_floor_area / footprint * min(
+            constraints.zoning.max_height / max(constraints.zoning.max_storeys, 1),
+            constraints.zoning.max_height,
         )
 
-        renderer = getattr(
-            module,
-            function_name,
-            None,
+        aspect = max(build_w, build_d) / max(min(build_w, build_d), 1e-9)
+        regularity = max(0.0, min(1.0, 1.0 - abs(aspect - 1.5) / 3.0))
+        target_fit = max(0.0, min(1.0, 1.0 - abs(gross_floor_area - max(program_gfa, 1.0)) / max(program_gfa, 1.0)))
+        compliance = 1.0
+        if coverage > constraints.zoning.max_site_coverage + 1e-9:
+            compliance = 0.0
+        if far > constraints.zoning.max_far + 1e-9:
+            compliance = 0.0
+        if height > constraints.zoning.max_height + 1e-9:
+            compliance = 0.0
+
+        candidate = DesignCandidate(
+            name=f"Massing Option {index + 1:02d}",
+            geometry={
+                "type": "rectangular_massing",
+                "footprint_width_m": round(build_w * scale, 3),
+                "footprint_depth_m": round(build_d * scale, 3),
+                "storeys": storeys,
+                "orientation": "north_access" if constraints.site.north_access else "site_defined",
+            },
+            metrics={
+                "site_area": round(site_area, 3),
+                "footprint_area": round(footprint, 3),
+                "gross_floor_area": round(gross_floor_area, 3),
+                "site_coverage": round(coverage, 4),
+                "far": round(far, 4),
+                "storeys": storeys,
+                "height_m": round(height, 3),
+                "program_gross_area": round(program_gfa, 3),
+                "program_fit": round(target_fit, 4),
+                "structural_regularity": round(regularity, 4),
+            },
+            evaluation={
+                "preliminary": True,
+                "program_compliance": target_fit >= 0.95,
+                "zoning_screening": compliance > 0,
+            },
         )
+        candidates.append(candidate)
 
-        if callable(renderer):
-            return renderer
+    return candidates
 
-    except Exception:
-        return None
 
-    return None
-
-
-# ============================================================
-# PLACEHOLDER RENDERER
-# ============================================================
-
-def render_placeholder(
-    module_name: str = "Module",
-) -> None:
-    """Render a safe placeholder for modules not yet implemented."""
-
-    st.title(module_name)
-
-    st.info(
-        f"{module_name} is registered in IMAGINE, "
-        "but its full interface is not available yet."
-    )
-
-
-# ============================================================
-# OVERVIEW
-# ============================================================
-
-def render_overview() -> None:
-    """Render the IMAGINE overview dashboard."""
-
-    st.title("🏗️ IMAGINE")
-
-    st.caption(
-        "Generative Architecture & Civil Engine"
-    )
-
-    st.markdown(
-        """
-        ## Project Overview
-
-        IMAGINE connects architectural constraints,
-        planning, programming, compliance and generative
-        design into one workflow.
-        """
-    )
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric(
-            "Projects",
-            "0",
-        )
-
-    with col2:
-        st.metric(
-            "Design Runs",
-            "0",
-        )
-
-    with col3:
-        st.metric(
-            "Candidates",
-            "0",
-        )
-
-    with col4:
-        st.metric(
-            "Best Designs",
-            "0",
-        )
-
-    st.divider()
-
-    st.subheader("Design Pipeline")
-
-    pipeline = [
-        "Project",
-        "Zoning",
-        "Site Planning",
-        "Floor Planning",
-        "Room Programming",
-        "Compliance",
-        "Generative Design",
-    ]
-
-    cols = st.columns(len(pipeline))
-
-    for column, step in zip(
-        cols,
-        pipeline,
-    ):
-        with column:
-            st.markdown(
-                f"""
-                <div style="
-                    border:1px solid rgba(128,128,128,.25);
-                    border-radius:12px;
-                    padding:14px;
-                    text-align:center;
-                    min-height:80px;
-                ">
-                    <strong>{step}</strong>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.divider()
-
-    st.subheader("System Status")
-
-    status_col1, status_col2 = st.columns(2)
-
-    with status_col1:
-        st.success(
-            "IMAGINE application is running."
-        )
-
-    with status_col2:
-        st.info(
-            "Generative Design is constraint-driven."
-        )
-
-
-# ============================================================
-# GENERATIVE DESIGN
-# ============================================================
-
-GENERATIVE_DESIGN_RENDERER = _safe_import(
-    "architecture.generative_design.ui",
-    "render_generative_design",
-)
-
-
-def render_generative_design_safe() -> None:
-    """
-    Render Generative Design.
-
-    If the architecture module has an import/runtime problem,
-    show a controlled diagnostic instead of crashing the app.
-    """
-
-    if GENERATIVE_DESIGN_RENDERER is None:
-        st.title("✨ Generative Design")
-
-        st.error(
-            "The Generative Design interface could not be loaded."
-        )
-
-        st.warning(
-            "The rest of IMAGINE remains available. "
-            "Check the Generative Design module imports."
-        )
-
-        with st.expander(
-            "Diagnostic information"
-        ):
-            st.code(
-                "architecture.generative_design.ui."
-                "render_generative_design"
-            )
-
-        return
-
-    try:
-        GENERATIVE_DESIGN_RENDERER()
-
-    except Exception as exc:
-        st.title("✨ Generative Design")
-
-        st.error(
-            "Generative Design encountered an error."
-        )
-
-        with st.expander(
-            "Show error details"
-        ):
-            st.exception(exc)
-
-
-# ============================================================
-# OPTIONAL MODULE RENDERERS
-# ============================================================
-
-OPTIONAL_RENDERERS: dict[str, RenderFunction | None] = {
-    "projects": _safe_import(
-        "architecture.projects.ui",
-        "render_projects",
-    ),
-    "zoning": _safe_import(
-        "architecture.zoning.ui",
-        "render_zoning",
-    ),
-    "site_planning": _safe_import(
-        "architecture.site_planning.ui",
-        "render_site_planning",
-    ),
-    "floor_planning": _safe_import(
-        "architecture.floor_planning.ui",
-        "render_floor_planning",
-    ),
-    "room_programming": _safe_import(
-        "architecture.room_programming.ui",
-        "render_room_programming",
-    ),
-    "compliance": _safe_import(
-        "architecture.compliance.ui",
-        "render_compliance",
-    ),
-}
-
-
-# ============================================================
-# MODULE REGISTRY
-# ============================================================
-
-MODULE_REGISTRY: list[dict[str, Any]] = [
-    {
-        "label": "Overview",
-        "icon": "🏠",
-        "route": "overview",
-        "renderer": render_overview,
-    },
-    {
-        "label": "Projects",
-        "icon": "📁",
-        "route": "projects",
-        "renderer": OPTIONAL_RENDERERS["projects"],
-    },
-    {
-        "label": "Zoning",
-        "icon": "📐",
-        "route": "zoning",
-        "renderer": OPTIONAL_RENDERERS["zoning"],
-    },
-    {
-        "label": "Site Planning",
-        "icon": "🌐",
-        "route": "site_planning",
-        "renderer": OPTIONAL_RENDERERS["site_planning"],
-    },
-    {
-        "label": "Floor Planning",
-        "icon": "🏢",
-        "route": "floor_planning",
-        "renderer": OPTIONAL_RENDERERS["floor_planning"],
-    },
-    {
-        "label": "Room Programming",
-        "icon": "🚪",
-        "route": "room_programming",
-        "renderer": OPTIONAL_RENDERERS["room_programming"],
-    },
-    {
-        "label": "Compliance",
-        "icon": "✅",
-        "route": "compliance",
-        "renderer": OPTIONAL_RENDERERS["compliance"],
-    },
-    {
-        "label": "Generative Design",
-        "icon": "✨",
-        "route": "generative_design",
-        "renderer": render_generative_design_safe,
-    },
-]
-
-
-# ============================================================
-# ROUTE MAP
-# ============================================================
-
-MODULES_BY_ROUTE: dict[str, dict[str, Any]] = {
-    module["route"]: module
-    for module in MODULE_REGISTRY
-}
-
-
-# ============================================================
-# VALIDATE REGISTRY
-# ============================================================
-
-def validate_module_registry() -> None:
-    """Validate module route uniqueness."""
-
-    routes = [
-        module["route"]
-        for module in MODULE_REGISTRY
-    ]
-
-    duplicates = {
-        route
-        for route in routes
-        if routes.count(route) > 1
-    }
-
-    if duplicates:
-        raise RuntimeError(
-            "Duplicate module routes detected: "
-            + ", ".join(
-                sorted(duplicates)
-            )
-        )
-
-    if "overview" not in MODULES_BY_ROUTE:
-        raise RuntimeError(
-            "Overview route is missing."
-        )
-
-    generative_design = (
-        MODULES_BY_ROUTE.get(
-            "generative_design"
-        )
-    )
-
-    if generative_design is None:
-        raise RuntimeError(
-            "Generative Design route is missing."
-        )
-
-
-validate_module_registry()
-
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-if "active_route" not in st.session_state:
-    st.session_state.active_route = "overview"
-
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.markdown(
-        """
-        # 🏗️ IMAGINE
-
-        **Generative Architecture & Civil Engine**
-        """
-    )
-
-    st.divider()
-
-    st.caption("NAVIGATION")
-
-    for module in MODULE_REGISTRY:
-
-        route = module["route"]
-
-        label = (
-            f'{module["icon"]} '
-            f'{module["label"]}'
-        )
-
-        if st.button(
-            label,
-            key=f"nav_{route}",
-            use_container_width=True,
-            type=(
-                "primary"
-                if st.session_state.active_route == route
-                else "secondary"
-            ),
-        ):
-            st.session_state.active_route = route
-            st.rerun()
-
-    st.divider()
-
-    st.caption(
-        "IMAGINE • Generative Architecture"
-    )
-
-
-# ============================================================
-# ACTIVE MODULE
-# ============================================================
-
-active_route = st.session_state.get(
-    "active_route",
-    "overview",
-)
-
-module = MODULES_BY_ROUTE.get(
-    active_route,
-)
-
-if module is None:
-    st.session_state.active_route = "overview"
-    module = MODULES_BY_ROUTE["overview"]
-
-
-# ============================================================
-# RENDER ACTIVE MODULE
-# ============================================================
-
-renderer = module.get(
-    "renderer"
-)
-
-if callable(renderer):
-
-    try:
-        renderer()
-
-    except Exception as exc:
-        st.error(
-            f'{module["label"]} could not be rendered.'
-        )
-
-        with st.expander(
-            "Show error details"
-        ):
-            st.exception(exc)
-
-else:
-    render_placeholder(
-        module["label"]
-    )
+__all__ = ["DesignCandidate", "generate_candidates"]
