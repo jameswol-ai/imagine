@@ -26,15 +26,16 @@ def test_no_implemented_registry_entry_is_missing_a_module_path() -> None:
 
 def test_enterprise_route_workspaces_are_executable() -> None:
     routes = {
-        "Finite Element Analysis", "Elements", "COBie", "BIM Digital Twin", "Energy",
+        "Finite Element Analysis", "Elements", "COBie", "BIM → Digital Twin", "Energy",
         "Uganda", "Kenya", "Tanzania", "Rwanda", "South Sudan", "Codes", "Zoning Laws",
         "Microsoft", "AutoCAD", "Revit", "Archicad", "Tekla", "IfcOpenShell", "ArcGIS", "Azure", "Mapbox",
     }
-    for spec in MODULE_SPECS:
-        if spec.route in routes:
-            assert spec.module_path == "modules.enterprise_missing"
-            assert spec.renderer_name == "render"
-            assert spec.implemented is True
+    by_route = {spec.route: spec for spec in MODULE_SPECS}
+    for route in routes:
+        spec = by_route[route]
+        assert spec.module_path == "modules.enterprise_missing"
+        assert spec.renderer_name == "render"
+        assert spec.implemented is True
 
 
 def test_core_structural_workspaces_are_importable() -> None:
