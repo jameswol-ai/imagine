@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -45,14 +45,35 @@ def _project_rows(projects: list[Any], organizations: dict[int, str]) -> list[di
     return rows
 
 
-def _parse_date(value: str) -> str | None:
-    value = value.strip()
-    if not value:
+def _parse_date(value: Any) -> str | None:
+    """Normalize Streamlit/date/string inputs to the database YYYY-MM-DD contract."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    if not text:
         return None
     try:
-        return date.fromisoformat(value).isoformat()
+        return date.fromisoformat(text).isoformat()
+    except ValueError as exc:
+        raise ValueError("Date must use YYYY-MM-DD format.") from exc
+
+
+def _date_input_value(value: Any) -> date | None:
+    """Convert an existing stored date value into a Streamlit date_input value."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value).strip())
     except ValueError:
-        raise ValueError("Date must use YYYY-MM-DD format.")
+        return None
 
 
 def render_projects() -> None:
@@ -126,8 +147,8 @@ def render_projects() -> None:
                 budget = st.number_input("Budget", min_value=0.0, value=0.0, step=1000.0)
                 progress = st.number_input("Progress %", min_value=0.0, max_value=100.0, value=0.0, step=1.0)
                 client_id = st.selectbox("Client / Organization", list(client_options), format_func=lambda x: client_options[x])
-                start_date = st.text_input("Start Date", placeholder="2026-09-01")
-                end_date = st.text_input("End Date", placeholder="2027-09-01")
+                start_date = st.date_input("Start Date", value=None, format="YYYY-MM-DD")
+                end_date = st.date_input("End Date", value=None, format="YYYY-MM-DD")
                 submitted = st.form_submit_button("Create Project", type="primary", use_container_width=True)
 
             if submitted:
@@ -175,8 +196,8 @@ def render_projects() -> None:
                         new_budget = st.number_input("Budget", min_value=0.0, value=float(getattr(selected, "budget", 0.0) or 0.0), step=1000.0)
                         new_progress = st.number_input("Progress %", min_value=0.0, max_value=100.0, value=float(getattr(selected, "progress", 0.0) or 0.0), step=1.0)
                         new_client = st.selectbox("Client / Organization", list(client_options), index=list(client_options).index(current_client), format_func=lambda x: client_options[x])
-                        new_start = st.text_input("Start Date", value=getattr(selected, "start_date", "") or "")
-                        new_end = st.text_input("End Date", value=getattr(selected, "end_date", "") or "")
+                        new_start = st.date_input("Start Date", value=_date_input_value(getattr(selected, "start_date", None)), format="YYYY-MM-DD", key="project_update_start")
+                        new_end = st.date_input("End Date", value=_date_input_value(getattr(selected, "end_date", None)), format="YYYY-MM-DD", key="project_update_end")
                         update_submitted = st.form_submit_button("Save Changes", type="primary", use_container_width=True)
 
                     if update_submitted:
