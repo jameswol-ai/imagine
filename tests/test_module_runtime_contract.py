@@ -24,18 +24,29 @@ def test_no_implemented_registry_entry_is_missing_a_module_path() -> None:
     assert broken == []
 
 
-def test_enterprise_route_workspaces_are_executable() -> None:
+def test_enterprise_routes_use_functional_workspaces() -> None:
     routes = {
-        "Finite Element Analysis", "Elements", "COBie", "BIM → Digital Twin", "Energy",
-        "Uganda", "Kenya", "Tanzania", "Rwanda", "South Sudan", "Codes", "Zoning Laws",
+        "IMAGINE Architect", "IMAGINE Engineer", "IMAGINE MEP", "IMAGINE QS", "IMAGINE PM",
+        "Energy", "Uganda", "Kenya", "Tanzania", "Rwanda", "South Sudan", "Codes", "Zoning Laws",
         "Microsoft", "AutoCAD", "Revit", "Archicad", "Tekla", "IfcOpenShell", "ArcGIS", "Azure", "Mapbox",
     }
     by_route = {spec.route: spec for spec in MODULE_SPECS}
     for route in routes:
         spec = by_route[route]
-        assert spec.module_path == "modules.enterprise_missing"
+        assert spec.module_path == "modules.enterprise_workspace"
         assert spec.renderer_name == "render"
         assert spec.implemented is True
+
+
+def test_functional_enterprise_profiles_cover_special_routes() -> None:
+    from modules.enterprise_workspace import PROFILES
+
+    required = {
+        "IMAGINE Architect", "IMAGINE Engineer", "IMAGINE MEP", "IMAGINE QS", "IMAGINE PM",
+        "Energy", "Uganda", "Kenya", "Tanzania", "Rwanda", "South Sudan", "Codes", "Zoning Laws",
+        "Microsoft", "AutoCAD", "Revit", "Archicad", "Tekla", "IfcOpenShell", "ArcGIS", "Azure", "Mapbox",
+    }
+    assert required.issubset(PROFILES)
 
 
 def test_core_structural_workspaces_are_importable() -> None:
@@ -43,8 +54,8 @@ def test_core_structural_workspaces_are_importable() -> None:
         "Beam Design": "modules.structural.beam_design",
         "Column Design": "modules.structural.column_design",
         "Slab Design": "modules.structural.slab_design",
-        "Foundation Design": "modules.structural.foundation_design",
-        "Punching Shear": "modules.structural.punching_shear",
+        "Foundation Design": "modules.structural.workspaces",
+        "Punching Shear": "modules.structural.workspaces",
         "Stairs Design": "modules.structural.stairs_design",
         "Openings Design": "modules.structural.openings_design",
         "Railings & Balustrades": "modules.structural.railings_design",
